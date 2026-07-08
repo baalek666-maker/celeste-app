@@ -53,7 +53,7 @@ export function Home({ user, onNavigate }: { user: User; onNavigate: (s: Screen)
         <p className="text-night-200 text-sm leading-relaxed">
           {user.isPremium
             ? "Votre horoscope personnalisé vous attend."
-            : "Découvrez ce que les planettes réservent à VOTRE thème natal aujourd'hui."}
+            : "Découvrez ce que les planètes réservent à VOTRE thème natal aujourd'hui."}
         </p>
         {!user.isPremium && (
           <span className="inline-block mt-2 px-3 py-1 rounded-full bg-gold-500/20 text-gold-300 text-xs font-medium">Premium</span>

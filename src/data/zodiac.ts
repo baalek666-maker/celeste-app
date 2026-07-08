@@ -147,8 +147,8 @@ export function signCompatibility(a: ZodiacSign, b: ZodiacSign): number {
     earth: ['earth', 'water'], water: ['water', 'earth'],
   };
   const opposite: Record<Element, Element> = { fire: 'water', water: 'fire', earth: 'air', air: 'earth' };
-  if (a === b) return 90;
-  if (compatible[ea].includes(eb)) return 70 + Math.floor(Math.random() * 15);
-  if (opposite[ea] === eb) return 30 + Math.floor(Math.random() * 15);
-  return 45 + Math.floor(Math.random() * 15);
+  if (a === b) return 85;
+  if (compatible[ea].includes(eb)) return 75;
+  if (opposite[ea] === eb) return 38;
+  return 55;
 }

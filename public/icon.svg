@@ -1,0 +1,46 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" width="512" height="512">
+  <defs>
+    <radialGradient id="bg" cx="50%" cy="50%" r="60%">
+      <stop offset="0%" stop-color="#2a2b4d"/>
+      <stop offset="100%" stop-color="#131325"/>
+    </radialGradient>
+    <linearGradient id="star" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#fcd34d"/>
+      <stop offset="100%" stop-color="#f59e0b"/>
+    </linearGradient>
+    <linearGradient id="ring" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#c084fc"/>
+      <stop offset="100%" stop-color="#7e22ce"/>
+    </linearGradient>
+  </defs>
+  <!-- Background -->
+  <rect width="512" height="512" rx="112" fill="url(#bg)"/>
+  <!-- Stars -->
+  <circle cx="100" cy="80" r="1.5" fill="#fff" opacity="0.5"/>
+  <circle cx="420" cy="120" r="2" fill="#fff" opacity="0.4"/>
+  <circle cx="380" cy="400" r="1.5" fill="#fff" opacity="0.3"/>
+  <circle cx="80" cy="380" r="1" fill="#fff" opacity="0.5"/>
+  <circle cx="200" cy="60" r="1" fill="#fcd34d" opacity="0.6"/>
+  <circle cx="450" cy="350" r="1" fill="#c084fc" opacity="0.5"/>
+  <!-- Outer ring -->
+  <circle cx="256" cy="256" r="170" fill="none" stroke="url(#ring)" stroke-width="2" opacity="0.4"/>
+  <!-- Zodiac divisions -->
+  <g stroke="#56589c" stroke-width="1" opacity="0.3">
+    <line x1="256" y1="96" x2="256" y2="116"/>
+    <line x1="398" y1="156" x2="380" y2="166"/>
+    <line x1="416" y1="256" x2="396" y2="256"/>
+    <line x1="398" y1="356" x2="380" y2="346"/>
+    <line x1="256" y1="416" x2="256" y2="396"/>
+    <line x1="156" y1="398" x2="166" y2="380"/>
+    <line x1="96" y1="256" x2="116" y2="256"/>
+    <line x1="114" y1="156" x2="132" y2="166"/>
+  </g>
+  <!-- Central star (4-point) -->
+  <path d="M 256 140 L 280 232 L 372 256 L 280 280 L 256 372 L 232 280 L 140 256 L 232 232 Z" fill="url(#star)" opacity="0.95"/>
+  <!-- Center dot -->
+  <circle cx="256" cy="256" r="8" fill="#fcd34d"/>
+  <!-- Planet dots -->
+  <circle cx="320" cy="180" r="4" fill="#a855f7" opacity="0.8"/>
+  <circle cx="190" cy="200" r="3" fill="#ec4899" opacity="0.7"/>
+  <circle cx="340" cy="330" r="3.5" fill="#06b6d4" opacity="0.6"/>
+</svg>
