@@ -166,7 +166,7 @@ Réponds UNIQUEMENT avec le JSON, aucun texte avant ou après.`;
         { role: 'user', content: userPrompt },
       ],
       temperature: 0.8,
-      max_tokens: 600,
+      max_tokens: 3000,
     }),
   });
 
@@ -177,11 +177,15 @@ Réponds UNIQUEMENT avec le JSON, aucun texte avant ou après.`;
   }
 
   const data = await response.json();
-  const content = data.choices?.[0]?.message?.content || '';
+  const msg = data.choices?.[0]?.message || {};
+  const content = msg.content || msg.reasoning_content || '';
 
   // Parse JSON from response (handle markdown code blocks)
-  const jsonMatch = content.match(/\{[\s\S]*\}/);
-  if (!jsonMatch) throw new Error('No JSON in LLM response');
+  let cleaned = content.replace(/```json\s*/g, '').replace(/```\s*/g, '').trim();
+  const jsonMatch = cleaned.match(/\{[\s\S]*\}/);
+  if (!jsonMatch) {
+    throw new Error('No JSON in LLM response');
+  }
   return JSON.parse(jsonMatch[0]);
 }
 
@@ -218,14 +222,15 @@ Réponds UNIQUEMENT avec le JSON.`;
         { role: 'user', content: userPrompt },
       ],
       temperature: 0.7,
-      max_tokens: 500,
+      max_tokens: 3000,
     }),
   });
 
   if (!response.ok) throw new Error(`LLM API error: ${response.status}`);
   const data = await response.json();
-  const content = data.choices?.[0]?.message?.content || '';
-  const jsonMatch = content.match(/\{[\s\S]*\}/);
+  const content = data.choices?.[0]?.message?.content || data.choices?.[0]?.message?.reasoning_content || '';
+  const cleaned = content.replace(/```json\s*/g, '').replace(/```\s*/g, '').trim();
+  const jsonMatch = cleaned.match(/\{[\s\S]*\}/);
   if (!jsonMatch) throw new Error('No JSON in LLM response');
   return JSON.parse(jsonMatch[0]);
 }
