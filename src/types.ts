@@ -18,6 +18,7 @@ export interface PlanetPosition {
   degree: number;       // 0-30 within sign
   house: House;
   retrograde: boolean;
+  longitude?: number;   // absolute ecliptic longitude 0-360 (for transit calculations)
 }
 
 export interface BirthData {
