@@ -14,16 +14,16 @@ export function Paywall({ onClose, onSubscribe }: {
   };
 
   return (
-    <div className="cosmic-bg star-field min-h-screen text-night-100">
-      <div className="max-w-md mx-auto px-5 pt-12 pb-8 min-h-screen flex flex-col">
+    <div className="cosmic-bg star-field min-h-screen text-night-100 relative">
+      <div className="max-w-md mx-auto px-5 pt-12 pb-8 min-h-screen flex flex-col relative z-10">
         {/* Close */}
-        <button onClick={onClose} className="absolute top-4 right-4 text-night-400 hover:text-night-200">
+        <button onClick={onClose} className="absolute top-4 right-4 text-night-400 hover:text-night-200 transition-colors text-xl">
           ✕
         </button>
 
         {/* Hero */}
-        <div className="text-center mt-4 mb-8">
-          <div className="w-20 h-20 mx-auto rounded-full bg-gradient-to-br from-cosmic-500/20 to-gold-500/20 flex items-center justify-center mb-4 animate-glow">
+        <div className="text-center mt-4 mb-8 animate-fade-in-scale">
+          <div className="w-20 h-20 mx-auto rounded-full bg-gradient-to-br from-gold-500/20 to-cosmic-500/20 flex items-center justify-center mb-4 animate-gold-glow">
             <span className="text-3xl">✨</span>
           </div>
           <h1 className="text-2xl font-bold mb-2 text-gold-gradient">Céleste Premium</h1>
@@ -33,15 +33,15 @@ export function Paywall({ onClose, onSubscribe }: {
         </div>
 
         {/* Features */}
-        <div className="space-y-4 mb-8">
+        <div className="space-y-3 mb-8">
           {[
             { icon: '🌅', title: 'Horoscope quotidien personnalisé', desc: "Calculé à partir de VOS planètes, pas de votre seul signe solaire" },
             { icon: '💞', title: 'Compatibilité illimitée', desc: 'Analysez vos relations avec tous les signes' },
             { icon: '📖', title: 'Journal de bord', desc: 'Suivez vos ressentis et observez les cycles' },
             { icon: '🔮', title: 'Transits planétaires', desc: "Comprenez ce que les planètes activent en vous" },
-          ].map(f => (
-            <div key={f.title} className="glass rounded-2xl p-4 flex items-start gap-3">
-              <span className="text-2xl">{f.icon}</span>
+          ].map((f, i) => (
+            <div key={f.title} className="glass rounded-2xl p-4 flex items-start gap-3 animate-fade-in card-glow" style={{ animationDelay: `${0.1 + i * 0.08}s` }}>
+              <div className="text-2xl mt-0.5">{f.icon}</div>
               <div>
                 <p className="text-night-100 font-semibold text-sm">{f.title}</p>
                 <p className="text-night-400 text-xs mt-0.5">{f.desc}</p>
@@ -53,7 +53,7 @@ export function Paywall({ onClose, onSubscribe }: {
         {/* Plans */}
         <div className="space-y-3 mb-6">
           <button onClick={() => setPlan('yearly')}
-            className={`w-full p-4 rounded-2xl border-2 transition-all text-left ${plan === 'yearly' ? 'border-gold-500 glass' : 'border-night-700 glass'}`}>
+            className={`w-full p-4 rounded-2xl border-2 transition-all duration-300 text-left ${plan === 'yearly' ? 'border-gold-500/60 glass-gold' : 'border-night-700/50 glass'}`}>
             <div className="flex items-center justify-between">
               <div>
                 <div className="flex items-center gap-2">
@@ -70,7 +70,7 @@ export function Paywall({ onClose, onSubscribe }: {
           </button>
 
           <button onClick={() => setPlan('weekly')}
-            className={`w-full p-4 rounded-2xl border-2 transition-all text-left ${plan === 'weekly' ? 'border-cosmic-500 glass' : 'border-night-700 glass'}`}>
+            className={`w-full p-4 rounded-2xl border-2 transition-all duration-300 text-left ${plan === 'weekly' ? 'border-cosmic-500/60 glass' : 'border-night-700/50 glass'}`}>
             <div className="flex items-center justify-between">
               <div>
                 <p className="text-night-100 font-bold">Hebdomadaire</p>
@@ -83,7 +83,7 @@ export function Paywall({ onClose, onSubscribe }: {
 
         {/* CTA */}
         <button onClick={handleSubscribe}
-          className="w-full py-4 rounded-2xl bg-gradient-to-r from-gold-500 to-gold-600 text-night-950 font-bold text-lg shadow-lg shadow-gold-900/50 transition-all animate-glow">
+          className="w-full py-4 rounded-2xl bg-gradient-to-r from-gold-400 to-gold-600 text-night-950 font-bold text-lg shadow-lg shadow-gold-900/50 transition-all duration-300 hover:scale-[1.01] animate-gold-glow">
           {plan === 'yearly' ? 'Démarrer mon essai gratuit' : 'Activer maintenant'}
         </button>
 

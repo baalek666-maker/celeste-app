@@ -26,35 +26,41 @@ export function Auth({ onSuccess }: { onSuccess: (user: any) => void }) {
   };
 
   return (
-    <div className="cosmic-bg star-field min-h-screen text-night-100 flex items-center justify-center px-6">
-      <div className="w-full max-w-sm">
+    <div className="cosmic-bg star-field min-h-screen text-night-100 flex items-center justify-center px-6 relative">
+      <div className="w-full max-w-sm relative z-10">
         {/* Logo */}
-        <div className="text-center mb-10">
-          <div className="inline-flex items-center justify-center w-20 h-20 rounded-full glass border border-gold-500/20 mb-4">
-            <span className="text-4xl">✦</span>
+        <div className="text-center mb-10 animate-fade-in-scale">
+          <div className="inline-flex items-center justify-center w-20 h-20 rounded-full glass-gold border border-gold-500/20 mb-4 animate-float-slow">
+            <svg width="40" height="40" viewBox="0 0 40 40" className="animate-spin-slow">
+              <circle cx="20" cy="20" r="16" fill="none" stroke="#fbbf24" strokeWidth="0.5" opacity="0.4" />
+              <circle cx="20" cy="20" r="10" fill="none" stroke="#c084fc" strokeWidth="0.5" opacity="0.3" />
+              <circle cx="20" cy="3" r="1.5" fill="#fbbf24" />
+              <circle cx="37" cy="20" r="1" fill="#c084fc" />
+              <circle cx="20" cy="20" r="2.5" fill="#fcd34d" opacity="0.7" />
+            </svg>
           </div>
           <h1 className="text-3xl font-bold text-gold-gradient">Céleste</h1>
           <p className="text-night-400 text-sm mt-2">Votre carte du ciel, votre destin</p>
         </div>
 
         {/* Mode toggle */}
-        <div className="flex gap-2 mb-6 p-1 glass rounded-2xl">
+        <div className="flex gap-2 mb-6 p-1 glass rounded-2xl animate-fade-in" style={{ animationDelay: '0.1s' }}>
           <button
             onClick={() => setMode('register')}
-            className={`flex-1 py-2.5 rounded-xl text-sm font-medium transition-all ${mode === 'register' ? 'bg-cosmic-600 text-white' : 'text-night-400'}`}
+            className={`flex-1 py-2.5 rounded-xl text-sm font-medium transition-all duration-300 ${mode === 'register' ? 'bg-gradient-to-r from-cosmic-600 to-cosmic-700 text-white shadow-lg shadow-cosmic-900/40' : 'text-night-400'}`}
           >
             Créer un compte
           </button>
           <button
             onClick={() => setMode('login')}
-            className={`flex-1 py-2.5 rounded-xl text-sm font-medium transition-all ${mode === 'login' ? 'bg-cosmic-600 text-white' : 'text-night-400'}`}
+            className={`flex-1 py-2.5 rounded-xl text-sm font-medium transition-all duration-300 ${mode === 'login' ? 'bg-gradient-to-r from-cosmic-600 to-cosmic-700 text-white shadow-lg shadow-cosmic-900/40' : 'text-night-400'}`}
           >
             Se connecter
           </button>
         </div>
 
         {/* Form */}
-        <form onSubmit={handleSubmit} className="space-y-4">
+        <form onSubmit={handleSubmit} className="space-y-4 animate-fade-in" style={{ animationDelay: '0.2s' }}>
           <div>
             <label className="text-night-400 text-xs uppercase tracking-widest mb-2 block">Email</label>
             <input
@@ -63,7 +69,7 @@ export function Auth({ onSuccess }: { onSuccess: (user: any) => void }) {
               onChange={(e) => setEmail(e.target.value)}
               placeholder="vous@exemple.com"
               required
-              className="w-full px-4 py-3.5 rounded-2xl glass border border-night-700 text-night-100 placeholder:text-night-500 focus:border-cosmic-500 focus:outline-none transition-colors"
+              className="w-full px-4 py-3.5 rounded-2xl glass border border-night-700 text-night-100 placeholder:text-night-500 focus:border-gold-500/50 focus:outline-none transition-colors"
             />
           </div>
           <div>
@@ -75,28 +81,35 @@ export function Auth({ onSuccess }: { onSuccess: (user: any) => void }) {
               placeholder={mode === 'register' ? '6 caractères minimum' : '••••••'}
               required
               minLength={mode === 'register' ? 6 : 1}
-              className="w-full px-4 py-3.5 rounded-2xl glass border border-night-700 text-night-100 placeholder:text-night-500 focus:border-cosmic-500 focus:outline-none transition-colors"
+              className="w-full px-4 py-3.5 rounded-2xl glass border border-night-700 text-night-100 placeholder:text-night-500 focus:border-gold-500/50 focus:outline-none transition-colors"
             />
           </div>
 
           {error && (
-            <p className="text-red-400 text-sm text-center">{error}</p>
+            <p className="text-red-400 text-sm text-center animate-fade-in">{error}</p>
           )}
 
           <button
             type="submit"
             disabled={loading}
-            className="w-full py-4 rounded-2xl bg-gradient-to-r from-cosmic-600 to-cosmic-700 text-white font-semibold text-lg transition-all disabled:opacity-50"
+            className="w-full py-4 rounded-2xl bg-gradient-to-r from-cosmic-600 via-cosmic-600 to-cosmic-700 text-white font-semibold text-lg transition-all duration-300 disabled:opacity-50 shadow-lg shadow-cosmic-900/40 hover:shadow-cosmic-700/50 hover:scale-[1.01]"
           >
-            {loading ? '...' : mode === 'register' ? 'Commencer ✦' : 'Se connecter'}
+            {loading ? (
+              <span className="flex items-center justify-center gap-2">
+                <svg className="animate-spin h-5 w-5" viewBox="0 0 24 24" fill="none">
+                  <circle cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="2" opacity="0.3" />
+                  <path d="M12 2a10 10 0 0 1 10 10" stroke="currentColor" strokeWidth="2" />
+                </svg>
+              </span>
+            ) : mode === 'register' ? 'Commencer ✦' : 'Se connecter'}
           </button>
         </form>
 
-        <p className="text-night-500 text-xs text-center mt-6">
+        <p className="text-night-500 text-xs text-center mt-6 animate-fade-in" style={{ animationDelay: '0.3s' }}>
           {mode === 'register' ? 'Déjà un compte ? ' : 'Pas encore de compte ? '}
           <button
             onClick={() => { setMode(mode === 'register' ? 'login' : 'register'); setError(''); }}
-            className="text-cosmic-300 font-medium"
+            className="text-cosmic-300 font-medium hover:text-cosmic-200 transition-colors"
           >
             {mode === 'register' ? 'Se connecter' : 'Créer un compte'}
           </button>

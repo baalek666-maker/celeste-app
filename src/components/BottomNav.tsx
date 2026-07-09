@@ -23,17 +23,24 @@ export function BottomNav({ items, labels, active, onNavigate }: NavProps) {
             <button
               key={item}
               onClick={() => onNavigate(item)}
-              className="flex flex-col items-center gap-1 px-3 py-1.5 transition-all"
+              className="flex flex-col items-center gap-1 px-3 py-1.5 transition-all duration-300"
             >
-              <svg
-                width="24" height="24" viewBox="0 0 24 24" fill="none"
-                stroke={isActive ? '#fbbf24' : '#757bc4'}
-                strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"
-                className={isActive ? 'drop-shadow-[0_0_8px_rgba(251,191,36,0.4)]' : ''}
-              >
-                <path d={ICONS[item]} />
-              </svg>
-              <span className={`text-[10px] font-medium ${isActive ? 'text-gold-400' : 'text-night-400'}`}>
+              <div className={`relative transition-all duration-300 ${isActive ? 'scale-110' : 'scale-100'}`}>
+                {/* Glow background on active */}
+                {isActive && (
+                  <div className="absolute inset-0 -m-2 rounded-full bg-gold-500/10 blur-md" />
+                )}
+                <svg
+                  width="24" height="24" viewBox="0 0 24 24" fill="none"
+                  stroke={isActive ? '#fbbf24' : '#757bc4'}
+                  strokeWidth={isActive ? '2' : '1.5'}
+                  strokeLinecap="round" strokeLinejoin="round"
+                  className={`relative transition-all duration-300 ${isActive ? 'drop-shadow-[0_0_8px_rgba(251,191,36,0.5)]' : ''}`}
+                >
+                  <path d={ICONS[item]} />
+                </svg>
+              </div>
+              <span className={`text-[10px] font-medium transition-all duration-300 ${isActive ? 'text-gold-400' : 'text-night-400'}`}>
                 {labels[item]}
               </span>
             </button>
