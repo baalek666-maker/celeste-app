@@ -1,24 +1,47 @@
 import { useState, useEffect } from 'react';
 import type { User, HoroscopeEntry } from '../types';
-import { generateHoroscope } from '../lib/horoscope';
+import { api } from '../lib/api';
 import { getCachedHoroscope, cacheHoroscope } from '../lib/storage';
 
 export function Horoscope({ user }: { user: User }) {
-  const [horoscope, setHoroscope] = useState<HoroscopeEntry | null>(null);
+  const [horoscope, setHoroscope] = useState<any>(null);
   const [loading, setLoading] = useState(true);
+  const [error, setError] = useState('');
   const today = new Date().toISOString().split('T')[0];
   const todayFr = new Date().toLocaleDateString('fr-FR', { weekday: 'long', day: 'numeric', month: 'long' });
 
   useEffect(() => {
+    // Check local cache first
     const cached = getCachedHoroscope(today);
-    if (cached) { setHoroscope(cached); setLoading(false); return; }
-    if (!user.natalChart) return;
-    generateHoroscope(user.natalChart, today).then(h => {
-      setHoroscope(h);
-      cacheHoroscope(today, h);
+    if (cached) {
+      setHoroscope(cached);
       setLoading(false);
-    });
-  }, [today, user.natalChart]);
+      return;
+    }
+
+    // Fetch from backend (LLM-powered)
+    api.getHoroscope()
+      .then(h => {
+        // Backend returns French keys: amour, carriere, energie
+        const entry: any = {
+          date: today,
+          general: h.general,
+          love: h.amour,
+          career: h.carriere,
+          energy: h.energie,
+          mood: h.mood,
+          luckyNumber: h.luckyNumber,
+          luckyColor: h.luckyColor,
+        };
+        setHoroscope(entry);
+        cacheHoroscope(today, entry);
+        setLoading(false);
+      })
+      .catch(err => {
+        setError(err.message || 'Erreur');
+        setLoading(false);
+      });
+  }, [today]);
 
   if (loading) {
     return (
@@ -30,6 +53,18 @@ export function Horoscope({ user }: { user: User }) {
           <circle cx="40" cy="40" r="3" fill="#fcd34d" opacity="0.6" />
         </svg>
         <p className="text-night-400 text-sm">Analyse des transits planétaires...</p>
+      </div>
+    );
+  }
+
+  if (error) {
+    return (
+      <div className="px-5 pt-12 flex flex-col items-center justify-center min-h-[60vh]">
+        <p className="text-red-400 text-sm mb-4">{error}</p>
+        <button onClick={() => { setLoading(true); setError(''); window.location.reload(); }}
+          className="px-6 py-3 rounded-2xl glass border border-night-600 text-night-200">
+          Réessayer
+        </button>
       </div>
     );
   }

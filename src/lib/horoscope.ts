@@ -152,6 +152,8 @@ export async function generateCompatibility(
   return {
     yourSun,
     theirSun: theirSunSign,
+    yourMoon: yourSun,
+    theirMoon: theirSunSign,
     score: compat,
     title,
     description: desc,

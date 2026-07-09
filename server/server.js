@@ -114,13 +114,14 @@ function getNatalPositions(birthData) {
     };
   }
   // Ascendant
-  const gst = SiderealTime(time);
-  const lst = ((gst + birthData.longitude) % 360 + 360) % 360;
+  const gst = SiderealTime(time); // returns hours (0-24), NOT degrees
+  const gstDeg = gst * 15; // convert hours → degrees (1h = 15°)
+  const lst = ((gstDeg + birthData.longitude) % 360 + 360) % 360;
   const eps = 23.4393 * Math.PI / 180;
   const latR = birthData.latitude * Math.PI / 180;
   const lstR = lst * Math.PI / 180;
   let asc = Math.atan2(-Math.cos(lstR), Math.sin(lstR)*Math.cos(eps)+Math.tan(latR)*Math.sin(eps)) * 180/Math.PI;
-  if (asc < 0) asc += 360;
+  asc = ((asc + 180) % 360 + 360) % 360; // +180°: formula gives descendant, flip to ascendant
   result.ascendant = { sign: SIGNS[Math.floor(asc/30)], degree: Math.round(asc%30 * 10) / 10 };
   return result;
 }

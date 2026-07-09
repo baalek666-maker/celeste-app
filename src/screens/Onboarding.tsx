@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import { calculateNatalChart } from '../lib/astrology';
 import { setBirthData, setOnboarded } from '../lib/storage';
+import { api } from '../lib/api';
 import type { User, BirthData, NatalChart } from '../types';
 import { ZODIAC_SIGNS } from '../data/zodiac';
 
@@ -133,10 +134,12 @@ export function Onboarding({ onComplete }: { onComplete: (u: User) => void }) {
       latitude: c.lat, longitude: c.lng, timezone: c.tz,
     };
 
-    setTimeout(() => {
+    setTimeout(async () => {
       const chart = calculateNatalChart(birth);
       setBirthData(birth, chart);
       setOnboarded();
+      // Save birth data to backend
+      try { await api.saveBirthData(birth); } catch {}
       const user = JSON.parse(localStorage.getItem('celeste_user') || '{}');
       onComplete(user);
     }, 2800);
