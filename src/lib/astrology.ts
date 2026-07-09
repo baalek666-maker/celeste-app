@@ -74,8 +74,9 @@ function isRetrograde(planet: string, time: AstroTime): boolean {
  * Uses the precise SiderealTime function from astronomy-engine.
  */
 function ascendantDegree(time: AstroTime, latitude: number, longitude: number): number {
-  const gst = SiderealTime(time);
-  const lst = ((gst + longitude) % 360 + 360) % 360;
+  const gst = SiderealTime(time); // returns hours (0-24), NOT degrees!
+  const gstDeg = gst * 15; // convert hours → degrees (1h = 15°)
+  const lst = ((gstDeg + longitude) % 360 + 360) % 360;
 
   const eps = 23.4393 * (Math.PI / 180);
   const latRad = latitude * (Math.PI / 180);
@@ -85,7 +86,7 @@ function ascendantDegree(time: AstroTime, latitude: number, longitude: number): 
     -Math.cos(lstRad),
     Math.sin(lstRad) * Math.cos(eps) + Math.tan(latRad) * Math.sin(eps),
   ) * (180 / Math.PI);
-  if (asc < 0) asc += 360;
+  asc = ((asc + 180) % 360 + 360) % 360; // +180°: formula gives descendant, flip to ascendant
   return asc;
 }
 
