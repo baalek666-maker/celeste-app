@@ -6,6 +6,7 @@
  */
 
 import type { BirthData, JournalEntry } from '../types';
+import { enqueue, drain } from './offlineQueue';
 
 const API_URL = import.meta.env.VITE_API_URL || '/api';
 const TOKEN_KEY = 'celeste_jwt';
@@ -23,6 +24,21 @@ export function clearToken(): void {
   localStorage.removeItem(TOKEN_KEY);
 }
 
+function isMutation(method?: string) {
+  const m = (method || 'GET').toUpperCase();
+  return m === 'POST' || m === 'PUT' || m === 'PATCH' || m === 'DELETE';
+}
+
+function isNetworkFailure(err: unknown): boolean {
+  if (err instanceof TypeError) return true;
+  const msg = (err instanceof Error ? err.message : String(err)).toLowerCase();
+  return (
+    msg.includes('failed to fetch') ||
+    msg.includes('load failed') ||
+    msg.includes('networkerror')
+  );
+}
+
 // ─── HTTP helper ───────────────────────────────────
 async function apiCall<T = any>(
   path: string,
@@ -36,11 +52,48 @@ async function apiCall<T = any>(
   if (token) {
     headers['Authorization'] = `Bearer ${token}`;
   }
+  const method = (options.method || 'GET').toUpperCase() as
+    | 'GET' | 'POST' | 'PUT' | 'PATCH' | 'DELETE';
 
-  const res = await fetch(`${API_URL}${path}`, {
-    ...options,
-    headers,
-  });
+  // Mutation + offline ⇒ enqueue et renvoie un fake ok
+  if (isMutation(method) && typeof navigator !== 'undefined' && !navigator.onLine) {
+    let bodyParsed: unknown = undefined;
+    if (options.body && typeof options.body === 'string') {
+      try { bodyParsed = JSON.parse(options.body); } catch { bodyParsed = options.body; }
+    }
+    enqueue({
+      url: `${API_URL}${path}`,
+      method: method as 'POST' | 'PUT' | 'PATCH' | 'DELETE',
+      body: bodyParsed,
+      headers,
+    });
+    return { ok: true, queued: true, offline: true } as unknown as T;
+  }
+
+  let res: Response;
+  try {
+    res = await fetch(`${API_URL}${path}`, {
+      ...options,
+      headers,
+    });
+  } catch (err) {
+    // Mutation + échec réseau en cours ⇒ enqueue aussi (mode offline opportuniste)
+    if (isMutation(method)) {
+      let bodyParsed: unknown = undefined;
+      if (options.body && typeof options.body === 'string') {
+        try { bodyParsed = JSON.parse(options.body); } catch { bodyParsed = options.body; }
+      }
+      enqueue({
+        url: `${API_URL}${path}`,
+        method: method as 'POST' | 'PUT' | 'PATCH' | 'DELETE',
+        body: bodyParsed,
+        headers,
+      });
+      return { ok: true, queued: true, offline: true } as unknown as T;
+    }
+    if (isNetworkFailure(err)) throw err;
+    throw err;
+  }
 
   if (!res.ok) {
     const err = await res.json().catch(() => ({ error: 'Network error' }));
@@ -48,6 +101,11 @@ async function apiCall<T = any>(
   }
 
   return res.json();
+}
+
+// À appeler depuis l'app au boot pour drainer la queue si online.
+export async function flushOfflineQueue() {
+  return drain();
 }
 
 // ─── Auth ──────────────────────────────────────────
