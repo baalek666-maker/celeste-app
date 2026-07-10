@@ -4,6 +4,7 @@ import cors from 'cors';
 import bcrypt from 'bcryptjs';
 import jwt from 'jsonwebtoken';
 import Database from 'better-sqlite3';
+import { rateLimit, ipKeyGenerator } from 'express-rate-limit';
 import { AstroTime, Body, GeoVector, SiderealTime, EclipticGeoMoon, Rotation_EQJ_ECL, RotateVector } from 'astronomy-engine';
 import { readFileSync } from 'fs';
 import { fileURLToPath } from 'url';
@@ -11,7 +12,10 @@ import { dirname, join } from 'path';
 import billingRouter, { stripeWebhookHandler, isStripeConfigured } from './billing.js';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
-const JWT_SECRET = process.env.JWT_SECRET || 'celeste-secret-change-in-prod';
+const JWT_SECRET = process.env.JWT_SECRET;
+if (!JWT_SECRET || JWT_SECRET.length < 32) {
+  throw new Error('FATAL: JWT_SECRET is missing or too short (>= 32 chars required). Refusing to boot.');
+}
 const LLM_API_URL = process.env.LLM_API_URL || 'https://api.cheapestinference.com/v1/chat/completions';
 const LLM_API_KEY = process.env.LLM_API_KEY || '';
 const LLM_MODEL = process.env.LLM_MODEL || 'gpt-4o-mini';
@@ -269,6 +273,26 @@ function auth(req, res, next) {
   }
 }
 
+// ─── Rate limiters ─────────────────────────────────────────
+// Login/register: prevent brute force
+const authLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000, // 15 min
+  max: 10,
+  message: { error: 'Trop de tentatives. Réessaie dans 15 minutes.' },
+  standardHeaders: true,
+  legacyHeaders: false,
+});
+
+// LLM endpoints: prevent quota burn (key by user id, fall back to IP via ipKeyGenerator helper for IPv6 safety)
+const llmLimiter = rateLimit({
+  windowMs: 60 * 60 * 1000, // 1h
+  max: 30,
+  keyGenerator: (req) => req.user?.id?.toString() || ipKeyGenerator(req.ip),
+  message: { error: 'Limite atteinte. Réessaie dans une heure.' },
+  standardHeaders: true,
+  legacyHeaders: false,
+});
+
 // ─── Server ────────────────────────────────────────────────
 const app = express();
 app.use(cors({ origin: true, credentials: true }));
@@ -293,7 +317,7 @@ app.get('/api/health', (req, res) => {
 });
 
 // ─── Auth: Register ────────────────────────────────────────
-app.post('/api/auth/register', async (req, res) => {
+app.post('/api/auth/register', authLimiter, async (req, res) => {
   const { email, password } = req.body;
   if (!email || !password) return res.status(400).json({ error: 'Email et mot de passe requis' });
   if (password.length < 6) return res.status(400).json({ error: 'Mot de passe trop court (6 min)' });
@@ -308,7 +332,7 @@ app.post('/api/auth/register', async (req, res) => {
 });
 
 // ─── Auth: Login ───────────────────────────────────────────
-app.post('/api/auth/login', async (req, res) => {
+app.post('/api/auth/login', authLimiter, async (req, res) => {
   const { email, password } = req.body;
   const user = db.prepare('SELECT * FROM users WHERE email = ?').get(email?.toLowerCase());
   if (!user || !bcrypt.compareSync(password, user.password_hash)) {
@@ -349,16 +373,28 @@ app.get('/api/profile', auth, (req, res) => {
 });
 
 // ─── Horoscope (LLM-powered) ───────────────────────────────
-app.post('/api/horoscope', auth, async (req, res) => {
+app.post('/api/horoscope', auth, llmLimiter, async (req, res) => {
   try {
     const user = db.prepare('SELECT * FROM users WHERE id = ?').get(req.user.id);
     if (!user?.birth_data) return res.status(400).json({ error: 'Birth data required' });
 
+    // Premium expiry check (defence-in-depth on top of Stripe webhook)
+    const now = Math.floor(Date.now() / 1000);
+    const isPremium = !!user.is_premium && (!user.premium_until || user.premium_until > now);
+
     const today = new Date().toISOString().split('T')[0];
 
-    // Check cache first
+    // Check cache first (cached responses bypass the free-tier gate)
     const cached = db.prepare('SELECT content FROM horoscope_cache WHERE user_id = ? AND date = ?').get(req.user.id, today);
     if (cached) return res.json(JSON.parse(cached.content));
+
+    // Free-tier gate (server-side, authoritative)
+    if (!isPremium) {
+      if ((user.scans_remaining ?? 0) <= 0) {
+        return res.status(402).json({ error: 'Free scans exhausted', code: 'paywall_required', scansRemaining: 0 });
+      }
+      db.prepare('UPDATE users SET scans_remaining = scans_remaining - 1 WHERE id = ?').run(req.user.id);
+    }
 
     const birthData = JSON.parse(user.birth_data);
     const natalPositions = getNatalPositions(birthData);
@@ -371,7 +407,9 @@ app.post('/api/horoscope', auth, async (req, res) => {
     db.prepare('INSERT OR REPLACE INTO horoscope_cache (user_id, date, content) VALUES (?, ?, ?)')
       .run(req.user.id, today, JSON.stringify(horoscope));
 
-    res.json(horoscope);
+    // Return current scans_remaining so the frontend can show it
+    const remaining = isPremium ? null : (user.scans_remaining - 1);
+    res.json({ ...horoscope, scansRemaining: remaining });
   } catch (err) {
     console.error('Horoscope error:', err.message);
     res.status(500).json({ error: 'Failed to generate horoscope', detail: err.message });
@@ -379,26 +417,46 @@ app.post('/api/horoscope', auth, async (req, res) => {
 });
 
 // ─── Compatibility (LLM-powered) ───────────────────────────
-app.post('/api/compatibility', auth, async (req, res) => {
+app.post('/api/compatibility', auth, llmLimiter, async (req, res) => {
   try {
     const user = db.prepare('SELECT * FROM users WHERE id = ?').get(req.user.id);
     if (!user?.birth_data) return res.status(400).json({ error: 'Your birth data required' });
 
+    // Premium expiry check
+    const now = Math.floor(Date.now() / 1000);
+    const isPremium = !!user.is_premium && (!user.premium_until || user.premium_until > now);
+
+    // Free-tier gate (compatibility = 1 free analysis)
+    if (!isPremium) {
+      if ((user.scans_remaining ?? 0) <= 0) {
+        return res.status(402).json({ error: 'Free scans exhausted', code: 'paywall_required', scansRemaining: 0 });
+      }
+      db.prepare('UPDATE users SET scans_remaining = scans_remaining - 1 WHERE id = ?').run(req.user.id);
+    }
+
     const { partnerBirthData } = req.body;
     if (!partnerBirthData) return res.status(400).json({ error: 'Partner birth data required' });
+
+    // Lightweight validation of partner birth data
+    if (typeof partnerBirthData !== 'object' ||
+        !partnerBirthData.date || !/^\d{4}-\d{2}-\d{2}$/.test(partnerBirthData.date) ||
+        !partnerBirthData.time || !/^\d{2}:\d{2}$/.test(partnerBirthData.time) ||
+        typeof partnerBirthData.latitude !== 'number' || Math.abs(partnerBirthData.latitude) > 90 ||
+        typeof partnerBirthData.longitude !== 'number' || Math.abs(partnerBirthData.longitude) > 180) {
+      return res.status(400).json({ error: 'Invalid partner birth data format' });
+    }
 
     const chart1 = getNatalPositions(JSON.parse(user.birth_data));
     const chart2 = getNatalPositions(partnerBirthData);
 
     const result = await generateCompatibility(chart1, chart2, chart1.sun.sign, chart2.sun.sign);
-    // Add the real sun/moon signs (computed from the natal charts) so the
-    // frontend can display them without having to fake them client-side.
     res.json({
       ...result,
-      yourSun: sign1,
-      theirSun: sign2,
+      yourSun: chart1.sun.sign,
+      theirSun: chart2.sun.sign,
       yourMoon: chart1.moon.sign,
       theirMoon: chart2.moon.sign,
+      scansRemaining: isPremium ? null : (user.scans_remaining - 1),
     });
   } catch (err) {
     console.error('Compatibility error:', err.message);
