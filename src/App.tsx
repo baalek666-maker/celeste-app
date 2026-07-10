@@ -137,6 +137,7 @@ export function App() {
         isPremium: profile.isPremium,
         scansRemaining: profile.scansRemaining,
         premiumUntil: profile.premiumUntil ?? null,
+        streak: profile.streak ?? user.streak ?? 0,
       };
       // If birth data is on the server, sync it
       if (profile.birthData) {
@@ -212,6 +213,7 @@ export function App() {
           email: serverUser.email,
           isPremium: serverUser.isPremium,
           scansRemaining: serverUser.scansRemaining,
+          streak: serverUser.streak ?? 0,
         };
         if (serverUser.birthData) {
           updated.birthData = serverUser.birthData;

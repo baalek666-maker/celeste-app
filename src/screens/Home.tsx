@@ -53,6 +53,8 @@ function getMoonPhase(): { name: string; emoji: string; description: string } {
 }
 
 // Daily streak tracking — increments when visiting on consecutive days
+// (server-side authoritative, see server.js updateStreak())
+// Local helper kept for backward compat with any stray callers; prefer user.streak from server.
 function updateStreak(): number {
   const KEY = 'celeste_streak';
   let data: { count: number; lastVisit: string };
@@ -75,10 +77,14 @@ function updateStreak(): number {
   return count;
 }
 
+export { updateStreak };
+
 export function Home({ user, onNavigate }: { user: User; onNavigate: (s: Screen) => void }) {
   // Hooks MUST be called unconditionally — Rules of Hooks.
   const dailyQuote = useMemo(() => getDailyQuote(), []);
-  const streak = useMemo(() => updateStreak(), []);
+  // Streak comes from the server (authoritative — increments on first
+  // horoscope view of the day). Falls back to 0 if not yet hydrated.
+  const streak = user.streak ?? 0;
   const moonPhase = useMemo(() => getMoonPhase(), []);
 
   // Safe early return AFTER all hooks.
@@ -102,9 +108,14 @@ export function Home({ user, onNavigate }: { user: User; onNavigate: (s: Screen)
           <h1 className="text-2xl font-bold text-gold-gradient">Bonjour</h1>
         </div>
         <div className="flex items-center gap-2">
-          {streak > 1 && (
-            <span className="text-xs text-gold-400/90 font-medium bg-gold-500/10 px-2.5 py-1 rounded-full border border-gold-500/20">
-              🔥 {streak} jours
+          {streak >= 2 && (
+            <span className="text-xs text-gold-400 font-semibold bg-gold-500/10 px-3 py-1.5 rounded-full border border-gold-500/30 flex items-center gap-1">
+              🔥 {streak} {streak === 1 ? 'jour' : 'jours'}
+            </span>
+          )}
+          {streak === 1 && (
+            <span className="text-xs text-gold-400 font-medium bg-gold-500/10 px-3 py-1.5 rounded-full border border-gold-500/30">
+              ✨ Premier jour
             </span>
           )}
           <div className="w-11 h-11 rounded-full glass-gold border border-gold-500/20 flex items-center justify-center animate-float-slow">

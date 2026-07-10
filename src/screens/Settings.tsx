@@ -4,6 +4,7 @@ import { logout, setBirthData } from '../lib/storage';
 import { ZODIAC_SIGNS } from '../data/zodiac';
 import { calculateNatalChart } from '../lib/astrology';
 import { api } from '../lib/api';
+import { useNotifications } from '../lib/useNotifications';
 
 // eslint-disable-next-line @typescript-eslint/ban-ts-comment
 // @ts-ignore — Vite resolves this to the package.json version at build time.
@@ -214,6 +215,8 @@ export function Settings({ user, onUpdate }: { user: User; onUpdate: (u: User) =
 
       {/* Actions */}
       <div className="space-y-2">
+        {/* Notifications push (Feature 3) */}
+        <NotificationPanel />
         {user.birthData && (
           <button onClick={() => setEditing(true)}
             className="w-full glass rounded-2xl p-4 flex items-center justify-between text-left hover:border-night-600 border border-transparent transition-all">
@@ -234,6 +237,119 @@ export function Settings({ user, onUpdate }: { user: User; onUpdate: (u: User) =
       </div>
 
       <p className="text-night-600 text-xs text-center mt-8">Céleste · v{pkg.version}</p>
+    </div>
+  );
+}
+
+// ─── Notification Panel (Feature 3) ───────────────────────
+function NotificationPanel() {
+  const { status, loading, error, subscribe, unsubscribe, updateHour, test } = useNotifications();
+  const [testing, setTesting] = useState(false);
+  const [testResult, setTestResult] = useState<{ sent: number; total: number } | null>(null);
+
+  if (!status) {
+    return (
+      <div className="glass rounded-2xl p-4 text-night-400 text-sm">Chargement…</div>
+    );
+  }
+
+  if (!status.supported) {
+    return (
+      <div className="glass rounded-2xl p-4 text-left">
+        <p className="text-night-200 text-sm font-medium mb-1">🔔 Notifications</p>
+        <p className="text-night-500 text-xs">Non supporté sur ce navigateur.</p>
+      </div>
+    );
+  }
+
+  const hours = Array.from({ length: 24 }, (_, h) => h);
+
+  const handleToggle = async () => {
+    setTestResult(null);
+    if (status.enabled) await unsubscribe();
+    else await subscribe(status.hour);
+  };
+
+  const handleTest = async () => {
+    setTesting(true);
+    setTestResult(null);
+    const r = await test();
+    if (r) setTestResult(r);
+    setTesting(false);
+  };
+
+  return (
+    <div className="glass rounded-2xl p-4">
+      <div className="flex items-center justify-between mb-3">
+        <div>
+          <p className="text-night-200 text-sm font-medium">🔔 Notifications quotidiennes</p>
+          <p className="text-night-500 text-xs mt-0.5">
+            {status.enabled
+              ? `Activé${status.subscriptionCount > 1 ? ` (${status.subscriptionCount} appareils)` : ''}`
+              : 'Rappel chaque matin avant ton horoscope'}
+          </p>
+        </div>
+        <button
+          onClick={handleToggle}
+          disabled={loading}
+          className={`relative w-12 h-7 rounded-full transition-colors ${
+            status.enabled ? 'bg-cosmic-500' : 'bg-night-700'
+          }`}
+        >
+          <span
+            className={`absolute top-0.5 w-6 h-6 rounded-full bg-white shadow-md transition-all ${
+              status.enabled ? 'left-5' : 'left-0.5'
+            }`}
+          />
+        </button>
+      </div>
+
+      {status.enabled && (
+        <>
+          {/* Heure */}
+          <div className="flex items-center justify-between pt-3 border-t border-night-700">
+            <span className="text-night-300 text-xs">Heure du rappel</span>
+            <select
+              value={status.hour}
+              onChange={(e) => updateHour(parseInt(e.target.value, 10))}
+              className="bg-night-800 text-night-100 text-xs rounded-lg px-2 py-1 border border-night-700"
+            >
+              {hours.map((h) => (
+                <option key={h} value={h}>
+                  {String(h).padStart(2, '0')}h00
+                </option>
+              ))}
+            </select>
+          </div>
+
+          {/* Test */}
+          <div className="flex items-center justify-between pt-3 border-t border-night-700">
+            <div>
+              <span className="text-night-300 text-xs">Tester maintenant</span>
+              {testResult && (
+                <p className="text-night-500 text-xs mt-0.5">
+                  {testResult.sent}/{testResult.total} envoyée(s)
+                </p>
+              )}
+            </div>
+            <button
+              onClick={handleTest}
+              disabled={testing}
+              className="text-xs px-3 py-1 rounded-lg bg-cosmic-500/20 text-cosmic-200 border border-cosmic-500/40 hover:bg-cosmic-500/30 disabled:opacity-50"
+            >
+              {testing ? '…' : 'Envoyer'}
+            </button>
+          </div>
+        </>
+      )}
+
+      {error && <p className="text-red-400 text-xs mt-2">{error}</p>}
+
+      {status.permission === 'denied' && (
+        <p className="text-amber-400 text-xs mt-2">
+          Permission refusée. Autorise les notifications dans les paramètres du navigateur.
+        </p>
+      )}
     </div>
   );
 }

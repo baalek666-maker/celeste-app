@@ -51,6 +51,7 @@ export interface User {
   trialStartedAt: number | null;
   premiumUntil: number | null;
   createdAt: number;
+  streak?: number;
 }
 
 export interface HoroscopeEntry {

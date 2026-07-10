@@ -21,6 +21,18 @@ const LLM_API_KEY = process.env.LLM_API_KEY || '';
 const LLM_MODEL = process.env.LLM_MODEL || 'gpt-4o-mini';
 const PORT = process.env.PORT || 3001;
 
+// ─── Web Push (VAPID) setup ────────────────────────────────
+import webpush from 'web-push';
+const VAPID_PUBLIC_KEY = process.env.VAPID_PUBLIC_KEY;
+const VAPID_PRIVATE_KEY = process.env.VAPID_PRIVATE_KEY;
+const VAPID_SUBJECT = process.env.VAPID_SUBJECT || 'mailto:admin@example.com';
+if (VAPID_PUBLIC_KEY && VAPID_PRIVATE_KEY) {
+  webpush.setVapidDetails(VAPID_SUBJECT, VAPID_PUBLIC_KEY, VAPID_PRIVATE_KEY);
+  console.log('🔔 Web Push: VAPID configured');
+} else {
+  console.log('⚠️  Web Push: VAPID keys missing — notifications disabled');
+}
+
 // ─── Database ──────────────────────────────────────────────
 const db = new Database(join(__dirname, 'celeste.db'));
 db.pragma('journal_mode = WAL');
@@ -38,6 +50,8 @@ db.exec(`
     premium_until INTEGER,
     stripe_customer_id TEXT,
     stripe_subscription_id TEXT,
+    streak_count INTEGER DEFAULT 0,
+    streak_last_date TEXT,
     created_at INTEGER DEFAULT (strftime('%s','now'))
   );
 
@@ -77,6 +91,68 @@ if (!hasCol('stripe_customer_id')) {
 }
 if (!hasCol('stripe_subscription_id')) {
   db.exec('ALTER TABLE users ADD COLUMN stripe_subscription_id TEXT');
+}
+if (!hasCol('streak_count')) {
+  db.exec('ALTER TABLE users ADD COLUMN streak_count INTEGER DEFAULT 0');
+}
+if (!hasCol('streak_last_date')) {
+  db.exec('ALTER TABLE users ADD COLUMN streak_last_date TEXT');
+}
+
+// horoscope_cache migration — add summary column (per-day short version for week view)
+const hcacheCols = db.prepare("PRAGMA table_info(horoscope_cache)").all();
+if (!hcacheCols.find(c => c.name === 'summary')) {
+  db.exec('ALTER TABLE horoscope_cache ADD COLUMN summary TEXT');
+}
+
+// push_subscriptions table — Web Push API storage
+if (!db.prepare("SELECT name FROM sqlite_master WHERE type='table' AND name='push_subscriptions'").get()) {
+  db.exec(`
+    CREATE TABLE push_subscriptions (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      user_id INTEGER NOT NULL,
+      endpoint TEXT NOT NULL UNIQUE,
+      p256dh TEXT NOT NULL,
+      auth TEXT NOT NULL,
+      user_agent TEXT,
+      created_at INTEGER DEFAULT (strftime('%s', 'now')),
+      FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
+    );
+    CREATE INDEX idx_push_user ON push_subscriptions(user_id);
+  `);
+}
+
+// users columns for notification preferences
+const userColsForNotif = db.prepare("PRAGMA table_info(users)").all();
+if (!userColsForNotif.find(c => c.name === 'notification_hour')) {
+  db.exec('ALTER TABLE users ADD COLUMN notification_hour INTEGER DEFAULT 9');
+}
+if (!userColsForNotif.find(c => c.name === 'last_notification_date')) {
+  db.exec('ALTER TABLE users ADD COLUMN last_notification_date TEXT');
+}
+
+// ─── Streak helpers ────────────────────────────────────────
+function yesterdayISODate() {
+  const d = new Date();
+  d.setDate(d.getDate() - 1);
+  return d.toISOString().split('T')[0];
+}
+
+// Update streak for user after they viewed today's horoscope.
+// Rules:
+//  - If streak_last_date == today  → no-op (already counted today)
+//  - If streak_last_date == yesterday → streak_count + 1
+//  - Otherwise (gap or null) → streak_count = 1
+// Returns the new streak count.
+function updateStreak(userId, today) {
+  const u = db.prepare('SELECT streak_count, streak_last_date FROM users WHERE id = ?').get(userId);
+  if (!u) return 0;
+  if (u.streak_last_date === today) return u.streak_count ?? 0;
+  const yesterday = yesterdayISODate();
+  const newCount = u.streak_last_date === yesterday ? (u.streak_count ?? 0) + 1 : 1;
+  db.prepare('UPDATE users SET streak_count = ?, streak_last_date = ? WHERE id = ?')
+    .run(newCount, today, userId);
+  return newCount;
 }
 
 // ─── Ephemeris (server-side, astronomy-engine) ─────────────
@@ -152,10 +228,74 @@ function getNatalPositions(birthData) {
 }
 
 // ─── LLM Horoscope Generation ──────────────────────────────
+// Retry with exponential backoff on 429 (rate limit) and 5xx
+async function callLLMWithRetry(messages, maxRetries = 3) {
+  let lastErr;
+  for (let attempt = 0; attempt <= maxRetries; attempt++) {
+    const response = await fetch(LLM_API_URL, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${LLM_API_KEY}`,
+      },
+      body: JSON.stringify({
+        model: LLM_MODEL,
+        messages,
+        temperature: 0.85,
+        max_tokens: 800,
+      }),
+    });
+    if (response.ok) return await response.json();
+    const errText = await response.text().catch(() => '');
+    lastErr = new Error(`LLM ${response.status}`);
+    if (response.status === 429 || response.status >= 500) {
+      if (attempt < maxRetries) {
+        const delayMs = 1000 * Math.pow(2, attempt); // 1s, 2s, 4s
+        console.warn(`[LLM] attempt ${attempt + 1} ${response.status}, retry in ${delayMs}ms`);
+        await new Promise(r => setTimeout(r, delayMs));
+        continue;
+      }
+    }
+    console.error('[LLM] fatal:', response.status, errText.slice(0, 200));
+    throw lastErr;
+  }
+  throw lastErr;
+}
+
+// Shorter prompt for week view summaries — only 4 fields instead of 7
+async function generateHoroscopeSummary(natalPositions, transits, sign, dateLabel) {
+  const systemPrompt = `Tu es Céleste, un astrologue français. Tu écris des résumés d'horoscope très courts et poétiques (2-3 phrases maximum) en français. Ton ton est introspectif et moderne.`;
+
+  const userPrompt = `Thème natal: ${Object.entries(natalPositions).map(([k,v]) => `${k} ${v.sign} ${v.degree}°`).join(', ')}.
+Transits du ${dateLabel}: ${Object.entries(transits).map(([k,v]) => `${k} ${v.sign} ${v.degree}°`).join(', ')}.
+Signe solaire: ${sign}.
+
+Génère un résumé court en JSON:
+{
+  "general": "2 phrases sur l'énergie dominante du jour",
+  "energie": un nombre de 1 à 5,
+  "mood": "1-2 mots pour l'humeur",
+  "luckyColor": "une couleur en français"
+}
+
+Réponds UNIQUEMENT avec le JSON.`;
+
+  const data = await callLLMWithRetry([
+    { role: 'system', content: systemPrompt },
+    { role: 'user', content: userPrompt },
+  ], 2);
+  const msg = data.choices?.[0]?.message || {};
+  const content = msg.content || msg.reasoning_content || '';
+  let cleaned = content.replace(/```json\s*/g, '').replace(/```\s*/g, '').trim();
+  const jsonMatch = cleaned.match(/\{[\s\S]*\}/);
+  if (!jsonMatch) throw new Error('No JSON in summary response');
+  return JSON.parse(jsonMatch[0]);
+}
+
 async function generateHoroscope(natalPositions, transits, sign) {
   const today = new Date().toLocaleDateString('fr-FR', { weekday: 'long', day: 'numeric', month: 'long' });
 
-  const systemPrompt = `Tu es Céleste, un astrologue français bienveillant et perspicace. Tu écris des horoscopes personnalisés basés sur les vraies positions planétaires. Ton ton est psychologique, introspectif et moderne — jamais预言式 ou moralisateur. Tu écris en français.`;
+  const systemPrompt = `Tu es Céleste, un astrologue français bienveillant et perspicace. Tu écris des horoscopes personnalisés basés sur les vraies positions planétaires. Ton ton est psychologique, introspectif et moderne — jamais prédictif ni moralisateur. Tu écris en français.`;
 
   const userPrompt = `Voici le thème natal de la personne:
 ${Object.entries(natalPositions).map(([k,v]) => `${k}: ${v.sign} ${v.degree}°${v.retrograde ? ' ℞' : ''}`).join('\n')}
@@ -178,30 +318,10 @@ Génère un horoscope PERSONNALISÉ en JSON avec ce format exact:
 
 Réponds UNIQUEMENT avec le JSON, aucun texte avant ou après.`;
 
-  const response = await fetch(LLM_API_URL, {
-    method: 'POST',
-    headers: {
-      'Content-Type': 'application/json',
-      'Authorization': `Bearer ${LLM_API_KEY}`,
-    },
-    body: JSON.stringify({
-      model: LLM_MODEL,
-      messages: [
-        { role: 'system', content: systemPrompt },
-        { role: 'user', content: userPrompt },
-      ],
-      temperature: 0.8,
-      max_tokens: 3000,
-    }),
-  });
-
-  if (!response.ok) {
-    const errText = await response.text();
-    console.error('LLM API error:', response.status, errText);
-    throw new Error(`LLM API error: ${response.status}`);
-  }
-
-  const data = await response.json();
+  const data = await callLLMWithRetry([
+    { role: 'system', content: systemPrompt },
+    { role: 'user', content: userPrompt },
+  ]);
   const msg = data.choices?.[0]?.message || {};
   const content = msg.content || msg.reasoning_content || '';
 
@@ -234,25 +354,10 @@ Analyse leur compatibilité amoureuse. Réponds en JSON:
 }
 Réponds UNIQUEMENT avec le JSON.`;
 
-  const response = await fetch(LLM_API_URL, {
-    method: 'POST',
-    headers: {
-      'Content-Type': 'application/json',
-      'Authorization': `Bearer ${LLM_API_KEY}`,
-    },
-    body: JSON.stringify({
-      model: LLM_MODEL,
-      messages: [
-        { role: 'system', content: systemPrompt },
-        { role: 'user', content: userPrompt },
-      ],
-      temperature: 0.7,
-      max_tokens: 3000,
-    }),
-  });
-
-  if (!response.ok) throw new Error(`LLM API error: ${response.status}`);
-  const data = await response.json();
+  const data = await callLLMWithRetry([
+    { role: 'system', content: systemPrompt },
+    { role: 'user', content: userPrompt },
+  ], 3);
   const content = data.choices?.[0]?.message?.content || data.choices?.[0]?.message?.reasoning_content || '';
   const cleaned = content.replace(/```json\s*/g, '').replace(/```\s*/g, '').trim();
   const jsonMatch = cleaned.match(/\{[\s\S]*\}/);
@@ -347,6 +452,7 @@ app.post('/api/auth/login', authLimiter, async (req, res) => {
       isPremium: !!user.is_premium,
       scansRemaining: user.scans_remaining,
       birthData: user.birth_data ? JSON.parse(user.birth_data) : null,
+      streak: user.streak_count ?? 0,
     },
   });
 });
@@ -369,6 +475,7 @@ app.get('/api/profile', auth, (req, res) => {
     scansRemaining: user.scans_remaining,
     birthData: user.birth_data ? JSON.parse(user.birth_data) : null,
     premiumUntil: user.premium_until,
+    streak: user.streak_count ?? 0,
   });
 });
 
@@ -386,7 +493,10 @@ app.post('/api/horoscope', auth, llmLimiter, async (req, res) => {
 
     // Check cache first (cached responses bypass the free-tier gate)
     const cached = db.prepare('SELECT content FROM horoscope_cache WHERE user_id = ? AND date = ?').get(req.user.id, today);
-    if (cached) return res.json(JSON.parse(cached.content));
+    if (cached) {
+      const streak = updateStreak(req.user.id, today);
+      return res.json({ ...JSON.parse(cached.content), streak });
+    }
 
     // Free-tier gate (server-side, authoritative)
     if (!isPremium) {
@@ -407,12 +517,120 @@ app.post('/api/horoscope', auth, llmLimiter, async (req, res) => {
     db.prepare('INSERT OR REPLACE INTO horoscope_cache (user_id, date, content) VALUES (?, ?, ?)')
       .run(req.user.id, today, JSON.stringify(horoscope));
 
+    // Streak: counting today (first view of today's horoscope)
+    const streak = updateStreak(req.user.id, today);
+
     // Return current scans_remaining so the frontend can show it
     const remaining = isPremium ? null : (user.scans_remaining - 1);
-    res.json({ ...horoscope, scansRemaining: remaining });
+    res.json({ ...horoscope, scansRemaining: remaining, streak });
   } catch (err) {
     console.error('Horoscope error:', err.message);
     res.status(500).json({ error: 'Failed to generate horoscope', detail: err.message });
+  }
+});
+
+// ─── Horoscope Week (7-day summary view) ──────────────────
+// Premium: 7 days | Free: 3 days (J-1 to J+1)
+app.get('/api/horoscope/week', auth, async (req, res) => {
+  try {
+    const user = db.prepare('SELECT * FROM users WHERE id = ?').get(req.user.id);
+    if (!user?.birth_data) return res.status(400).json({ error: 'Birth data required' });
+
+    const now = Math.floor(Date.now() / 1000);
+    const isPremium = !!user.is_premium && (!user.premium_until || user.premium_until > now);
+
+    const days = isPremium ? 7 : 3; // Free gets J-1..J+1, Premium gets J-3..J+3
+    const offsetStart = isPremium ? -3 : -1;
+    const offsetEnd = isPremium ? 3 : 1;
+
+    const birthData = JSON.parse(user.birth_data);
+    const natalPositions = getNatalPositions(birthData);
+    const sunSign = natalPositions.sun.sign;
+
+    const results = [];
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+
+    // First, hydrate from cache for all requested days (one round-trip)
+    for (let offset = offsetStart; offset <= offsetEnd; offset++) {
+      const day = new Date(today);
+      day.setDate(today.getDate() + offset);
+      const isoDate = day.toISOString().split('T')[0];
+
+      const cached = db.prepare('SELECT summary FROM horoscope_cache WHERE user_id = ? AND date = ?').get(req.user.id, isoDate);
+      if (cached?.summary) {
+        results.push({
+          date: isoDate,
+          offset,
+          weekday: day.toLocaleDateString('fr-FR', { weekday: 'short' }),
+          summary: JSON.parse(cached.summary),
+          cached: true,
+        });
+      }
+    }
+
+    // Compute which days still need generation
+    const haveDate = new Set(results.map(r => r.date));
+    const missing = [];
+    for (let offset = offsetStart; offset <= offsetEnd; offset++) {
+      const day = new Date(today);
+      day.setDate(today.getDate() + offset);
+      const isoDate = day.toISOString().split('T')[0];
+      if (!haveDate.has(isoDate)) missing.push({ offset, isoDate, day });
+    }
+
+    // Generate missing summaries sequentially (avoids 429 burst)
+    // Premium-only: free users must hit /api/horoscope first to start trial
+    if (missing.length > 0 && isPremium) {
+      for (const { offset, isoDate, day } of missing) {
+        try {
+          const transits = getTransits(day);
+          const dateLabel = day.toLocaleDateString('fr-FR', { weekday: 'long', day: 'numeric', month: 'long' });
+          const summary = await generateHoroscopeSummary(natalPositions, transits, sunSign, dateLabel);
+
+          // Save to cache (upsert: keep existing content if any)
+          const existing = db.prepare('SELECT content FROM horoscope_cache WHERE user_id = ? AND date = ?').get(req.user.id, isoDate);
+          if (existing) {
+            db.prepare('UPDATE horoscope_cache SET summary = ? WHERE user_id = ? AND date = ?')
+              .run(JSON.stringify(summary), req.user.id, isoDate);
+          } else {
+            db.prepare('INSERT INTO horoscope_cache (user_id, date, content, summary) VALUES (?, ?, ?, ?)')
+              .run(req.user.id, isoDate, '{}', JSON.stringify(summary));
+          }
+
+          results.push({
+            date: isoDate,
+            offset,
+            weekday: day.toLocaleDateString('fr-FR', { weekday: 'short' }),
+            summary,
+            cached: false,
+          });
+        } catch (err) {
+          console.warn(`[week] skip ${isoDate}: ${err.message}`);
+          results.push({
+            date: isoDate,
+            offset,
+            weekday: day.toLocaleDateString('fr-FR', { weekday: 'short' }),
+            summary: null,
+            cached: false,
+            error: err.message,
+          });
+        }
+      }
+    }
+
+    // Sort by date
+    results.sort((a, b) => a.offset - b.offset);
+
+    res.json({
+      days: results,
+      isPremium,
+      rangeDays: days,
+      generated: missing.filter(m => !results.find(r => r.date === m.isoDate && r.error)).length,
+    });
+  } catch (err) {
+    console.error('Week horoscope error:', err.message);
+    res.status(500).json({ error: 'Failed to generate week', detail: err.message });
   }
 });
 
@@ -503,6 +721,91 @@ app.post('/api/premium/activate', auth, (req, res) => {
 // /create-checkout, /portal, /verify-session sont protégés par auth (dans le router)
 app.get('/api/billing/status', (req, res) => res.json({ configured: isStripeConfigured() }));
 app.use('/api/billing', auth, billingRouter);
+
+// ─── Web Push endpoints ────────────────────────────────────
+// Public endpoint — frontend needs the public key to subscribe
+app.get('/api/notifications/vapid-key', (req, res) => {
+  if (!VAPID_PUBLIC_KEY) return res.status(503).json({ error: 'Push not configured' });
+  res.json({ publicKey: VAPID_PUBLIC_KEY });
+});
+
+app.get('/api/notifications/status', auth, (req, res) => {
+  const u = db.prepare('SELECT notification_hour, last_notification_date FROM users WHERE id = ?').get(req.user.id);
+  const subs = db.prepare('SELECT COUNT(*) as n FROM push_subscriptions WHERE user_id = ?').get(req.user.id);
+  res.json({
+    enabled: subs.n > 0,
+    subscriptionCount: subs.n,
+    hour: u?.notification_hour ?? 9,
+    lastSent: u?.last_notification_date || null,
+  });
+});
+
+app.post('/api/notifications/subscribe', auth, async (req, res) => {
+  if (!VAPID_PUBLIC_KEY) return res.status(503).json({ error: 'Push not configured' });
+  const { subscription, hour } = req.body || {};
+  if (!subscription?.endpoint || !subscription?.keys?.p256dh || !subscription?.keys?.auth) {
+    return res.status(400).json({ error: 'Invalid subscription' });
+  }
+  try {
+    db.prepare(`
+      INSERT INTO push_subscriptions (user_id, endpoint, p256dh, auth, user_agent)
+      VALUES (?, ?, ?, ?, ?)
+      ON CONFLICT(endpoint) DO UPDATE SET user_id = excluded.user_id, user_agent = excluded.user_agent
+    `).run(req.user.id, subscription.endpoint, subscription.keys.p256dh, subscription.keys.auth, req.headers['user-agent'] || '');
+    if (Number.isInteger(hour) && hour >= 0 && hour <= 23) {
+      db.prepare('UPDATE users SET notification_hour = ? WHERE id = ?').run(hour, req.user.id);
+    }
+    res.json({ ok: true });
+  } catch (err) {
+    console.error('subscribe error:', err.message);
+    res.status(500).json({ error: 'Failed to save subscription' });
+  }
+});
+
+app.delete('/api/notifications/unsubscribe', auth, (req, res) => {
+  const { endpoint } = req.body || {};
+  if (endpoint) {
+    db.prepare('DELETE FROM push_subscriptions WHERE user_id = ? AND endpoint = ?').run(req.user.id, endpoint);
+  } else {
+    db.prepare('DELETE FROM push_subscriptions WHERE user_id = ?').run(req.user.id);
+  }
+  res.json({ ok: true });
+});
+
+app.patch('/api/notifications/preferences', auth, (req, res) => {
+  const { hour } = req.body || {};
+  if (!Number.isInteger(hour) || hour < 0 || hour > 23) {
+    return res.status(400).json({ error: 'hour must be 0-23' });
+  }
+  db.prepare('UPDATE users SET notification_hour = ? WHERE id = ?').run(hour, req.user.id);
+  res.json({ ok: true });
+});
+
+// Send test notification to current user (all their devices)
+app.post('/api/notifications/test', auth, async (req, res) => {
+  if (!VAPID_PUBLIC_KEY) return res.status(503).json({ error: 'Push not configured' });
+  const subs = db.prepare('SELECT endpoint, p256dh, auth FROM push_subscriptions WHERE user_id = ?').all(req.user.id);
+  if (subs.length === 0) return res.status(404).json({ error: 'No active subscription' });
+  const payload = JSON.stringify({
+    title: '✨ Céleste — test',
+    body: 'Si tu lis ceci, les notifications marchent. 🌙',
+    icon: '/icon-192.png',
+    badge: '/badge-72.png',
+    url: '/',
+  });
+  const results = await Promise.allSettled(subs.map(s => webpush.sendNotification({
+    endpoint: s.endpoint,
+    keys: { p256dh: s.p256dh, auth: s.auth },
+  }, payload)));
+  const sent = results.filter(r => r.status === 'fulfilled').length;
+  // Cleanup dead subs (410 Gone)
+  results.forEach((r, i) => {
+    if (r.status === 'rejected' && (r.reason?.statusCode === 404 || r.reason?.statusCode === 410)) {
+      db.prepare('DELETE FROM push_subscriptions WHERE endpoint = ?').run(subs[i].endpoint);
+    }
+  });
+  res.json({ sent, total: subs.length });
+});
 
 // ─── Serve static frontend in production ───────────────────
 app.use(express.static(join(__dirname, '..', 'dist')));

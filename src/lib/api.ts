@@ -59,6 +59,7 @@ export interface AuthResponse {
     isPremium: boolean;
     scansRemaining: number;
     birthData?: BirthData | null;
+    streak?: number;
   };
 }
 
@@ -91,6 +92,7 @@ export const api = {
       scansRemaining: number;
       birthData?: BirthData | null;
       premiumUntil?: number | null;
+      streak?: number;
     }>('/profile'),
 
   // Horoscope (LLM-powered, cached server-side per day)
@@ -103,6 +105,8 @@ export const api = {
       mood: string;
       luckyNumber: number;
       luckyColor: string;
+      scansRemaining?: number | null;
+      streak?: number;
     }>('/horoscope', { method: 'POST' }),
 
   // Compatibility (LLM-powered)
@@ -117,6 +121,27 @@ export const api = {
       method: 'POST',
       body: JSON.stringify({ partnerBirthData }),
     }),
+
+  // Week horoscope summary (3 or 7 days)
+  getWeekHoroscope: () =>
+    apiCall<{
+      days: Array<{
+        date: string;
+        offset: number;
+        weekday: string;
+        summary: {
+          general: string;
+          energie: number;
+          mood: string;
+          luckyColor: string;
+        } | null;
+        cached: boolean;
+        error?: string;
+      }>;
+      isPremium: boolean;
+      rangeDays: number;
+      generated: number;
+    }>('/horoscope/week', { method: 'GET' }),
 
   // Journal
   getJournal: () =>
@@ -138,4 +163,40 @@ export const api = {
 
   // Health check
   health: () => apiCall<{ status: string }>('/health'),
+
+  // ─── Notifications (Web Push) ───────────────────────────
+  getVAPIDKey: () => apiCall<{ publicKey: string }>('/notifications/vapid-key'),
+
+  getNotificationStatus: () => apiCall<{
+    enabled: boolean;
+    subscriptionCount: number;
+    hour: number;
+    lastSent: string | null;
+  }>('/notifications/status'),
+
+  subscribeToNotifications: (data: {
+    subscription: { endpoint: string; keys: { p256dh: string; auth: string } };
+    hour?: number;
+  }) => apiCall<{ ok: true }>('/notifications/subscribe', {
+    method: 'POST',
+    body: JSON.stringify(data),
+  }),
+
+  unsubscribeFromNotifications: (data: { endpoint?: string }) =>
+    apiCall<{ ok: true }>('/notifications/unsubscribe', {
+      method: 'DELETE',
+      body: JSON.stringify(data),
+    }),
+
+  updateNotificationHour: (hour: number) =>
+    apiCall<{ ok: true }>('/notifications/preferences', {
+      method: 'PATCH',
+      body: JSON.stringify({ hour }),
+    }),
+
+  testNotification: () =>
+    apiCall<{ sent: number; total: number }>('/notifications/test', {
+      method: 'POST',
+      body: '{}',
+    }),
 };
