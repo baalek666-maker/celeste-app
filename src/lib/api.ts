@@ -340,4 +340,18 @@ export const api = {
     interpretation: string | null;
     generatedAt: string;
   }>('/chart/houses'),
+
+  // ─── Asteroids (Feature B2) ────────────────────────
+  getAsteroids: () => apiCall<{
+    positions: Array<{
+      key: string;
+      name: string;
+      theme: string;
+      sign: string;
+      degree: number;
+      absDeg: number;
+    }>;
+    interpretation: string | null;
+    generatedAt: string;
+  }>('/chart/asteroids'),
 };

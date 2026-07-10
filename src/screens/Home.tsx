@@ -7,6 +7,7 @@ import DailyAspects from '../components/DailyAspects';
 import DailyRituals from '../components/DailyRituals';
 import OnboardingChecklist from '../components/OnboardingChecklist';
 import HousesChart from '../components/HousesChart';
+import AsteroidInsights from '../components/AsteroidInsights';
 
 const DAILY_QUOTES = [
   'Les étoiles ne brillent jamais plus fort qu\'en pleine obscurité.',
@@ -255,6 +256,10 @@ export function Home({ user, onNavigate }: { user: User; onNavigate: (s: Screen)
       {/* Astrological Houses (Feature B1) */}
       <div className="mb-6 stagger-card" style={d(11)}>
         <HousesChart />
+      </div>
+      {/* Asteroid Insights (Feature B2) */}
+      <div className="mb-6 stagger-card" style={d(12)}>
+        <AsteroidInsights />
       </div>
     </div>
   );

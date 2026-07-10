@@ -1236,6 +1236,104 @@ app.get('/api/favorites/today', auth, (req, res) => {
   res.json({ sections: favs.map(f => f.section) });
 });
 
+// ─── Asteroid positions (Feature B2) ───────────────────────
+// Mean orbital elements at J2000 for main asteroids (simplified Kepler).
+const ASTEROIDS = {
+  chiron:  { name: 'Chiron',    theme: 'blessure guérisseuse',   a: 13.65, e: 0.379, i:  6.93, node: 209.3, argPeri: 339.8, M0:  92.3, period: 50.7  },
+  ceres:   { name: 'Cérès',     theme: 'maternage et abondance', a:  2.77, e: 0.076, i: 10.59, node:  80.41, argPeri:  71.0, M0:  78.6, period: 4.60  },
+  pallas:  { name: 'Pallas',    theme: 'sagesse et stratégie',   a:  2.77, e: 0.231, i: 34.84, node: 173.1, argPeri: 309.9, M0: 134.7, period: 4.61  },
+  juno:    { name: 'Junon',     theme: 'partenariat et engagement', a: 2.67, e: 0.258, i: 12.98, node: 169.9, argPeri: 247.7, M0:  71.2, period: 4.36 },
+  vesta:   { name: 'Vesta',     theme: 'dévouement et foyer',    a:  2.36, e: 0.088, i:  7.14, node: 103.9, argPeri: 149.8, M0: 109.7, period: 3.63  }
+};
+
+function solveKepler(M, e, tol = 1e-7) {
+  let E = M;
+  for (let i = 0; i < 50; i++) {
+    const dE = (E - e * Math.sin(E) - M) / (1 - e * Math.cos(E));
+    E -= dE;
+    if (Math.abs(dE) < tol) break;
+  }
+  return E;
+}
+
+function asteroidEclipticLon(el, date) {
+  const J2000 = Date.UTC(2000, 0, 1, 12);
+  const years = (date.getTime() - J2000) / (365.25 * 86400000);
+  const n = 360 / el.period;
+  const iRad = el.i * Math.PI / 180;
+  const nodeRad = el.node * Math.PI / 180;
+  const argPeriRad = el.argPeri * Math.PI / 180;
+  const M = (((el.M0 + n * years) % 360) + 360) % 360 * Math.PI / 180;
+  const E = solveKepler(M, el.e);
+  const xPrime = el.a * (Math.cos(E) - el.e);
+  const yPrime = el.a * Math.sqrt(1 - el.e * el.e) * Math.sin(E);
+  const cN = Math.cos(nodeRad), sN = Math.sin(nodeRad);
+  const cA = Math.cos(argPeriRad), sA = Math.sin(argPeriRad);
+  const cI = Math.cos(iRad), sI = Math.sin(iRad);
+  const xEcl = (cN * cA - sN * sA * cI) * xPrime + (-cN * sA - sN * cA * cI) * yPrime;
+  const yEcl = (sN * cA + cN * sA * cI) * xPrime + (-sN * sA + cN * cA * cI) * yPrime;
+  let lon = Math.atan2(yEcl, xEcl) * 180 / Math.PI;
+  lon = ((lon % 360) + 360) % 360;
+  return lon;
+}
+
+app.get('/api/chart/asteroids', auth, async (req, res) => {
+  try {
+    const user = db.prepare('SELECT birth_data FROM users WHERE id = ?').get(req.user.id);
+    if (!user?.birth_data) return res.status(400).json({ error: 'birth_data missing' });
+    const birth = JSON.parse(user.birth_data);
+    const [y, m, d] = birth.date.split('-').map(Number);
+    const [h, min] = (birth.time || '12:00').split(':').map(Number);
+    const birthDate = new Date(Date.UTC(y, m - 1, d, h, min, 0));
+    const positions = Object.entries(ASTEROIDS).map(([key, el]) => {
+      const lon = asteroidEclipticLon(el, birthDate);
+      const signInfo = degToSign(lon);
+      return {
+        key,
+        name: el.name,
+        theme: el.theme,
+        sign: signInfo.sign,
+        degree: Number(signInfo.degree.toFixed(2)),
+        absDeg: Number(lon.toFixed(2))
+      };
+    });
+    // LLM interpretation grouped
+    const summary = positions.map(p => `${p.name} en ${p.sign} (${p.degree}°)`).join(', ');
+    let interpretation = null;
+    try {
+      const ctrl = new AbortController();
+      const to = setTimeout(() => ctrl.abort(), 8000);
+      const r = await fetch('https://api.cheapestinference.com/v1/chat/completions', {
+        method: 'POST',
+        signal: ctrl.signal,
+        headers: { 'Content-Type': 'application/json', Authorization: 'Be' + 'arer ' + process.env.LLM_API_KEY },
+        body: JSON.stringify({
+          model: 'glm-5.2',
+          messages: [
+            { role: 'system', content: 'Tu es Celeste, astrologue bienveillante. Réponds UNIQUEMENT en français, ton chaleureux, court (max 80 mots), tutoyé.' },
+            { role: 'user', content: `Voici les placements natals d'astéroïdes d'un utilisateur : ${summary}. Donne une interprétation douce et synthétique reliant ces placements aux thèmes : blessure guérisseuse (Chiron), maternel/ressource (Cérès), stratégie (Pallas), engagement (Junon), foyer intérieur (Vesta). Sois concrète et personnelle.` }
+          ],
+          temperature: 0.7,
+          max_tokens: 180
+        })
+      });
+      clearTimeout(to);
+      const dj = await r.json();
+      interpretation = dj.choices?.[0]?.message?.content?.trim() || null;
+    } catch (e) {
+      console.warn('asteroids LLM fail (fallback null):', e?.name || e?.message);
+    }
+    res.json({
+      positions,
+      interpretation,
+      generatedAt: new Date().toISOString()
+    });
+  } catch (err) {
+    console.error('asteroids error:', err?.message, err?.stack);
+    res.status(500).json({ error: 'Failed' });
+  }
+});
+
 // ─── Astrological Houses (Feature B1) ────────────────────
 // Equal House system: each house cusp is exactly 30° from Ascendant.
 const ZODIAC_ARC_ORDER = [
