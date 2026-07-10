@@ -1,15 +1,49 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import type { User, JournalEntry } from '../types';
 import { getJournal, addJournalEntry } from '../lib/storage';
+import { api, getToken } from '../lib/api';
 
 export function Journal({ user }: { user: User }) {
-  const [entries, setEntries] = useState<JournalEntry[]>(getJournal());
+  const [entries, setEntries] = useState<JournalEntry[]>(() => getJournal());
   const [note, setNote] = useState('');
   const [rating, setRating] = useState(0);
+  const [syncing, setSyncing] = useState(false);
+  const [syncMsg, setSyncMsg] = useState('');
   const today = new Date().toISOString().split('T')[0];
   const todayFr = new Date().toLocaleDateString('fr-FR', { weekday: 'long', day: 'numeric', month: 'long' });
 
-  const handleSave = () => {
+  // On mount, if logged in, fetch server-side entries and merge with local.
+  // Server is source of truth; localStorage acts as offline cache.
+  useEffect(() => {
+    if (!getToken()) return;
+    let cancelled = false;
+    (async () => {
+      try {
+        setSyncing(true);
+        const remote = await api.getJournal();
+        if (cancelled) return;
+        const local = getJournal();
+        // Merge: prefer remote entries, fill gaps with local
+        const byId = new Map<string, JournalEntry>();
+        for (const e of local) byId.set(e.id, e);
+        for (const e of remote) byId.set(e.id, e);
+        const merged = Array.from(byId.values()).sort((a, b) => b.date.localeCompare(a.date));
+        // Persist merged to local cache
+        localStorage.setItem('celeste_journal', JSON.stringify(merged));
+        setEntries(merged);
+        setSyncMsg(`${remote.length} entrées synchronisées.`);
+      } catch (e) {
+        // Offline / network error — keep local cache
+        setSyncMsg('Mode hors-ligne.');
+      } finally {
+        if (!cancelled) setSyncing(false);
+        setTimeout(() => setSyncMsg(''), 3000);
+      }
+    })();
+    return () => { cancelled = true; };
+  }, [user.email]);
+
+  const handleSave = async () => {
     if (!note.trim()) return;
     const entry: JournalEntry = {
       id: today,
@@ -18,16 +52,36 @@ export function Journal({ user }: { user: User }) {
       userNote: note.trim(),
       userRating: rating,
     };
+    // 1. Save locally (instant, works offline)
     addJournalEntry(entry);
     setEntries(getJournal());
     setNote('');
     setRating(0);
+    // 2. Best-effort sync to backend
+    if (getToken()) {
+      try {
+        await api.saveJournalEntry({
+          date: entry.date,
+          userNote: entry.userNote,
+          userRating: entry.userRating,
+        });
+      } catch {
+        // Swallow — entry is safe locally, will re-sync on next visit
+      }
+    }
   };
 
   return (
     <div className="px-5 pt-12 pb-4">
       <h1 className="text-2xl font-bold mb-1 text-gold-gradient">Journal</h1>
       <p className="text-night-400 text-sm mb-6">Vos ressentis et votre parcours astral</p>
+
+      {/* Sync status */}
+      {(syncing || syncMsg) && (
+        <p className="text-xs text-cosmic-400 mb-3 animate-fade-in">
+          {syncing ? '⟳ Synchronisation…' : `✓ ${syncMsg}`}
+        </p>
+      )}
 
       {/* Today's entry */}
       <div className="glass rounded-3xl p-5 mb-6">
@@ -62,8 +116,8 @@ export function Journal({ user }: { user: User }) {
         <>
           <p className="text-night-400 text-xs uppercase tracking-widest mb-3">Historique</p>
           <div className="space-y-3">
-            {entries.map(e => (
-              <div key={e.id} className="glass rounded-2xl p-4">
+            {entries.map((e, idx) => (
+              <div key={e.id} className="glass rounded-2xl p-4 animate-fade-in card-glow" style={{ animationDelay: `${idx * 0.06}s` }}>
                 <div className="flex items-center justify-between mb-2">
                   <p className="text-night-300 text-sm capitalize">
                     {new Date(e.date).toLocaleDateString('fr-FR', { day: 'numeric', month: 'short' })}

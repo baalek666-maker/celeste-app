@@ -3,19 +3,32 @@ import type { User, ZodiacSign, BirthData, CompatibilityResult } from '../types'
 import { api } from '../lib/api';
 import { ZODIAC_SIGNS, ZODIAC_ORDER } from '../data/zodiac';
 
+// Representative dates per sign (used in quick mode as approximation only).
+// NOTE: in quick mode the moon is computed by the backend from this date, so
+// the partner's moon sign returned is genuine for that date — not a fake.
+const SIGN_REPRESENTATIVE_DATES: Record<string, string> = {
+  aries: '2000-04-05', taurus: '2000-05-05', gemini: '2000-06-05',
+  cancer: '2000-07-05', leo: '2000-08-05', virgo: '2000-09-05',
+  libra: '2000-10-05', scorpio: '2000-11-05', sagittarius: '2000-12-05',
+  capricorn: '2000-01-05', aquarius: '2000-02-05', pisces: '2000-03-05',
+};
+
 // Simplified: user enters partner's date + place (like onboarding-lite)
 const CITIES = [
-  { city: 'Paris', lat: 48.8566, lng: 2.3522, tz: 2 },
-  { city: 'Marseille', lat: 43.2965, lng: 5.3698, tz: 2 },
-  { city: 'Lyon', lat: 45.7640, lng: 4.8357, tz: 2 },
-  { city: 'Toulouse', lat: 43.6047, lng: 1.4442, tz: 2 },
-  { city: 'Nice', lat: 43.7102, lng: 7.2620, tz: 2 },
-  { city: 'Nantes', lat: 47.2184, lng: -1.5536, tz: 2 },
-  { city: 'Bordeaux', lat: 44.8378, lng: -0.5792, tz: 2 },
-  { city: 'Lille', lat: 50.6292, lng: 3.0573, tz: 2 },
-  { city: 'Genève', lat: 46.2044, lng: 6.1432, tz: 2 },
-  { city: 'Bruxelles', lat: 50.8503, lng: 4.3517, tz: 2 },
-  { city: 'Montréal', lat: 45.5017, lng: -73.5673, tz: -4 },
+  { city: 'Paris', country: 'France', lat: 48.8566, lng: 2.3522, tz: 2 },
+  { city: 'Marseille', country: 'France', lat: 43.2965, lng: 5.3698, tz: 2 },
+  { city: 'Lyon', country: 'France', lat: 45.7640, lng: 4.8357, tz: 2 },
+  { city: 'Toulouse', country: 'France', lat: 43.6047, lng: 1.4442, tz: 2 },
+  { city: 'Nice', country: 'France', lat: 43.7102, lng: 7.2620, tz: 2 },
+  { city: 'Nantes', country: 'France', lat: 47.2184, lng: -1.5536, tz: 2 },
+  { city: 'Bordeaux', country: 'France', lat: 44.8378, lng: -0.5792, tz: 2 },
+  { city: 'Lille', country: 'France', lat: 50.6292, lng: 3.0573, tz: 2 },
+  { city: 'Genève', country: 'Suisse', lat: 46.2044, lng: 6.1432, tz: 2 },
+  { city: 'Bruxelles', country: 'Belgique', lat: 50.8503, lng: 4.3517, tz: 2 },
+  { city: 'Montréal', country: 'Canada', lat: 45.5017, lng: -73.5673, tz: -4 },
+  { city: 'New York', country: 'États-Unis', lat: 40.7128, lng: -74.0060, tz: -4 },
+  { city: 'Londres', country: 'Royaume-Uni', lat: 51.5074, lng: -0.1278, tz: 1 },
+  { city: 'Berlin', country: 'Allemagne', lat: 52.5200, lng: 13.4050, tz: 2 },
 ];
 
 export function Compatibility({ user }: { user: User }) {
@@ -40,39 +53,54 @@ export function Compatibility({ user }: { user: User }) {
           date: pDate,
           time: pTime || '12:00',
           city: c.city,
-          country: 'France',
+          country: c.country,
           latitude: c.lat,
           longitude: c.lng,
           timezone: c.tz,
         };
       } else {
-        // Quick mode: construct minimal birth data from sign guess
-        // Use a representative date for each sign as approximation
-        const signDates: Record<string, string> = {
-          aries: '2000-04-01', taurus: '2000-05-05', gemini: '2000-06-05',
-          cancer: '2000-07-05', leo: '2000-08-05', virgo: '2000-09-05',
-          libra: '2000-10-05', scorpio: '2000-11-05', sagittarius: '2000-12-05',
-          capricorn: '2000-01-05', aquarius: '2000-02-05', pisces: '2000-03-05',
-        };
+        // Quick mode: use a representative date for the chosen sign. The
+        // backend computes a real chart for that date, so theirMoon comes
+        // back genuinely calculated (not a fake).
         partnerData = {
-          date: signDates[theirSign], time: '12:00',
-          city: 'Paris', country: 'France',
-          latitude: 48.8566, longitude: 2.3522, timezone: 2,
+          date: SIGN_REPRESENTATIVE_DATES[theirSign],
+          time: '12:00',
+          city: 'Paris',
+          country: 'France',
+          latitude: 48.8566,
+          longitude: 2.3522,
+          timezone: 2,
         };
       }
 
       const res = await api.getCompatibility(partnerData);
+      // Trust the backend: it returns yourMoon/theirMoon computed from real
+      // birth data. Only fall back to the user/sun if the field is absent.
       setResult({
         ...res,
         yourSun: user.natalChart?.sun || 'aries',
         theirSun: theirSign,
-        yourMoon: user.natalChart?.moon || 'aries',
-        theirMoon: theirSign,
+        yourMoon: res.yourMoon ?? user.natalChart?.moon ?? 'aries',
+        theirMoon: res.theirMoon ?? theirSign,
       });
     } catch (err: any) {
       setError(err.message || 'Erreur');
     } finally {
       setLoading(false);
+    }
+  };
+
+  const handleShare = async () => {
+    if (!result) return;
+    const text = `💞 Notre compatibilité est de ${result.score}% sur Céleste ! ${result.title}`;
+    try {
+      if (navigator.share) {
+        await navigator.share({ title: 'Notre compatibilité Céleste', text });
+      } else {
+        await navigator.clipboard.writeText(text);
+      }
+    } catch {
+      // user cancelled or clipboard unavailable
     }
   };
 
@@ -191,6 +219,19 @@ export function Compatibility({ user }: { user: User }) {
           <div className="glass rounded-3xl p-5 mb-4">
             <p className="text-night-200 leading-relaxed text-sm">{result.description}</p>
           </div>
+
+          <button onClick={handleShare}
+            className="w-full py-3 rounded-2xl glass border border-cosmic-500/40 text-cosmic-200 font-medium transition-all flex items-center justify-center gap-2 hover:border-cosmic-500/70 active:scale-[0.99] mb-4">
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#c084fc"
+              strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+              <circle cx="18" cy="5" r="3" />
+              <circle cx="6" cy="12" r="3" />
+              <circle cx="18" cy="19" r="3" />
+              <line x1="8.59" y1="13.51" x2="15.42" y2="17.49" />
+              <line x1="15.41" y1="6.51" x2="8.59" y2="10.49" />
+            </svg>
+            Partager
+          </button>
 
           {result.strengths?.length > 0 && (
             <div className="glass rounded-3xl p-5 mb-4">

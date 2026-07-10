@@ -39,12 +39,29 @@ export function ChartView({ user }: { user: User }) {
             );
           })}
 
-          {/* House dividers */}
+          {/* House dividers — use REAL cusps from chart.houses, not fixed 30° intervals */}
           {chart.houses.map((house, i) => {
-            const angle = (i * 30 - 90) * Math.PI / 180;
+            // house.cusp is in absolute degrees (0-360). Convert to SVG angle:
+            // subtract 90° so 0° Aries renders at the top (12 o'clock).
+            const angle = (house.cusp - 90) * Math.PI / 180;
             const x = 160 + 120 * Math.cos(angle);
             const y = 160 + 120 * Math.sin(angle);
-            return <line key={i} x1="160" y1="160" x2={x} y2={y} stroke="#2a2b4d" strokeWidth="0.5" opacity="0.5" />;
+            return (
+              <g key={`house-${i}`}>
+                <line x1="160" y1="160" x2={x} y2={y} stroke="#2a2b4d" strokeWidth="0.5" opacity="0.5" />
+                {/* house number near the rim */}
+                {(() => {
+                  const labelAngle = (house.cusp + 15 - 90) * Math.PI / 180;
+                  const lx = 160 + 128 * Math.cos(labelAngle);
+                  const ly = 160 + 128 * Math.sin(labelAngle);
+                  return (
+                    <text x={lx} y={ly} fill="#56589c" fontSize="7" textAnchor="middle" dominantBaseline="middle" opacity="0.6">
+                      {i + 1}
+                    </text>
+                  );
+                })()}
+              </g>
+            );
           })}
 
           {/* Inner circles */}

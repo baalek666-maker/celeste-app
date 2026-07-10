@@ -10,10 +10,15 @@
     "preview": "vite preview"
   },
   "dependencies": {
+    "@capacitor/android": "^8.4.1",
+    "@capacitor/cli": "^8.4.1",
+    "@capacitor/core": "^8.4.1",
+    "@stripe/stripe-js": "^9.9.0",
     "astronomy-engine": "^2.1.19",
     "playwright": "^1.61.1",
     "react": "^19.2.7",
-    "react-dom": "^19.2.7"
+    "react-dom": "^19.2.7",
+    "stripe": "^22.3.1"
   },
   "devDependencies": {
     "@tailwindcss/vite": "^4.3.2",

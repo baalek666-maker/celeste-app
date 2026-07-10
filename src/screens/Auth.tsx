@@ -19,7 +19,15 @@ export function Auth({ onSuccess }: { onSuccess: (user: any) => void }) {
       setToken(res.token);
       onSuccess(res.user);
     } catch (err: any) {
-      setError(err.message || 'Une erreur est survenue');
+      // Friendlier, localized error messages
+      const raw = (err?.message || '').toLowerCase();
+      let msg = 'Oups, vérifiez vos identifiants ✦';
+      if (raw.includes('network') || raw.includes('failed to fetch') || raw.includes('load failed')) {
+        msg = 'Impossible de contacter les étoiles. Vérifiez votre connexion.';
+      } else if (raw.includes('already') || raw.includes('exists')) {
+        msg = 'Un compte existe déjà avec cet email. Essayez de vous connecter.';
+      }
+      setError(msg);
     } finally {
       setLoading(false);
     }
@@ -83,23 +91,37 @@ export function Auth({ onSuccess }: { onSuccess: (user: any) => void }) {
               minLength={mode === 'register' ? 6 : 1}
               className="w-full px-4 py-3.5 rounded-2xl glass border border-night-700 text-night-100 placeholder:text-night-500 focus:border-gold-500/50 focus:outline-none transition-colors"
             />
+            {mode === 'login' && (
+              <div className="flex justify-end mt-2">
+                <button
+                  type="button"
+                  onClick={() => setError('La récupération de mot de passe arrivera bientôt. ✦')}
+                  className="text-cosmic-400/80 text-xs hover:text-cosmic-300 transition-colors underline decoration-dotted decoration-cosmic-500/40"
+                >
+                  Mot de passe oublié ?
+                </button>
+              </div>
+            )}
           </div>
 
           {error && (
-            <p className="text-red-400 text-sm text-center animate-fade-in">{error}</p>
+            <div className="flex items-start gap-2 px-4 py-3 rounded-2xl bg-red-500/10 border border-red-500/20 animate-fade-in">
+              <span className="text-red-400 text-sm leading-relaxed">{error}</span>
+            </div>
           )}
 
           <button
             type="submit"
             disabled={loading}
-            className="w-full py-4 rounded-2xl bg-gradient-to-r from-cosmic-600 via-cosmic-600 to-cosmic-700 text-white font-semibold text-lg transition-all duration-300 disabled:opacity-50 shadow-lg shadow-cosmic-900/40 hover:shadow-cosmic-700/50 hover:scale-[1.01]"
+            className="w-full py-4 rounded-2xl bg-gradient-to-r from-cosmic-600 via-cosmic-600 to-cosmic-700 text-white font-semibold text-lg transition-all duration-300 disabled:opacity-70 shadow-lg shadow-cosmic-900/40 hover:shadow-cosmic-700/50 hover:scale-[1.01] active:scale-[0.99]"
           >
             {loading ? (
-              <span className="flex items-center justify-center gap-2">
+              <span className="flex items-center justify-center gap-3">
                 <svg className="animate-spin h-5 w-5" viewBox="0 0 24 24" fill="none">
                   <circle cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="2" opacity="0.3" />
                   <path d="M12 2a10 10 0 0 1 10 10" stroke="currentColor" strokeWidth="2" />
                 </svg>
+                {mode === 'register' ? 'Création du compte...' : 'Connexion...'}
               </span>
             ) : mode === 'register' ? 'Commencer ✦' : 'Se connecter'}
           </button>
