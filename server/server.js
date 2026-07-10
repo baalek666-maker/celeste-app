@@ -105,6 +105,23 @@ if (!hcacheCols.find(c => c.name === 'summary')) {
   db.exec('ALTER TABLE horoscope_cache ADD COLUMN summary TEXT');
 }
 
+// horoscope_favorites table — Feature 5: bookmark phrases across all sections
+if (!db.prepare("SELECT name FROM sqlite_master WHERE type='table' AND name='horoscope_favorites'").get()) {
+  db.exec(`
+    CREATE TABLE horoscope_favorites (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      user_id INTEGER NOT NULL,
+      date TEXT NOT NULL,
+      section TEXT NOT NULL,
+      content TEXT NOT NULL,
+      created_at INTEGER DEFAULT (strftime('%s', 'now')),
+      UNIQUE(user_id, date, section)
+    );
+    CREATE INDEX idx_fav_user_date ON horoscope_favorites(user_id, date);
+  `);
+  console.log('⭐ Migration: horoscope_favorites table created');
+}
+
 // push_subscriptions table — Web Push API storage
 if (!db.prepare("SELECT name FROM sqlite_master WHERE type='table' AND name='push_subscriptions'").get()) {
   db.exec(`
@@ -805,6 +822,77 @@ app.post('/api/notifications/test', auth, async (req, res) => {
     }
   });
   res.json({ sent, total: subs.length });
+});
+
+// ─── Transits of the day (Feature 6) ─────────────────────────
+app.get('/api/transits/today', auth, (req, res) => {
+  try {
+    const now = new Date();
+    const date = new Date(Date.UTC(
+      now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate(),
+      now.getUTCHours(), now.getUTCMinutes()
+    ));
+    const transits = getTransits(date);
+    res.json({ date: date.toISOString(), transits });
+  } catch (err) {
+    console.error('transits error:', err.message);
+    res.status(500).json({ error: 'Failed' });
+  }
+});
+
+// ─── Favorites (Feature 5) ──────────────────────────────────
+// Bookmark a phrase from any horoscope section
+app.post('/api/favorites', auth, (req, res) => {
+  const { date, section, content } = req.body || {};
+  if (!date || !section || !content) {
+    return res.status(400).json({ error: 'date, section, content required' });
+  }
+  if (content.length > 1000) return res.status(400).json({ error: 'content too long' });
+  try {
+    // Toggle: if exists, remove; else add
+    const existing = db.prepare(
+      'SELECT id FROM horoscope_favorites WHERE user_id = ? AND date = ? AND section = ?'
+    ).get(req.user.id, date, section);
+    if (existing) {
+      db.prepare('DELETE FROM horoscope_favorites WHERE id = ?').run(existing.id);
+      return res.json({ ok: true, action: 'removed', id: existing.id });
+    }
+    const result = db.prepare(
+      'INSERT INTO horoscope_favorites (user_id, date, section, content) VALUES (?, ?, ?, ?)'
+    ).run(req.user.id, date, section, content);
+    res.json({ ok: true, action: 'added', id: result.lastInsertRowid });
+  } catch (err) {
+    console.error('favorite error:', err.message);
+    res.status(500).json({ error: 'Failed' });
+  }
+});
+
+// List user favorites (newest first)
+app.get('/api/favorites', auth, (req, res) => {
+  const limit = Math.min(parseInt(req.query.limit) || 100, 500);
+  const favorites = db.prepare(
+    'SELECT id, date, section, content, created_at FROM horoscope_favorites WHERE user_id = ? ORDER BY created_at DESC LIMIT ?'
+  ).all(req.user.id, limit);
+  res.json({ favorites });
+});
+
+// Delete a specific favorite by id
+app.delete('/api/favorites/:id', auth, (req, res) => {
+  const id = parseInt(req.params.id);
+  if (!id) return res.status(400).json({ error: 'invalid id' });
+  const result = db.prepare(
+    'DELETE FROM horoscope_favorites WHERE id = ? AND user_id = ?'
+  ).run(id, req.user.id);
+  res.json({ ok: true, deleted: result.changes });
+});
+
+// Quick check: which sections of today are favorited (for UI stars)
+app.get('/api/favorites/today', auth, (req, res) => {
+  const today = new Date().toISOString().split('T')[0];
+  const favs = db.prepare(
+    'SELECT section FROM horoscope_favorites WHERE user_id = ? AND date = ?'
+  ).all(req.user.id, today);
+  res.json({ sections: favs.map(f => f.section) });
 });
 
 // ─── Serve static frontend in production ───────────────────

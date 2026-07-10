@@ -2,7 +2,9 @@ import { useState, useEffect, useRef } from 'react';
 import type { User } from '../types';
 import { api } from '../lib/api';
 import { getCachedHoroscope, cacheHoroscope } from '../lib/storage';
+import { useFavorites } from '../lib/useFavorites';
 import ShareCard from '../components/ShareCard';
+import SkyMap from '../components/SkyMap';
 
 const LOADING_MESSAGES = [
   'Alignement des planètes...',
@@ -135,6 +137,15 @@ export function Horoscope({ user }: { user: User }) {
   };
 
   const [shareOpen, setShareOpen] = useState(false);
+  const { isFavorited, toggle: toggleFav } = useFavorites();
+
+  const handleToggleFav = async (section: 'general' | 'love' | 'career', content: string) => {
+    try {
+      await toggleFav(today, section, content);
+    } catch (err) {
+      console.warn('toggle fav failed', err);
+    }
+  };
 
   const handleShare = async () => {
     // Ouvre la carte visuelle à partager (Feature 4)
@@ -256,29 +267,59 @@ export function Horoscope({ user }: { user: User }) {
         </div>
       </div>
 
+      {/* Sky map (Feature 6) */}
+      <SkyMap />
+
       {/* General */}
       <div className="glass rounded-3xl p-5 mb-4 animate-fade-in card-glow">
-        <div className="flex items-center gap-2 mb-3">
-          <span className="text-xl">✦</span>
-          <p className="text-gold-400 text-xs uppercase tracking-widest">Général</p>
+        <div className="flex items-center justify-between mb-3">
+          <div className="flex items-center gap-2">
+            <span className="text-xl">✦</span>
+            <p className="text-gold-400 text-xs uppercase tracking-widest">Général</p>
+          </div>
+          <button
+            onClick={() => handleToggleFav('general', horoscope.general)}
+            className="text-lg px-2 py-1 rounded-lg hover:bg-night-800/50 active:scale-90 transition-all"
+            aria-label={isFavorited('general') ? 'Retirer des favoris' : 'Ajouter aux favoris'}
+          >
+            {isFavorited('general') ? '★' : '☆'}
+          </button>
         </div>
         <p className="text-night-100 leading-relaxed">{horoscope.general}</p>
       </div>
 
       {/* Love */}
       <div className="glass rounded-3xl p-5 mb-4 animate-fade-in card-glow" style={{ animationDelay: '0.1s' }}>
-        <div className="flex items-center gap-2 mb-3">
-          <span className="text-xl">♥</span>
-          <p className="text-cosmic-300 text-xs uppercase tracking-widest">Amour</p>
+        <div className="flex items-center justify-between mb-3">
+          <div className="flex items-center gap-2">
+            <span className="text-xl">♥</span>
+            <p className="text-cosmic-300 text-xs uppercase tracking-widest">Amour</p>
+          </div>
+          <button
+            onClick={() => handleToggleFav('love', horoscope.love)}
+            className="text-lg px-2 py-1 rounded-lg hover:bg-night-800/50 active:scale-90 transition-all"
+            aria-label={isFavorited('love') ? 'Retirer des favoris' : 'Ajouter aux favoris'}
+          >
+            {isFavorited('love') ? '★' : '☆'}
+          </button>
         </div>
         <p className="text-night-100 leading-relaxed">{horoscope.love}</p>
       </div>
 
       {/* Career */}
       <div className="glass rounded-3xl p-5 mb-4 animate-fade-in card-glow" style={{ animationDelay: '0.2s' }}>
-        <div className="flex items-center gap-2 mb-3">
-          <span className="text-xl">★</span>
-          <p className="text-gold-400 text-xs uppercase tracking-widest">Carrière</p>
+        <div className="flex items-center justify-between mb-3">
+          <div className="flex items-center gap-2">
+            <span className="text-xl">★</span>
+            <p className="text-gold-400 text-xs uppercase tracking-widest">Carrière</p>
+          </div>
+          <button
+            onClick={() => handleToggleFav('career', horoscope.career)}
+            className="text-lg px-2 py-1 rounded-lg hover:bg-night-800/50 active:scale-90 transition-all"
+            aria-label={isFavorited('career') ? 'Retirer des favoris' : 'Ajouter aux favoris'}
+          >
+            {isFavorited('career') ? '★' : '☆'}
+          </button>
         </div>
         <p className="text-night-100 leading-relaxed">{horoscope.career}</p>
       </div>

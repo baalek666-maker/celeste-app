@@ -161,8 +161,26 @@ export const api = {
       body: JSON.stringify({ plan }),
     }),
 
+  // Quick check: which sections of today are favorited (for UI stars)
+  todayFavorites: () => apiCall<{ sections: string[] }>('/favorites/today'),
+  toggleFavorite: (date: string, section: string, content: string) =>
+    apiCall<{ ok: boolean; action: 'added' | 'removed'; id: number }>('/favorites', {
+      method: 'POST',
+      body: { date, section, content },
+    }),
+  listFavorites: (limit = 100) =>
+    apiCall<{ favorites: { id: number; date: string; section: string; content: string; created_at: number }[] }>(`/favorites?limit=${limit}`),
+  deleteFavorite: (id: number) =>
+    apiCall<{ ok: boolean; deleted: number }>(`/favorites/${id}`, { method: 'DELETE' }),
+
   // Health check
   health: () => apiCall<{ status: string }>('/health'),
+
+  // Transits of the day (Feature 6)
+  getTransitsToday: () => apiCall<{
+    date: string;
+    transits: Record<string, { sign: string; degree: number; longitude: number; retrograde: boolean }>;
+  }>('/transits/today'),
 
   // ─── Notifications (Web Push) ───────────────────────────
   getVAPIDKey: () => apiCall<{ publicKey: string }>('/notifications/vapid-key'),
