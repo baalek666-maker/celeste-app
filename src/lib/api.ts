@@ -7,7 +7,7 @@
 
 import type { BirthData, JournalEntry } from '../types';
 
-const API_URL = import.meta.env.VITE_API_URL || 'https://pokevendrepro.com/celeste/api';
+const API_URL = import.meta.env.VITE_API_URL || '/api';
 const TOKEN_KEY = 'celeste_jwt';
 
 // ─── Token management ──────────────────────────────
