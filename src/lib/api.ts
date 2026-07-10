@@ -298,4 +298,21 @@ export const api = {
     apiCall<{
       days: Array<{ date: string; completed_morning: number; completed_evening: number }>;
     }>(`/rituals/history?days=${days}`),
+
+  // ─── Onboarding Progress (Feature A2) ────────────────
+  getOnboarding: () => apiCall<{
+    steps: Array<{ key: string; label: string; icon: string; completed: boolean }>;
+    dismissed: boolean;
+    completedCount: number;
+    totalCount: number;
+  }>('/onboarding/progress'),
+
+  markOnboardingStep: (step: string) =>
+    apiCall<{ ok: true; step: string; completed: Record<string, boolean> }>(
+      '/onboarding/step',
+      { method: 'POST', body: JSON.stringify({ step }) }
+    ),
+
+  dismissOnboarding: () =>
+    apiCall<{ ok: true }>('/onboarding/dismiss', { method: 'POST' }),
 };

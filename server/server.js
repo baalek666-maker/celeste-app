@@ -184,6 +184,20 @@ if (!db.prepare("SELECT name FROM sqlite_master WHERE type='table' AND name='dai
   `);
 }
 
+// onboarding_progress table — first-run guided tour (Feature A2)
+if (!db.prepare("SELECT name FROM sqlite_master WHERE type='table' AND name='onboarding_progress'").get()) {
+  db.exec(`
+    CREATE TABLE onboarding_progress (
+      user_id INTEGER PRIMARY KEY,
+      completed_steps TEXT DEFAULT '{}',
+      dismissed INTEGER DEFAULT 0,
+      created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+      updated_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+      FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
+    );
+  `);
+}
+
 // ─── Streak helpers ────────────────────────────────────────
 function yesterdayISODate() {
   const d = new Date();
@@ -1326,6 +1340,75 @@ app.get('/api/rituals/history', auth, (req, res) => {
     res.json({ days: rows });
   } catch (err) {
     console.error('ritual history error:', err.message);
+    res.status(500).json({ error: 'Failed' });
+  }
+});
+
+// ─── Onboarding Progress (Feature A2) ─────────────────────────
+const ONBOARDING_STEPS = [
+  { key: 'birthdata',     label: 'Renseigne ta date de naissance',   icon: '🎂' },
+  { key: 'firsthoroscope', label: 'Découvre ton horoscope du jour', icon: '✨' },
+  { key: 'notification',  label: 'Active les notifications',         icon: '🔔' },
+  { key: 'ritual',        label: 'Essaie ton premier rituel',        icon: '🌙' },
+  { key: 'compatibility', label: 'Teste la compatibilité',            icon: '💞' }
+];
+
+app.get('/api/onboarding/progress', auth, (req, res) => {
+  try {
+    const row = db.prepare(
+      'SELECT completed_steps, dismissed FROM onboarding_progress WHERE user_id = ?'
+    ).get(req.user.id);
+    const completed = row ? JSON.parse(row.completed_steps || '{}') : {};
+    res.json({
+      steps: ONBOARDING_STEPS.map(s => ({ ...s, completed: !!completed[s.key] })),
+      dismissed: !!(row && row.dismissed),
+      completedCount: Object.values(completed).filter(Boolean).length,
+      totalCount: ONBOARDING_STEPS.length
+    });
+  } catch (err) {
+    console.error('onboarding get error:', err.message);
+    res.status(500).json({ error: 'Failed' });
+  }
+});
+
+app.post('/api/onboarding/step', auth, (req, res) => {
+  const { step } = req.body || {};
+  if (!ONBOARDING_STEPS.find(s => s.key === step)) {
+    return res.status(400).json({ error: 'unknown step' });
+  }
+  try {
+    const existing = db.prepare(
+      'SELECT completed_steps FROM onboarding_progress WHERE user_id = ?'
+    ).get(req.user.id);
+    const completed = existing ? JSON.parse(existing.completed_steps || '{}') : {};
+    completed[step] = true;
+    const json = JSON.stringify(completed);
+    if (existing) {
+      db.prepare(
+        'UPDATE onboarding_progress SET completed_steps = ?, updated_at = CURRENT_TIMESTAMP WHERE user_id = ?'
+      ).run(json, req.user.id);
+    } else {
+      db.prepare(
+        'INSERT INTO onboarding_progress (user_id, completed_steps) VALUES (?, ?)'
+      ).run(req.user.id, json);
+    }
+    res.json({ ok: true, step, completed });
+  } catch (err) {
+    console.error('onboarding step error:', err.message);
+    res.status(500).json({ error: 'Failed' });
+  }
+});
+
+app.post('/api/onboarding/dismiss', auth, (req, res) => {
+  try {
+    db.prepare(
+      `INSERT INTO onboarding_progress (user_id, dismissed, updated_at)
+       VALUES (?, 1, CURRENT_TIMESTAMP)
+       ON CONFLICT(user_id) DO UPDATE SET dismissed = 1, updated_at = CURRENT_TIMESTAMP`
+    ).run(req.user.id);
+    res.json({ ok: true });
+  } catch (err) {
+    console.error('onboarding dismiss error:', err.message);
     res.status(500).json({ error: 'Failed' });
   }
 });
