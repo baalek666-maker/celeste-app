@@ -218,4 +218,48 @@ export const api = {
       method: 'POST',
       body: '{}',
     }),
+
+  // ─── Multi-profiles (Feature 8) ──────────────────────────
+  listProfiles: () => apiCall<{
+    profiles: {
+      id: number;
+      name: string;
+      relation: string;
+      isSelf: boolean;
+      birthData: { date: string; time: string; city: string; country?: string; latitude: number; longitude: number; timezone: number };
+      createdAt: number;
+    }[];
+  }>('/profiles'),
+
+  getProfile: (id: number) => apiCall<{
+    id: number;
+    name: string;
+    relation: string;
+    isSelf: boolean;
+    birthData: { date: string; time: string; city: string; country?: string; latitude: number; longitude: number; timezone: number };
+    createdAt: number;
+  }>(`/profiles/${id}`),
+
+  createProfile: (data: {
+    name: string;
+    relation: string;
+    birthData: { date: string; time: string; city: string; country?: string; latitude: number; longitude: number; timezone: number };
+    isSelf?: boolean;
+  }) => apiCall<{ ok: true; id: number }>('/profiles', {
+    method: 'POST',
+    body: JSON.stringify(data),
+  }),
+
+  updateProfile: (id: number, data: {
+    name?: string;
+    relation?: string;
+    birthData?: { date: string; time: string; city: string; country?: string; latitude: number; longitude: number; timezone: number };
+    isSelf?: boolean;
+  }) => apiCall<{ ok: true }>(`/profiles/${id}`, {
+    method: 'PUT',
+    body: JSON.stringify(data),
+  }),
+
+  deleteProfile: (id: number) =>
+    apiCall<{ ok: true }>(`/profiles/${id}`, { method: 'DELETE' }),
 };

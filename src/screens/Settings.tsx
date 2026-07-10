@@ -6,6 +6,7 @@ import { calculateNatalChart } from '../lib/astrology';
 import { api } from '../lib/api';
 import { useNotifications } from '../lib/useNotifications';
 import { useFavorites } from '../lib/useFavorites';
+import { ProfilesScreen } from './ProfilesScreen';
 
 // eslint-disable-next-line @typescript-eslint/ban-ts-comment
 // @ts-ignore — Vite resolves this to the package.json version at build time.
@@ -120,6 +121,7 @@ export function Settings({ user, onUpdate }: { user: User; onUpdate: (u: User) =
   const [showLegal, setShowLegal] = useState(false);
   const [editing, setEditing] = useState(false);
   const [showFavorites, setShowFavorites] = useState(false);
+  const [showProfiles, setShowProfiles] = useState(false);
 
   const handleLogout = () => {
     const u = logout();
@@ -174,6 +176,10 @@ export function Settings({ user, onUpdate }: { user: User; onUpdate: (u: User) =
 
   if (showFavorites) {
     return <FavoritesView onBack={() => setShowFavorites(false)} />;
+  }
+
+  if (showProfiles) {
+    return <ProfilesScreen user={user} onClose={() => setShowProfiles(false)} />;
   }
 
   return (
@@ -233,6 +239,11 @@ export function Settings({ user, onUpdate }: { user: User; onUpdate: (u: User) =
         <button onClick={() => setShowFavorites(true)}
           className="w-full glass rounded-2xl p-4 flex items-center justify-between text-left hover:border-night-600 border border-transparent transition-all">
           <span className="text-night-200 text-sm">⭐ Mes favoris</span>
+          <span className="text-night-400">→</span>
+        </button>
+        <button onClick={() => setShowProfiles(true)}
+          className="w-full glass rounded-2xl p-4 flex items-center justify-between text-left hover:border-night-600 border border-transparent transition-all">
+          <span className="text-night-200 text-sm">👥 Profils (famille, ami·es)</span>
           <span className="text-night-400">→</span>
         </button>
         <button onClick={() => setShowLegal(true)}
