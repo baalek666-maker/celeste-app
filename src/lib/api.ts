@@ -362,4 +362,19 @@ export const api = {
     interpretation: string | null;
     generatedAt: string;
   }>('/chart/lunar-nodes'),
+
+  // ─── Weekly Challenge (Feature C3) ─────────────────
+  getWeeklyChallenge: () => apiCall<{
+    weekId: string;             // 'YYYY-Www' e.g. '2026-28'
+    theme: string;              // ex: "Vulnérabilité"
+    action: string;             // ex: "Partage un souvenir personnel..."
+    explanation: string;        // pourquoi ce défi (astro)
+    completed: boolean;
+    reflectionNote: string | null;
+    generatedAt: string;
+  }>('/challenge/week'),
+  completeWeeklyChallenge: (note: string) => apiCall<{ ok: true }>('/challenge/week/complete', {
+    method: 'POST',
+    body: { note }
+  }),
 };

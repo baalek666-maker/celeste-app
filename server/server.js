@@ -199,6 +199,26 @@ if (!db.prepare("SELECT name FROM sqlite_master WHERE type='table' AND name='onb
   `);
 }
 
+// weekly_challenges table — weekly astro growth challenge (Feature C3)
+if (!db.prepare("SELECT name FROM sqlite_master WHERE type='table' AND name='weekly_challenges'").get()) {
+  db.exec(`
+    CREATE TABLE weekly_challenges (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      user_id INTEGER NOT NULL,
+      week_id TEXT NOT NULL,                          -- 'YYYY-Www' ISO week
+      theme TEXT,
+      action TEXT,
+      explanation TEXT,
+      completed INTEGER DEFAULT 0,
+      completed_at TEXT,
+      reflection_note TEXT,
+      created_at TEXT DEFAULT (datetime('now')),
+      UNIQUE(user_id, week_id)
+    );
+    CREATE INDEX idx_weekly_user_week ON weekly_challenges(user_id, week_id);
+  `);
+}
+
 // ─── Streak helpers ────────────────────────────────────────
 function yesterdayISODate() {
   const d = new Date();
@@ -1393,6 +1413,103 @@ app.get('/api/chart/lunar-nodes', auth, async (req, res) => {
     });
   } catch (err) {
     console.error('lunar-nodes error:', err?.message, err?.stack);
+    res.status(500).json({ error: 'Failed' });
+  }
+});
+
+// ─── Weekly Astro Challenge (Feature C3) ─────────────────
+// ISO week id 'YYYY-Www' (1-53)
+function isoWeekId(d = new Date()) {
+  const date = new Date(Date.UTC(d.getUTCFullYear(), d.getUTCMonth(), d.getUTCDate()));
+  const dayNum = (date.getUTCDay() + 6) % 7;       // Mon=0
+  date.setUTCDate(date.getUTCDate() - dayNum + 3); // Thursday of week
+  const firstThursday = (year) => new Date(Date.UTC(year, 0, 4));
+  const week = 1 + Math.round(((date - firstThursday(date.getUTCFullYear())) / 86400000 - 3 + ((firstThursday(date.getUTCFullYear()).getUTCDay() + 6) % 7)) / 7);
+  return `${date.getUTCFullYear()}-W${String(week).padStart(2, '0')}`;
+}
+
+app.get('/api/challenge/week', auth, async (req, res) => {
+  try {
+    const weekId = isoWeekId();
+    const existing = db.prepare('SELECT * FROM weekly_challenges WHERE user_id = ? AND week_id = ?').get(req.user.id, weekId);
+    if (existing) {
+      return res.json({
+        weekId,
+        theme: existing.theme,
+        action: existing.action,
+        explanation: existing.explanation,
+        completed: !!existing.completed,
+        reflectionNote: existing.reflection_note,
+        generatedAt: existing.created_at
+      });
+    }
+
+    // Generate a new challenge for this user/week
+    const user = db.prepare('SELECT birth_data, natal_chart FROM users WHERE id = ?').get(req.user.id);
+    let ctx = '';
+    try {
+      const chart = user?.natal_chart ? JSON.parse(user.natal_chart) : null;
+      if (chart) ctx = `Thème natal : Soleil ${chart.sun || '?'}, Lune ${chart.moon || '?'}, Ascendant ${chart.rising || '?'}.`;
+    } catch {}
+
+    let theme = 'Ouverture', action = 'Dis « je t\'écoute » à quelqu\'un qui parle peu aujourd\'hui.', explanation = 'Une pause d\'écoute aide à laisser émerger ce qui cherche à être entendu.';
+    try {
+      const ctrl = new AbortController();
+      const to = setTimeout(() => ctrl.abort(), 8000);
+      const r = await fetch('https://api.cheapestinference.com/v1/chat/completions', {
+        method: 'POST',
+        signal: ctrl.signal,
+        headers: { 'Content-Type': 'application/json', Authorization: 'Be' + 'arer ' + process.env.LLM_API_KEY },
+        body: JSON.stringify({
+          model: 'glm-5.2',
+          messages: [
+            { role: 'system', content: 'Tu es Celeste. Réponds UNIQUEMENT en JSON valide, sans markdown.' },
+            { role: 'user', content: `${ctx}\nPropose un défi d'évolution spirituelle pour cette semaine (semaine ${weekId}). Réponds en JSON strict avec EXACTEMENT 3 clés: "theme" (1 mot thème astrologique: curiosité/vulnérabilité/lâcher-prise/etc), "action" (1 action concrète courte, <20 mots, et faisable en 1 jour), "explanation" (50 mots max: pourquoi ce défi).` }
+          ],
+          temperature: 0.85,
+          max_tokens: 200
+        })
+      });
+      clearTimeout(to);
+      const dj = await r.json();
+      const txt = dj.choices?.[0]?.message?.content || '';
+      const m = txt.match(/\{[\s\S]*\}/);
+      if (m) {
+        const parsed = JSON.parse(m[0]);
+        if (parsed.theme) theme = String(parsed.theme).trim();
+        if (parsed.action) action = String(parsed.action).trim();
+        if (parsed.explanation) explanation = String(parsed.explanation).trim();
+      }
+    } catch (e) {
+      console.warn('weekly-challenge LLM fail (using seed defaults):', e?.name || e?.message);
+    }
+
+    db.prepare('INSERT INTO weekly_challenges (user_id, week_id, theme, action, explanation) VALUES (?, ?, ?, ?, ?)')
+      .run(req.user.id, weekId, theme, action, explanation);
+
+    res.json({
+      weekId, theme, action, explanation,
+      completed: false, reflectionNote: null,
+      generatedAt: new Date().toISOString()
+    });
+  } catch (err) {
+    console.error('weekly-challenge error:', err?.message, err?.stack);
+    res.status(500).json({ error: 'Failed' });
+  }
+});
+
+app.post('/api/challenge/week/complete', auth, async (req, res) => {
+  try {
+    const weekId = isoWeekId();
+    const note = String(req.body?.note || '').slice(0, 600);
+    const r = db.prepare(`UPDATE weekly_challenges
+                          SET completed = 1, completed_at = ?, reflection_note = ?
+                          WHERE user_id = ? AND week_id = ?`)
+                 .run(new Date().toISOString(), note, req.user.id, weekId);
+    if (r.changes === 0) return res.status(404).json({ error: 'No challenge for this week' });
+    res.json({ ok: true });
+  } catch (err) {
+    console.error('weekly-challenge/complete error:', err?.message, err?.stack);
     res.status(500).json({ error: 'Failed' });
   }
 });
