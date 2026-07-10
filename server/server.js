@@ -5,7 +5,8 @@ import bcrypt from 'bcryptjs';
 import jwt from 'jsonwebtoken';
 import Database from 'better-sqlite3';
 import { rateLimit, ipKeyGenerator } from 'express-rate-limit';
-import { AstroTime, Body, GeoVector, SiderealTime, EclipticGeoMoon, Rotation_EQJ_ECL, RotateVector } from 'astronomy-engine';
+import * as Astronomy from 'astronomy-engine';
+const { AstroTime, Body, GeoVector, SiderealTime, EclipticGeoMoon, Rotation_EQJ_ECL, RotateVector, Observer, Horizon, Equator, MakeTime, Ecliptic } = Astronomy;
 import { readFileSync } from 'fs';
 import { fileURLToPath } from 'url';
 import { dirname, join } from 'path';
@@ -1233,6 +1234,130 @@ app.get('/api/favorites/today', auth, (req, res) => {
     'SELECT section FROM horoscope_favorites WHERE user_id = ? AND date = ?'
   ).all(req.user.id, today);
   res.json({ sections: favs.map(f => f.section) });
+});
+
+// ─── Astrological Houses (Feature B1) ────────────────────
+// Equal House system: each house cusp is exactly 30° from Ascendant.
+const ZODIAC_ARC_ORDER = [
+  'Bélier','Taureau','Gémeaux','Cancer','Lion','Vierge','Balance','Scorpion','Sagittaire','Capricorne','Verseau','Poissons'
+];
+
+function degToSign(deg) {
+  const normDeg = ((deg % 360) + 360) % 360;
+  const signIdx = Math.floor(normDeg / 30);
+  const signDeg = normDeg - signIdx * 30;
+  return { sign: ZODIAC_ARC_ORDER[signIdx], degree: signDeg, absDeg: normDeg };
+}
+
+function computeHouses(birth) {
+  // Equal House system: only Ascendant needed; other cusps = Asc + (N-1)*30°.
+  // Ascendant ≈ atan2(-cos(LST), sin(LST)*cos(ε) - tan(lat)*sin(ε))
+  const [year, month, day] = birth.date.split('-').map(Number);
+  const [hour, minute] = (birth.time || '12:00').split(':').map(Number);
+  const obsLat = birth.lat ?? 48.85;
+  const obsLng = birth.lng ?? 2.35;
+  const date = new Date(Date.UTC(year, month - 1, day, hour, minute, 0));
+  const astroTime = MakeTime(date);
+  const lstHours = SiderealTime(astroTime) + obsLng / 15;
+  const obliquity = 23.4392911 * Math.PI / 180;
+  const lstRad = (lstHours * 15) * Math.PI / 180;
+  const latRad = obsLat * Math.PI / 180;
+  const y = -Math.cos(lstRad);
+  const x = Math.sin(lstRad) * Math.cos(obliquity) - Math.tan(latRad) * Math.sin(obliquity);
+  let ascLon = Math.atan2(y, x) * 180 / Math.PI;
+  ascLon = ((ascLon % 360) + 360) % 360;
+  const asc = degToSign(ascLon);
+  const houses = [];
+  for (let i = 1; i <= 12; i++) {
+    const cuspLon = (ascLon + (i - 1) * 30) % 360;
+    houses.push({ num: i, ...degToSign(cuspLon) });
+  }
+  return { asc, houses };
+}
+
+const HOUSE_THEMES = {
+  1: 'identité et apparence',
+  2: 'valeurs et ressources',
+  3: 'communication et entourage',
+  4: 'foyer et racines',
+  5: 'créativité et amour',
+  6: 'travail et santé',
+  7: 'partenariats et autres',
+  8: 'transformation et héritage',
+  9: 'philosophie et voyages',
+  10: 'carrière et vocation',
+  11: 'communauté et projets',
+  12: 'intériorité et spiritualité'
+};
+
+async function interpretHouses(asc, sunSign) {
+  const theme = HOUSE_THEMES[1];
+  const prompt = `Tu es Celeste, astrologue chaleureuse. L'Ascendant natal d'un utilisateur est en ${asc.sign} (${asc.degree.toFixed(1)}°), son Soleil en ${sunSign}.
+En 2 phrases max (40 mots), explique ce que l'Ascendant ${asc.sign} révèle sur sa manière d'aborder la vie, et quel est le conseil du jour lié à la maison 1 (${theme}).`;
+  try {
+    const r = await fetch('https://api.cheapestinference.com/v1/chat/completions', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': 'Be' + 'arer ' + process.env.LLM_API_KEY
+      },
+      body: JSON.stringify({
+        model: 'glm-5.2',
+        messages: [
+          { role: 'system', content: 'Tu es Celeste, astrologue bienveillante. Réponds UNIQUEMENT en français, ton chaleureux, court, jamais plus de 40 mots.' },
+          { role: 'user', content: prompt }
+        ],
+        temperature: 0.7,
+        max_tokens: 120
+      })
+    });
+    const d = await r.json();
+    return d.choices?.[0]?.message?.content?.trim() || null;
+  } catch {
+    return null;
+  }
+}
+
+app.get('/api/chart/houses', auth, async (req, res) => {
+  try {
+    const user = db.prepare('SELECT birth_data FROM users WHERE id = ?').get(req.user.id);
+    if (!user?.birth_data) return res.status(400).json({ error: 'birth_data missing' });
+    const birth = JSON.parse(user.birth_data);
+    const { asc, houses } = computeHouses(birth);
+    // Compute sun sign from birth date if not stored
+    let sunSign = birth.zodiacSign || 'unknown';
+    if (sunSign === 'unknown' && birth.date) {
+      const [y, m, d] = birth.date.split('-').map(Number);
+      const [h, min] = (birth.time || '12:00').split(':').map(Number);
+      const dt = new Date(Date.UTC(y, m - 1, d, h, min, 0));
+      try {
+        // Sun geocentric ecliptic longitude ≈ Earth heliocentric longitude + 180°
+        const earthLon = Astronomy.EclipticLongitude(Astronomy.Body.Earth, Astronomy.MakeTime(dt));
+        const sunDeg = (((earthLon + 180) % 360) + 360) % 360;
+        sunSign = ZODIAC_ARC_ORDER[Math.floor(sunDeg / 30)];
+      } catch (e) {
+        sunSign = 'unknown';
+      }
+    }
+    const interpretation = await interpretHouses(asc, sunSign);
+    res.json({
+      system: 'Equal House',
+      ascendant: asc,
+      sunSign,
+      houses: houses.map(h => ({
+        num: h.num,
+        sign: h.sign,
+        degree: Number(h.degree.toFixed(2)),
+        absDeg: Number(h.absDeg.toFixed(2)),
+        theme: HOUSE_THEMES[h.num]
+      })),
+      interpretation,
+      generatedAt: new Date().toISOString()
+    });
+  } catch (err) {
+    console.error('houses error:', err?.message, err?.stack || err);
+    res.status(500).json({ error: 'Failed' });
+  }
 });
 
 // ─── Daily Rituals (Feature A1) ─────────────────────────────

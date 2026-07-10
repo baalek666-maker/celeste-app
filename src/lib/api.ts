@@ -324,4 +324,20 @@ export const api = {
     daysRemaining: number | null;
     benefits: string[];
   }>('/premium/status'),
+
+  // ─── Astrological Houses (Feature B1) ─────────────────
+  getHouses: () => apiCall<{
+    system: string;
+    ascendant: { sign: string; degree: number; absDeg: number };
+    sunSign: string;
+    houses: Array<{
+      num: number;
+      sign: string;
+      degree: number;
+      absDeg: number;
+      theme: string;
+    }>;
+    interpretation: string | null;
+    generatedAt: string;
+  }>('/chart/houses'),
 };
