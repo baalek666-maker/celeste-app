@@ -989,6 +989,164 @@ app.get('/api/transits/today', auth, (req, res) => {
   }
 });
 
+// ─── Daily Aspects (Feature 9) ───────────────────────────────
+// Cache table for the day's planetary aspects (LLM-generated, refreshed daily)
+db.exec(`
+  CREATE TABLE IF NOT EXISTS daily_aspects_cache (
+    date TEXT PRIMARY KEY,
+    aspects_json TEXT NOT NULL,
+    created_at DATETIME DEFAULT CURRENT_TIMESTAMP
+  )
+`);
+
+const PLANET_NAMES_FR = {
+  sun: 'Soleil', moon: 'Lune', mercury: 'Mercure', venus: 'Vénus',
+  mars: 'Mars', jupiter: 'Jupiter', saturn: 'Saturne', uranus: 'Uranus',
+  neptune: 'Neptune', pluto: 'Pluton'
+};
+const ASPECT_NAMES_FR = {
+  conjunction: 'conjonction', opposition: 'opposition', trine: 'trigone',
+  square: 'carré', sextile: 'sextile', quincunx: 'quinconce'
+};
+const ASPECT_GLYPHS = {
+  conjunction: '☌', opposition: '☍', trine: '△', square: '□', sextile: '⚹', quincunx: '⚻'
+};
+const PLANET_GLYPHS = {
+  sun: '☉', moon: '☽', mercury: '☿', venus: '♀', mars: '♂',
+  jupiter: '♃', saturn: '♄', uranus: '♅', neptune: '♆', pluto: '♇'
+};
+
+// Geometrically compute major aspects between planets for a given date
+function computeDailyAspects(date) {
+  const planets = ['sun', 'moon', 'mercury', 'venus', 'mars', 'jupiter', 'saturn'];
+  const aspects = [];
+  const aspectDefs = [
+    { name: 'conjunction', angle: 0, orb: 6, nature: 'neutre' },
+    { name: 'opposition', angle: 180, orb: 6, nature: 'tension' },
+    { name: 'trine', angle: 120, orb: 5, nature: 'harmonique' },
+    { name: 'square', angle: 90, orb: 5, nature: 'tension' },
+    { name: 'sextile', angle: 60, orb: 4, nature: 'harmonique' }
+  ];
+  // Get current positions in ecliptic longitude (0-360°)
+  const rot = Rotation_EQJ_ECL(date);
+  const positions = {};
+  for (const p of planets) {
+    const body = p === 'sun' ? Body.Sun
+      : p === 'moon' ? Body.Moon
+      : p === 'mercury' ? Body.Mercury
+      : p === 'venus' ? Body.Venus
+      : p === 'mars' ? Body.Mars
+      : p === 'jupiter' ? Body.Jupiter
+      : p === 'saturn' ? Body.Saturn : null;
+    if (!body) continue;
+    const eqVec = GeoVector(body, date, true);
+    const eclVec = RotateVector(rot, eqVec);
+    const lon = (Math.atan2(eclVec.y, eclVec.x) * 180 / Math.PI + 360) % 360;
+    positions[p] = lon;
+  }
+  // Pairwise aspects
+  for (let i = 0; i < planets.length; i++) {
+    for (let j = i + 1; j < planets.length; j++) {
+      const a = positions[planets[i]];
+      const b = positions[planets[j]];
+      if (a == null || b == null) continue;
+      let diff = Math.abs(a - b);
+      if (diff > 180) diff = 360 - diff;
+      for (const def of aspectDefs) {
+        if (Math.abs(diff - def.angle) <= def.orb) {
+          aspects.push({
+            p1: planets[i], p2: planets[j],
+            aspect: def.name,
+            nature: def.nature,
+            orb: Math.round((Math.abs(diff - def.angle)) * 10) / 10
+          });
+          break;
+        }
+      }
+    }
+  }
+  // Sort: tensions first (most actionable), then harmonics, then neutrals
+  const natureOrder = { tension: 0, harmonique: 1, neutre: 2 };
+  aspects.sort((x, y) => natureOrder[x.nature] - natureOrder[y.nature]);
+  return aspects.slice(0, 5); // top 5
+}
+
+async function interpretAspects(aspects, date) {
+  if (aspects.length === 0) return aspects;
+  const lines = aspects.map((a, i) =>
+    `${i + 1}. ${PLANET_NAMES_FR[a.p1]} ${ASPECT_NAMES_FR[a.aspect]} ${PLANET_NAMES_FR[a.p2]} (orbe ${a.orb}°, ${a.nature})`
+  ).join('\n');
+  const prompt = `Tu es Celeste, astrologue francophone bienveillante. Pour chaque aspect planétaire ci-dessous, écris une INTERPRÉTATION courte (1 phrase, 15-25 mots) et un CONSEIL actionnable (1 phrase, 10-20 mots).
+Ton: chaleureux, moderne, terre-à-terre, jamais culpabilisant. Tu tutoies.
+Retourne UNIQUEMENT un JSON valide, sans texte autour, exactement:
+{"aspects":[{"i":1,"interprétation":"...","conseil":"..."},...]}
+Le nombre d'éléments doit correspondre aux aspects fournis.
+Date: ${date.toISOString().split('T')[0]}
+${lines}`;
+  try {
+    const resp = await fetch(LLM_API_URL, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'Authorization': 'Be' + 'arer ' + LLM_API_KEY },
+      body: JSON.stringify({
+        model: LLM_MODEL,
+        messages: [
+          { role: 'system', content: 'Tu es Celeste. Réponds uniquement en JSON valide.' },
+          { role: 'user', content: prompt }
+        ],
+        temperature: 0.7,
+        max_tokens: 800
+      })
+    });
+    if (!resp.ok) throw new Error('LLM ' + resp.status);
+    const data = await resp.json();
+    const text = (data.choices?.[0]?.message?.content || '').trim();
+    const cleaned = text.replace(/^```json\n?/i, '').replace(/```$/i, '').trim();
+    const parsed = JSON.parse(cleaned);
+    return aspects.map((a, i) => ({
+      ...a,
+      p1Name: PLANET_NAMES_FR[a.p1], p2Name: PLANET_NAMES_FR[a.p2],
+      p1Glyph: PLANET_GLYPHS[a.p1], p2Glyph: PLANET_GLYPHS[a.p2],
+      aspectFr: ASPECT_NAMES_FR[a.aspect], aspectGlyph: ASPECT_GLYPHS[a.aspect],
+      interpretation: parsed.aspects?.[i]?.interprétation || parsed.aspects?.[i]?.interpretation || '',
+      conseil: parsed.aspects?.[i]?.conseil || ''
+    }));
+  } catch (err) {
+    console.error('aspect LLM error:', err.message);
+    // Fallback: return aspects without interpretation
+    return aspects.map(a => ({
+      ...a,
+      p1Name: PLANET_NAMES_FR[a.p1], p2Name: PLANET_NAMES_FR[a.p2],
+      p1Glyph: PLANET_GLYPHS[a.p1], p2Glyph: PLANET_GLYPHS[a.p2],
+      aspectFr: ASPECT_NAMES_FR[a.aspect], aspectGlyph: ASPECT_GLYPHS[a.aspect],
+      interpretation: '', conseil: ''
+    }));
+  }
+}
+
+app.get('/api/aspects/today', auth, async (req, res) => {
+  try {
+    const now = new Date();
+    const dateKey = now.toISOString().split('T')[0];
+    // Check cache
+    const cached = db.prepare('SELECT aspects_json FROM daily_aspects_cache WHERE date = ?').get(dateKey);
+    if (cached) {
+      const aspects = JSON.parse(cached.aspects_json);
+      return res.json({ date: dateKey, aspects, cached: true });
+    }
+    // Compute + interpret + cache
+    const date = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate(), 12, 0));
+    const rawAspects = computeDailyAspects(date);
+    const aspects = await interpretAspects(rawAspects, date);
+    db.prepare('INSERT OR REPLACE INTO daily_aspects_cache (date, aspects_json) VALUES (?, ?)').run(
+      dateKey, JSON.stringify(aspects)
+    );
+    res.json({ date: dateKey, aspects, cached: false });
+  } catch (err) {
+    console.error('aspects error:', err.message);
+    res.status(500).json({ error: 'Failed' });
+  }
+});
+
 // ─── Favorites (Feature 5) ──────────────────────────────────
 // Bookmark a phrase from any horoscope section
 app.post('/api/favorites', auth, (req, res) => {

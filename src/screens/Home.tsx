@@ -3,6 +3,7 @@ import type { User } from '../types';
 import type { Screen } from '../App';
 import { ZODIAC_SIGNS } from '../data/zodiac';
 import { elementDescription } from '../lib/astrology';
+import DailyAspects from '../components/DailyAspects';
 
 const DAILY_QUOTES = [
   'Les étoiles ne brillent jamais plus fort qu\'en pleine obscurité.',
@@ -234,6 +235,11 @@ export function Home({ user, onNavigate }: { user: User; onNavigate: (s: Screen)
           <p className="text-night-100 font-semibold text-sm">Compatibilité</p>
           <p className="text-night-400 text-xs">Analysez votre couple</p>
         </button>
+      </div>
+
+      {/* Daily Aspects (Feature 9) */}
+      <div className="mb-6 stagger-card" style={d(9)}>
+        <DailyAspects />
       </div>
     </div>
   );

@@ -183,6 +183,22 @@ export const api = {
     transits: Record<string, { sign: string; degree: number; longitude: number; retrograde: boolean }>;
   }>('/transits/today'),
 
+  // Daily Aspects (Feature 9)
+  getDailyAspects: () => apiCall<{
+    date: string;
+    cached: boolean;
+    aspects: Array<{
+      p1: string; p2: string;
+      p1Name: string; p2Name: string;
+      p1Glyph: string; p2Glyph: string;
+      aspect: string; aspectFr: string; aspectGlyph: string;
+      nature: 'tension' | 'harmonique' | 'neutre';
+      orb: number;
+      interpretation: string;
+      conseil: string;
+    }>;
+  }>('/aspects/today'),
+
   // ─── Notifications (Web Push) ───────────────────────────
   getVAPIDKey: () => apiCall<{ publicKey: string }>('/notifications/vapid-key'),
 
