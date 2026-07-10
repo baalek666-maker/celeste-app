@@ -7,6 +7,7 @@ import { api } from '../lib/api';
 import { useNotifications } from '../lib/useNotifications';
 import { useFavorites } from '../lib/useFavorites';
 import { ProfilesScreen } from './ProfilesScreen';
+import PremiumBadge from '../components/PremiumBadge';
 
 // eslint-disable-next-line @typescript-eslint/ban-ts-comment
 // @ts-ignore — Vite resolves this to the package.json version at build time.
@@ -205,23 +206,9 @@ export function Settings({ user, onUpdate }: { user: User; onUpdate: (u: User) =
           </div>
         </div>
 
-        {/* Premium badge */}
+        {/* Premium badge (Feature A3) — uses /api/premium/status with full benefits list */}
         <div className="mt-4 pt-4 border-t border-night-700">
-          {user.isPremium ? (
-            <div className="flex items-center justify-between">
-              <div className="flex items-center gap-2">
-                <span className="text-gold-400">★</span>
-                <p className="text-gold-300 font-medium text-sm">Premium</p>
-              </div>
-              {user.premiumUntil && (
-                <p className="text-night-400 text-xs">
-                  jusqu'au {new Date(user.premiumUntil).toLocaleDateString('fr-FR')}
-                </p>
-              )}
-            </div>
-          ) : (
-            <p className="text-night-400 text-sm">Compte gratuit</p>
-          )}
+          <PremiumBadge />
         </div>
       </div>
 

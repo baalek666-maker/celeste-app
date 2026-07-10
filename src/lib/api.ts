@@ -315,4 +315,13 @@ export const api = {
 
   dismissOnboarding: () =>
     apiCall<{ ok: true }>('/onboarding/dismiss', { method: 'POST' }),
+
+  // ─── Premium Status (Feature A3) ────────────────────
+  getPremiumStatus: () => apiCall<{
+    isPremium: boolean;
+    plan: 'free' | 'monthly' | 'yearly' | 'lifetime';
+    premiumUntil: string | null;
+    daysRemaining: number | null;
+    benefits: string[];
+  }>('/premium/status'),
 };

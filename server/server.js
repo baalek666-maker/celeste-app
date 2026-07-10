@@ -1413,6 +1413,45 @@ app.post('/api/onboarding/dismiss', auth, (req, res) => {
   }
 });
 
+// ─── Premium Status (Feature A3) ─────────────────────────
+app.get('/api/premium/status', auth, (req, res) => {
+  try {
+    const user = db.prepare(
+      'SELECT is_premium, premium_until FROM users WHERE id = ?'
+    ).get(req.user.id);
+    if (!user) return res.status(404).json({ error: 'User not found' });
+    const now = Math.floor(Date.now() / 1000);
+    const isPremium = user.is_premium === 1 || (user.premium_until && user.premium_until > now);
+    let plan = 'free';
+    if (user.is_premium === 1) plan = 'lifetime';
+    else if (user.premium_until && user.premium_until > now) {
+      const days = (user.premium_until - now) / 86400;
+      plan = days > 365 ? 'yearly' : 'monthly';
+    }
+    const daysRemaining = (user.premium_until && user.premium_until > now)
+      ? Math.ceil((user.premium_until - now) / 86400) : null;
+    res.json({
+      isPremium,
+      plan,
+      premiumUntil: user.premium_until && user.premium_until > now
+        ? new Date(user.premium_until * 1000).toISOString() : null,
+      daysRemaining,
+      benefits: isPremium ? [
+        'Compatibilités illimitées',
+        'Tous les profils multi-personnes',
+        'Notifications push avancées',
+        'Exports PDF HD'
+      ] : [
+        '3 scans de compatibilité offerts',
+        '1 profil personnel'
+      ]
+    });
+  } catch (err) {
+    console.error('premium status error:', err.message);
+    res.status(500).json({ error: 'Failed' });
+  }
+});
+
 // ─── Serve static frontend in production ───────────────────
 app.use(express.static(join(__dirname, '..', 'dist')));
 app.get('*', (req, res) => {
