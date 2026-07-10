@@ -165,6 +165,25 @@ if (!db.prepare("SELECT name FROM sqlite_master WHERE type='table' AND name='pro
   `);
 }
 
+// daily_rituals table — morning card + evening intention (Feature A1)
+if (!db.prepare("SELECT name FROM sqlite_master WHERE type='table' AND name='daily_rituals'").get()) {
+  db.exec(`
+    CREATE TABLE daily_rituals (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      user_id INTEGER NOT NULL,
+      date TEXT NOT NULL,
+      morning_card TEXT,
+      evening_intention TEXT,
+      completed_morning INTEGER DEFAULT 0,
+      completed_evening INTEGER DEFAULT 0,
+      created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+      UNIQUE(user_id, date),
+      FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
+    );
+    CREATE INDEX idx_rituals_user_date ON daily_rituals(user_id, date);
+  `);
+}
+
 // ─── Streak helpers ────────────────────────────────────────
 function yesterdayISODate() {
   const d = new Date();
@@ -1200,6 +1219,115 @@ app.get('/api/favorites/today', auth, (req, res) => {
     'SELECT section FROM horoscope_favorites WHERE user_id = ? AND date = ?'
   ).all(req.user.id, today);
   res.json({ sections: favs.map(f => f.section) });
+});
+
+// ─── Daily Rituals (Feature A1) ─────────────────────────────
+async function generateRitualContent(userId, date) {
+  const user = db.prepare('SELECT birth_data FROM users WHERE id = ?').get(userId);
+  if (!user) return null;
+  const birth = user.birth_data ? JSON.parse(user.birth_data) : null;
+  const sunSign = birth?.zodiacSign || 'unknown';
+  const today = date.toISOString().split('T')[0];
+  const prompt = `Tu es Celeste, astrologue francophone bienveillante. Pour une personne de signe solaire ${sunSign}, génère le rituel du ${today} au format JSON strict:
+{"morningCard": "<carte du matin: conseil énergétique en 1 phrase, 15-25 mots, ton chaleureux tutoyé>", "eveningIntention": "<intention du soir: question/reflexion douce en 1 phrase, 10-20 mots>"}
+Retourne UNIQUEMENT le JSON, rien d'autre. Pas de markdown.`;
+  try {
+    const resp = await fetch(LLM_API_URL, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'Authorization': 'Be' + 'arer ' + LLM_API_KEY },
+      body: JSON.stringify({
+        model: LLM_MODEL,
+        messages: [
+          { role: 'system', content: 'Tu es Celeste. Réponds uniquement en JSON valide.' },
+          { role: 'user', content: prompt }
+        ],
+        temperature: 0.8,
+        max_tokens: 200
+      })
+    });
+    if (!resp.ok) throw new Error('LLM ' + resp.status);
+    const data = await resp.json();
+    const text = (data.choices?.[0]?.message?.content || '').trim()
+      .replace(/^```json\n?/i, '').replace(/```$/i, '').trim();
+    const parsed = JSON.parse(text);
+    return {
+      morningCard: parsed.morningCard || 'Prends un instant pour respirer et te centrer avant de démarrer ta journée.',
+      eveningIntention: parsed.eveningIntention || 'Avant de dormir, note une chose pour laquelle tu es reconnaissant(e).'
+    };
+  } catch (err) {
+    console.error('ritual LLM error:', err.message);
+    return {
+      morningCard: 'Prends un instant pour respirer et te centrer avant de démarrer ta journée.',
+      eveningIntention: 'Avant de dormir, note une chose pour laquelle tu es reconnaissant(e).'
+    };
+  }
+}
+
+app.get('/api/rituals/today', auth, async (req, res) => {
+  try {
+    const today = new Date().toISOString().split('T')[0];
+    let row = db.prepare(
+      'SELECT * FROM daily_rituals WHERE user_id = ? AND date = ?'
+    ).get(req.user.id, today);
+    if (!row) {
+      const content = await generateRitualContent(req.user.id, new Date());
+      db.prepare(
+        'INSERT INTO daily_rituals (user_id, date, morning_card, evening_intention) VALUES (?, ?, ?, ?)'
+      ).run(req.user.id, today, content.morningCard, content.eveningIntention);
+      row = db.prepare(
+        'SELECT * FROM daily_rituals WHERE user_id = ? AND date = ?'
+      ).get(req.user.id, today);
+    }
+    res.json({
+      date: today,
+      morningCard: row.morning_card,
+      eveningIntention: row.evening_intention,
+      completedMorning: !!row.completed_morning,
+      completedEvening: !!row.completed_evening
+    });
+  } catch (err) {
+    console.error('ritual today error:', err.message);
+    res.status(500).json({ error: 'Failed' });
+  }
+});
+
+app.post('/api/rituals/today/complete', auth, (req, res) => {
+  const { period } = req.body || {};
+  if (!['morning', 'evening'].includes(period)) {
+    return res.status(400).json({ error: 'period must be morning or evening' });
+  }
+  const today = new Date().toISOString().split('T')[0];
+  const col = period === 'morning' ? 'completed_morning' : 'completed_evening';
+  try {
+    const result = db.prepare(
+      `UPDATE daily_rituals SET ${col} = 1 WHERE user_id = ? AND date = ?`
+    ).run(req.user.id, today);
+    if (result.changes === 0) {
+      // No row for today yet — create stub with completion
+      const morning = period === 'morning' ? 1 : 0;
+      const evening = period === 'evening' ? 1 : 0;
+      db.prepare(
+        'INSERT INTO daily_rituals (user_id, date, morning_card, evening_intention, completed_morning, completed_evening) VALUES (?, ?, ?, ?, ?, ?)'
+      ).run(req.user.id, today, 'À générer demain', 'À générer demain', morning, evening);
+    }
+    res.json({ ok: true, period, date: today });
+  } catch (err) {
+    console.error('ritual complete error:', err.message);
+    res.status(500).json({ error: 'Failed' });
+  }
+});
+
+app.get('/api/rituals/history', auth, (req, res) => {
+  try {
+    const days = Math.min(parseInt(req.query.days) || 7, 30);
+    const rows = db.prepare(
+      'SELECT date, completed_morning, completed_evening FROM daily_rituals WHERE user_id = ? ORDER BY date DESC LIMIT ?'
+    ).all(req.user.id, days);
+    res.json({ days: rows });
+  } catch (err) {
+    console.error('ritual history error:', err.message);
+    res.status(500).json({ error: 'Failed' });
+  }
 });
 
 // ─── Serve static frontend in production ───────────────────

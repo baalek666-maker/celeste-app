@@ -278,4 +278,24 @@ export const api = {
 
   deleteProfile: (id: number) =>
     apiCall<{ ok: true }>(`/profiles/${id}`, { method: 'DELETE' }),
+
+  // ─── Daily Rituals (Feature A1) ───────────────────────
+  getRitualToday: () => apiCall<{
+    date: string;
+    morningCard: string;
+    eveningIntention: string;
+    completedMorning: boolean;
+    completedEvening: boolean;
+  }>('/rituals/today'),
+
+  completeRitual: (period: 'morning' | 'evening') =>
+    apiCall<{ ok: true; period: string; date: string }>('/rituals/today/complete', {
+      method: 'POST',
+      body: JSON.stringify({ period }),
+    }),
+
+  getRitualHistory: (days = 7) =>
+    apiCall<{
+      days: Array<{ date: string; completed_morning: number; completed_evening: number }>;
+    }>(`/rituals/history?days=${days}`),
 };
