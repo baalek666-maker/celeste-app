@@ -7,7 +7,7 @@
 
 import type { BirthData, JournalEntry } from '../types';
 
-const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:3001/api';
+const API_URL = import.meta.env.VITE_API_URL || 'https://pokevendrepro.com/celeste/api';
 const TOKEN_KEY = 'celeste_jwt';
 
 // ─── Token management ──────────────────────────────
@@ -128,7 +128,8 @@ export const api = {
       body: JSON.stringify(entry),
     }),
 
-  // Premium
+  // Premium — DEPRECATED. Use payment.startCheckout() instead.
+  // This endpoint now returns 402 (Payment Required) on the server.
   activatePremium: (plan: 'weekly' | 'annual') =>
     apiCall<{ isPremium: boolean; premiumUntil: number }>('/premium/activate', {
       method: 'POST',

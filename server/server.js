@@ -8,6 +8,7 @@ import { AstroTime, Body, GeoVector, SiderealTime, EclipticGeoMoon, Rotation_EQJ
 import { readFileSync } from 'fs';
 import { fileURLToPath } from 'url';
 import { dirname, join } from 'path';
+import billingRouter, { stripeWebhookHandler, isStripeConfigured } from './billing.js';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const JWT_SECRET = process.env.JWT_SECRET || 'celeste-secret-change-in-prod';
@@ -31,6 +32,8 @@ db.exec(`
     scans_remaining INTEGER DEFAULT 3,
     trial_started_at INTEGER,
     premium_until INTEGER,
+    stripe_customer_id TEXT,
+    stripe_subscription_id TEXT,
     created_at INTEGER DEFAULT (strftime('%s','now'))
   );
 
@@ -52,7 +55,25 @@ db.exec(`
     content TEXT NOT NULL,
     UNIQUE(user_id, date)
   );
+
+  CREATE TABLE IF NOT EXISTS stripe_events (
+    id TEXT PRIMARY KEY,
+    type TEXT NOT NULL,
+    received_at INTEGER NOT NULL
+  );
+
+  -- Migration safe : ajout colonnes Stripe si table users pré-existait sans elles
 `);
+
+// Safe migrations (idempotent)
+const userCols = db.prepare("PRAGMA table_info(users)").all();
+const hasCol = (name) => userCols.some(c => c.name === name);
+if (!hasCol('stripe_customer_id')) {
+  db.exec('ALTER TABLE users ADD COLUMN stripe_customer_id TEXT');
+}
+if (!hasCol('stripe_subscription_id')) {
+  db.exec('ALTER TABLE users ADD COLUMN stripe_subscription_id TEXT');
+}
 
 // ─── Ephemeris (server-side, astronomy-engine) ─────────────
 const SIGNS = ['Bélier','Taureau','Gémeaux','Cancer','Lion','Vierge','Balance','Scorpion','Sagittaire','Capricorne','Verseau','Poissons'];
@@ -241,6 +262,7 @@ function auth(req, res, next) {
   if (!token) return res.status(401).json({ error: 'No token' });
   try {
     req.user = jwt.verify(token, JWT_SECRET);
+    req.db = db; // expose db to billing routes (portal, etc.)
     next();
   } catch {
     res.status(401).json({ error: 'Invalid token' });
@@ -249,7 +271,20 @@ function auth(req, res, next) {
 
 // ─── Server ────────────────────────────────────────────────
 const app = express();
-app.use(cors());
+app.use(cors({ origin: true, credentials: true }));
+
+// ─── Stripe webhook (raw body AVANT express.json) ──────────
+// ⚠️ Doit être monté avant express.json() pour que la signature fonctionne
+app.post(
+  '/api/billing/webhook',
+  express.raw({ type: 'application/json' }),
+  (req, res) => {
+    req.rawBody = req.body; // preserve raw body for signature verification
+    stripeWebhookHandler(req, res, db);
+  }
+);
+
+// JSON parser pour le reste de l'API
 app.use(express.json({ limit: '2mb' }));
 
 // Health check
@@ -356,7 +391,15 @@ app.post('/api/compatibility', auth, async (req, res) => {
     const chart2 = getNatalPositions(partnerBirthData);
 
     const result = await generateCompatibility(chart1, chart2, chart1.sun.sign, chart2.sun.sign);
-    res.json(result);
+    // Add the real sun/moon signs (computed from the natal charts) so the
+    // frontend can display them without having to fake them client-side.
+    res.json({
+      ...result,
+      yourSun: sign1,
+      theirSun: sign2,
+      yourMoon: chart1.moon.sign,
+      theirMoon: chart2.moon.sign,
+    });
   } catch (err) {
     console.error('Compatibility error:', err.message);
     res.status(500).json({ error: 'Failed', detail: err.message });
@@ -381,15 +424,27 @@ app.post('/api/journal', auth, (req, res) => {
 });
 
 // ─── Premium status ────────────────────────────────────────
+// ⚠️ Cet endpoint est DÉSACTIVÉ. Le premium ne peut plus être activé
+// que par le webhook Stripe après un vrai paiement. Garde la route
+// pour renvoyer un message clair à un éventuel client obsolète.
 app.post('/api/premium/activate', auth, (req, res) => {
-  const { plan } = req.body; // 'weekly' or 'annual'
-  const now = Date.now();
-  const duration = plan === 'annual' ? 365 * 86400000 : 7 * 86400000;
-  const until = now + duration;
-  db.prepare('UPDATE users SET is_premium = 1, premium_until = ?, scans_remaining = 999999 WHERE id = ?')
-    .run(until, req.user.id);
-  res.json({ isPremium: true, premiumUntil: until });
+  if (!isStripeConfigured()) {
+    return res.status(503).json({
+      error: 'Les paiements ne sont pas encore configurés sur cette instance.',
+      code: 'stripe_not_configured',
+    });
+  }
+  return res.status(402).json({
+    error: 'Cet endpoint est désactivé. Utilise POST /api/billing/create-checkout pour t\'abonner.',
+    code: 'use_checkout_endpoint',
+  });
 });
+
+// ─── Billing routes (Stripe) ───────────────────────────────
+// /status est public (le frontend veut savoir si Stripe est configuré sans auth)
+// /create-checkout, /portal, /verify-session sont protégés par auth (dans le router)
+app.get('/api/billing/status', (req, res) => res.json({ configured: isStripeConfigured() }));
+app.use('/api/billing', auth, billingRouter);
 
 // ─── Serve static frontend in production ───────────────────
 app.use(express.static(join(__dirname, '..', 'dist')));

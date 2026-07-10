@@ -1,16 +1,40 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import type { User } from '../types';
-import { activatePremium } from '../lib/storage';
+import { startCheckout, isStripeConfigured, openBillingPortal } from '../lib/payment';
 
 export function Paywall({ onClose, onSubscribe }: {
   onClose: () => void;
   onSubscribe: (u: User) => void;
 }) {
   const [plan, setPlan] = useState<'weekly' | 'yearly'>('yearly');
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState('');
+  const [configured, setConfigured] = useState<boolean | null>(null);
 
-  const handleSubscribe = () => {
-    const u = activatePremium(plan);
-    onSubscribe(u);
+  // Vérifier si Stripe est configuré côté serveur à l'ouverture du paywall
+  useEffect(() => {
+    isStripeConfigured().then(setConfigured);
+  }, []);
+
+  const handleSubscribe = async () => {
+    setBusy(true);
+    setError('');
+    const result = await startCheckout(plan);
+    if (!result.success) {
+      setError(result.error || 'Erreur inconnue.');
+      setBusy(false);
+    }
+    // Si success, on redirige vers Stripe — pas besoin de setBusy(false).
+  };
+
+  const handleManageSubscription = async () => {
+    setBusy(true);
+    setError('');
+    const result = await openBillingPortal();
+    if (!result.success) {
+      setError(result.error || 'Impossible d\'ouvrir le portail.');
+      setBusy(false);
+    }
   };
 
   return (
@@ -22,7 +46,7 @@ export function Paywall({ onClose, onSubscribe }: {
         </button>
 
         {/* Hero */}
-        <div className="text-center mt-4 mb-8 animate-fade-in-scale">
+        <div className="text-center mt-4 mb-6 animate-fade-in-scale">
           <div className="w-20 h-20 mx-auto rounded-full bg-gradient-to-br from-gold-500/20 to-cosmic-500/20 flex items-center justify-center mb-4 animate-gold-glow">
             <span className="text-3xl">✨</span>
           </div>
@@ -31,6 +55,17 @@ export function Paywall({ onClose, onSubscribe }: {
             Débloquez l'astrologie profondément personnelle, chaque jour
           </p>
         </div>
+
+        {/* Configuration warning */}
+        {configured === false && (
+          <div className="glass border border-amber-500/30 rounded-2xl p-4 mb-6">
+            <p className="text-amber-300 text-sm font-semibold mb-1">⚠️ Paiements en configuration</p>
+            <p className="text-night-300 text-xs">
+              Le système de paiement Stripe n'est pas encore activé sur cette instance.
+              Réessaie dans quelques heures.
+            </p>
+          </div>
+        )}
 
         {/* Features */}
         <div className="space-y-3 mb-8">
@@ -81,19 +116,41 @@ export function Paywall({ onClose, onSubscribe }: {
           </button>
         </div>
 
-        {/* CTA */}
+        {/* CTA — vrai checkout Stripe */}
         <button onClick={handleSubscribe}
-          className="w-full py-4 rounded-2xl bg-gradient-to-r from-gold-400 to-gold-600 text-night-950 font-bold text-lg shadow-lg shadow-gold-900/50 transition-all duration-300 hover:scale-[1.01] animate-gold-glow">
-          {plan === 'yearly' ? 'Démarrer mon essai gratuit' : 'Activer maintenant'}
+          disabled={busy || configured === false}
+          className="w-full py-4 rounded-2xl bg-gradient-to-r from-gold-400 to-gold-600 text-night-950 font-bold text-lg shadow-lg shadow-gold-900/50 transition-all duration-300 hover:scale-[1.01] animate-gold-glow disabled:opacity-50 disabled:cursor-not-allowed disabled:hover:scale-100">
+          {busy
+            ? 'Redirection…'
+            : configured === false
+              ? 'Indisponible'
+              : plan === 'yearly'
+                ? 'Démarrer mon essai gratuit'
+                : 'Activer maintenant'}
         </button>
+
+        {error && (
+          <p className="text-red-400 text-xs text-center mt-3">{error}</p>
+        )}
 
         <p className="text-night-500 text-xs text-center mt-4">
           {plan === 'yearly'
             ? '3 jours gratuits puis 39,99€/an. Annulez à tout moment. Rappel avant prélèvement.'
             : '6,99€/semaine. Annulez à tout moment.'}
         </p>
-        <p className="text-night-600 text-xs text-center mt-2">
+
+        {/* Manage existing subscription */}
+        <button onClick={handleManageSubscription}
+          disabled={busy || configured === false}
+          className="w-full mt-3 py-2 text-night-400 hover:text-night-200 text-xs underline transition-colors disabled:opacity-50">
+          Gérer mon abonnement existant
+        </button>
+
+        <p className="text-night-600 text-xs text-center mt-4">
           Contenu de divertissement. Ne constitue pas un conseil médical, financier ou juridique.
+        </p>
+        <p className="text-night-700 text-xs text-center mt-1">
+          Paiement sécurisé par Stripe. Données chiffrées, aucune information bancaire stockée sur nos serveurs.
         </p>
       </div>
     </div>

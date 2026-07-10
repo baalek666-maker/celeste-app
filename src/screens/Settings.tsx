@@ -1,16 +1,132 @@
 import { useState } from 'react';
-import type { User } from '../types';
-import { logout } from '../lib/storage';
+import type { User, BirthData } from '../types';
+import { logout, setBirthData } from '../lib/storage';
 import { ZODIAC_SIGNS } from '../data/zodiac';
+import { calculateNatalChart } from '../lib/astrology';
+import { api } from '../lib/api';
+
+// eslint-disable-next-line @typescript-eslint/ban-ts-comment
+// @ts-ignore — Vite resolves this to the package.json version at build time.
+import pkg from '../../package.json';
+
+// Top-12 villes FR + principales villes internationales (subset pour le mode édition).
+// Même format que la liste Onboarding — dupliquer était l'option la plus sûre.
+const EDIT_CITIES = [
+  { city: 'Paris', country: 'France', lat: 48.8566, lng: 2.3522, tz: 2 },
+  { city: 'Lyon', country: 'France', lat: 45.7640, lng: 4.8357, tz: 2 },
+  { city: 'Marseille', country: 'France', lat: 43.2965, lng: 5.3698, tz: 2 },
+  { city: 'Toulouse', country: 'France', lat: 43.6047, lng: 1.4442, tz: 2 },
+  { city: 'Bordeaux', country: 'France', lat: 44.8378, lng: -0.5792, tz: 2 },
+  { city: 'Lille', country: 'France', lat: 50.6292, lng: 3.0573, tz: 2 },
+  { city: 'Strasbourg', country: 'France', lat: 48.5734, lng: 7.7521, tz: 2 },
+  { city: 'Nice', country: 'France', lat: 43.7102, lng: 7.2620, tz: 2 },
+  { city: 'Nantes', country: 'France', lat: 47.2184, lng: -1.5536, tz: 2 },
+  { city: 'Rennes', country: 'France', lat: 48.1173, lng: -1.6778, tz: 2 },
+  { city: 'Bruxelles', country: 'Belgique', lat: 50.8503, lng: 4.3517, tz: 2 },
+  { city: 'Genève', country: 'Suisse', lat: 46.2044, lng: 6.1432, tz: 2 },
+  { city: 'Montréal', country: 'Canada', lat: 45.5017, lng: -73.5673, tz: -4 },
+  { city: 'Fort-de-France', country: 'Martinique', lat: 14.6042, lng: -61.0667, tz: -4 },
+];
+
+function EditBirthData({ user, onUpdate, onCancel }: {
+  user: User;
+  onUpdate: (u: User) => void;
+  onCancel: () => void;
+}) {
+  const initial = user.birthData!;
+  const [date, setDate] = useState(initial.date);
+  const [time, setTime] = useState(initial.time);
+  const [cityIdx, setCityIdx] = useState(
+    EDIT_CITIES.findIndex(c => c.city === initial.city && c.country === initial.country)
+  );
+  const [saving, setSaving] = useState(false);
+  const [err, setErr] = useState('');
+
+  const handleSave = async () => {
+    setErr('');
+    if (!date) return setErr('Date manquante.');
+    if (!time) return setErr('Heure manquante.');
+    if (cityIdx < 0) return setErr('Ville manquante.');
+    const c = EDIT_CITIES[cityIdx];
+    const birth: BirthData = {
+      date, time, city: c.city, country: c.country,
+      latitude: c.lat, longitude: c.lng, timezone: c.tz,
+    };
+    setSaving(true);
+    try {
+      // Recompute locally first (instant feedback)
+      const newChart = calculateNatalChart(birth);
+      // Persist locally
+      setBirthData(birth, newChart);
+      // Sync to backend (best-effort)
+      try { await api.saveBirthData(birth); } catch { /* offline OK */ }
+      onUpdate({ ...user, birthData: birth, natalChart: newChart });
+    } catch (e) {
+      setErr(`Erreur : ${e instanceof Error ? e.message : 'inconnue'}`);
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  return (
+    <div className="px-5 pt-12 pb-4">
+      <button onClick={onCancel} className="text-night-400 text-sm mb-4">← Retour</button>
+      <h1 className="text-xl font-bold mb-2 text-gold-gradient">Modifier mes données</h1>
+      <p className="text-night-400 text-xs mb-6">
+        Tout changement recalcule votre thème natal et met à jour vos horoscopes.
+      </p>
+
+      <label className="block text-night-300 text-xs uppercase tracking-widest mb-2">Date de naissance</label>
+      <input
+        type="date" value={date} onChange={e => setDate(e.target.value)}
+        className="w-full py-3 px-4 rounded-xl glass border border-night-700 text-night-100 mb-4 focus:outline-none focus:border-cosmic-500"
+      />
+
+      <label className="block text-night-300 text-xs uppercase tracking-widest mb-2">Heure de naissance</label>
+      <input
+        type="time" value={time} onChange={e => setTime(e.target.value)}
+        className="w-full py-3 px-4 rounded-xl glass border border-night-700 text-night-100 mb-6 focus:outline-none focus:border-cosmic-500"
+      />
+
+      <label className="block text-night-300 text-xs uppercase tracking-widest mb-2">Ville de naissance</label>
+      <select
+        value={cityIdx}
+        onChange={e => setCityIdx(Number(e.target.value))}
+        className="w-full py-3 px-4 rounded-xl glass border border-night-700 text-night-100 mb-6 focus:outline-none focus:border-cosmic-500"
+      >
+        {EDIT_CITIES.map((c, i) => (
+          <option key={i} value={i} className="bg-night-800">
+            {c.city} — {c.country}
+          </option>
+        ))}
+      </select>
+
+      {err && <p className="text-red-400 text-sm mb-3">{err}</p>}
+
+      <button
+        onClick={handleSave}
+        disabled={saving}
+        className="w-full py-3.5 rounded-2xl bg-gradient-to-r from-cosmic-600 to-cosmic-700 disabled:opacity-50 text-night-950 font-semibold transition-all font-display tracking-wide"
+      >
+        {saving ? 'Recalcul…' : 'Enregistrer et recalculer'}
+      </button>
+    </div>
+  );
+}
 
 export function Settings({ user, onUpdate }: { user: User; onUpdate: (u: User) => void }) {
   const [showLegal, setShowLegal] = useState(false);
+  const [editing, setEditing] = useState(false);
 
   const handleLogout = () => {
     const u = logout();
     onUpdate(u);
     window.location.reload();
   };
+
+  if (editing && user.birthData) {
+    return <EditBirthData user={user} onUpdate={onUpdate} onCancel={() => setEditing(false)} />;
+  }
 
   if (showLegal) {
     return (
@@ -98,6 +214,13 @@ export function Settings({ user, onUpdate }: { user: User; onUpdate: (u: User) =
 
       {/* Actions */}
       <div className="space-y-2">
+        {user.birthData && (
+          <button onClick={() => setEditing(true)}
+            className="w-full glass rounded-2xl p-4 flex items-center justify-between text-left hover:border-night-600 border border-transparent transition-all">
+            <span className="text-night-200 text-sm">Modifier mes données de naissance</span>
+            <span className="text-night-400">→</span>
+          </button>
+        )}
         <button onClick={() => setShowLegal(true)}
           className="w-full glass rounded-2xl p-4 flex items-center justify-between text-left hover:border-night-600 border border-transparent transition-all">
           <span className="text-night-200 text-sm">Informations légales</span>
@@ -110,7 +233,7 @@ export function Settings({ user, onUpdate }: { user: User; onUpdate: (u: User) =
         </button>
       </div>
 
-      <p className="text-night-600 text-xs text-center mt-8">Céleste · v1.0.0</p>
+      <p className="text-night-600 text-xs text-center mt-8">Céleste · v{pkg.version}</p>
     </div>
   );
 }
