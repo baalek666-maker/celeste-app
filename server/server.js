@@ -352,8 +352,32 @@ Réponds UNIQUEMENT avec le JSON, aucun texte avant ou après.`;
 }
 
 // ─── LLM Compatibility Generation ──────────────────────────
-async function generateCompatibility(chart1, chart2, sign1, sign2) {
+async function generateCompatibility(chart1, chart2, sign1, sign2, context = 'romantic') {
   const systemPrompt = `Tu es Céleste, un astrologue français. Tu analyses la compatibilité entre deux thèmes nataux. Ton analyse est nuancée — tu soulignes les forces ET les défis. Tu écris en français.`;
+
+  const ctxConfig = {
+    romantic: {
+      label: 'amoureuse',
+      angle: 'Analyse leur compatibilité amoureuse (chimique, attraction, communication intime, projets de vie à deux).',
+      titleHint: 'un titre évocateur romantique (ex: L\'étincelle et la profondeur)',
+    },
+    family: {
+      label: 'familiale',
+      angle: 'Analyse leur dynamique familiale (soutien, tensions éventuelles, rituels, façon dont chacun exprime l\'attachement, héritage émotionnel).',
+      titleHint: 'un titre évocateur familial (ex: Le fil invisible, Ancrage et envol)',
+    },
+    friend: {
+      label: 'amicale',
+      angle: 'Analyse leur amitié (complémentarité, activités partagées, loyauté, petits frictions du quotidien, façon dont ils se font mutuellement grandir).',
+      titleHint: 'un titre évocateur amical (ex: Les inséparables, L\'écho fidèle)',
+    },
+    colleague: {
+      label: 'professionnelle',
+      angle: 'Analyse leur dynamique de travail (complémentarité des styles, fluidité de la collaboration, zones de friction possibles, comment ils peuvent co-créer efficacement).',
+      titleHint: 'un titre évocateur professionnel (ex: Duo complémentaire, Forces en regard)',
+    },
+  };
+  const ctx = ctxConfig[context] || ctxConfig.romantic;
 
   const userPrompt = `Personne 1 (signe solaire ${sign1}):
 ${Object.entries(chart1).map(([k,v]) => `${k}: ${v.sign} ${v.degree}°`).join('\n')}
@@ -361,13 +385,13 @@ ${Object.entries(chart1).map(([k,v]) => `${k}: ${v.sign} ${v.degree}°`).join('\
 Personne 2 (signe solaire ${sign2}):
 ${Object.entries(chart2).map(([k,v]) => `${k}: ${v.sign} ${v.degree}°`).join('\n')}
 
-Analyse leur compatibilité amoureuse. Réponds en JSON:
+${ctx.angle} Réponds en JSON:
 {
-  "score": un nombre 0-100 basé sur l'harmonie des aspects,
-  "title": "un titre court et évocateur (ex: L'étincelle et la profondeur)",
+  "score": un nombre 0-100 basé sur l'harmonie des aspects pour ce contexte ${ctx.label},
+  "title": ${ctx.titleHint},
   "strengths": ["force 1", "force 2", "force 3"],
   "challenges": ["défi 1", "défi 2"],
-  "description": "2-3 phrases d'analyse globale nuancée"
+  "description": "2-3 phrases d'analyse globale nuancée adaptée au contexte ${ctx.label}"
 }
 Réponds UNIQUEMENT avec le JSON.`;
 
@@ -669,8 +693,12 @@ app.post('/api/compatibility', auth, llmLimiter, async (req, res) => {
       db.prepare('UPDATE users SET scans_remaining = scans_remaining - 1 WHERE id = ?').run(req.user.id);
     }
 
-    const { partnerBirthData } = req.body;
+    const { partnerBirthData, context } = req.body;
     if (!partnerBirthData) return res.status(400).json({ error: 'Partner birth data required' });
+
+    // Validate context (default romantic)
+    const validContexts = ['romantic', 'family', 'friend', 'colleague'];
+    const ctx = validContexts.includes(context) ? context : 'romantic';
 
     // Lightweight validation of partner birth data
     if (typeof partnerBirthData !== 'object' ||
@@ -684,9 +712,10 @@ app.post('/api/compatibility', auth, llmLimiter, async (req, res) => {
     const chart1 = getNatalPositions(JSON.parse(user.birth_data));
     const chart2 = getNatalPositions(partnerBirthData);
 
-    const result = await generateCompatibility(chart1, chart2, chart1.sun.sign, chart2.sun.sign);
+    const result = await generateCompatibility(chart1, chart2, chart1.sun.sign, chart2.sun.sign, ctx);
     res.json({
       ...result,
+      context: ctx,
       yourSun: chart1.sun.sign,
       theirSun: chart2.sun.sign,
       yourMoon: chart1.moon.sign,

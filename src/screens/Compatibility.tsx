@@ -33,6 +33,7 @@ const CITIES = [
 
 export function Compatibility({ user }: { user: User }) {
   const [mode, setMode] = useState<'quick' | 'detailed'>('quick');
+  const [context, setContext] = useState<'romantic' | 'family' | 'friend' | 'colleague'>('romantic');
   const [theirSign, setTheirSign] = useState<ZodiacSign>('leo');
   const [pDate, setPDate] = useState('');
   const [pTime, setPTime] = useState('');
@@ -73,7 +74,7 @@ export function Compatibility({ user }: { user: User }) {
         };
       }
 
-      const res = await api.getCompatibility(partnerData);
+      const res = await api.getCompatibility(partnerData, context);
       // Trust the backend: it returns yourMoon/theirMoon computed from real
       // birth data. Only fall back to the user/sun if the field is absent.
       setResult({
@@ -92,10 +93,12 @@ export function Compatibility({ user }: { user: User }) {
 
   const handleShare = async () => {
     if (!result) return;
-    const text = `💞 Notre compatibilité est de ${result.score}% sur Céleste ! ${result.title}`;
+    const ctxEmoji = { romantic: '💞', family: '👨‍👩‍👧', friend: '🤝', colleague: '💼' }[result.context || 'romantic'];
+    const ctxLabel = { romantic: 'compatibilité', family: 'dynamique familiale', friend: 'amitié', colleague: 'dynamique pro' }[result.context || 'romantic'];
+    const text = `${ctxEmoji} Notre ${ctxLabel} astrale : ${result.score}% sur Céleste ! ${result.title}`;
     try {
       if (navigator.share) {
-        await navigator.share({ title: 'Notre compatibilité Céleste', text });
+        await navigator.share({ title: 'Mon analyse Céleste', text });
       } else {
         await navigator.clipboard.writeText(text);
       }
@@ -111,6 +114,25 @@ export function Compatibility({ user }: { user: User }) {
 
       {!result && !loading && (
         <>
+          {/* Context selector */}
+          <div className="mb-5">
+            <p className="text-night-400 text-xs uppercase tracking-widest mb-3">Type de relation</p>
+            <div className="grid grid-cols-4 gap-2 p-1 glass rounded-2xl">
+              {([
+                { v: 'romantic', label: '💕 Amour', t: 'Amour' },
+                { v: 'family', label: '👨‍👩‍👧 Famille', t: 'Famille' },
+                { v: 'friend', label: '🤝 Ami(e)', t: 'Amitié' },
+                { v: 'colleague', label: '💼 Travail', t: 'Travail' },
+              ] as const).map((c) => (
+                <button key={c.v} onClick={() => setContext(c.v)}
+                  className={`py-2.5 rounded-xl text-xs font-medium transition-all ${context === c.v ? 'bg-cosmic-600 text-white' : 'text-night-400'}`}
+                  title={c.t}>
+                  {c.label}
+                </button>
+              ))}
+            </div>
+          </div>
+
           {/* Mode toggle */}
           <div className="flex gap-2 mb-6 p-1 glass rounded-2xl">
             <button onClick={() => setMode('quick')}

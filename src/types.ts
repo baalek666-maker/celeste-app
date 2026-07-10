@@ -75,6 +75,7 @@ export interface CompatibilityResult {
   strengths: string[];
   challenges: string[];
   description: string;
+  context?: 'romantic' | 'family' | 'friend' | 'colleague';
 }
 
 export interface JournalEntry {

@@ -109,17 +109,18 @@ export const api = {
       streak?: number;
     }>('/horoscope', { method: 'POST' }),
 
-  // Compatibility (LLM-powered)
-  getCompatibility: (partnerBirthData: BirthData) =>
+  // Compatibility (LLM-powered) — supports romantic/family/friend/colleague contexts
+  getCompatibility: (partnerBirthData: BirthData, context: 'romantic' | 'family' | 'friend' | 'colleague' = 'romantic') =>
     apiCall<{
       score: number;
       title: string;
       strengths: string[];
       challenges: string[];
       description: string;
+      context?: string;
     }>('/compatibility', {
       method: 'POST',
-      body: JSON.stringify({ partnerBirthData }),
+      body: JSON.stringify({ partnerBirthData, context }),
     }),
 
   // Week horoscope summary (3 or 7 days)
