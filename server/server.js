@@ -1334,6 +1334,69 @@ app.get('/api/chart/asteroids', auth, async (req, res) => {
   }
 });
 
+// ─── Lunar Nodes (Feature B3) ────────────────────────────────────
+// North Node (Tête du Dragon) and South Node (Queue du Dragon) — karmic axis.
+// True Node = (Sun geocentric ecliptic longitude) − (Moon geocentric ecliptic longitude)
+// South Node is exactly 180° opposite the North Node.
+app.get('/api/chart/lunar-nodes', auth, async (req, res) => {
+  try {
+    const user = db.prepare('SELECT birth_data FROM users WHERE id = ?').get(req.user.id);
+    if (!user?.birth_data) return res.status(400).json({ error: 'birth_data missing' });
+    const birth = JSON.parse(user.birth_data);
+    const [y, m, d] = birth.date.split('-').map(Number);
+    const [h, min] = (birth.time || '12:00').split(':').map(Number);
+    const t = Astronomy.MakeTime(new Date(Date.UTC(y, m - 1, d, h, min, 0)));
+
+    // Sun geocentric ecliptic longitude (Earth helio + 180°, see astronomy-engine-patterns)
+    const sunLon = (((Astronomy.EclipticLongitude(Astronomy.Body.Earth, t) + 180) % 360) + 360) % 360;
+    // Moon geocentric ecliptic longitude (built-in)
+    const moonLon = Astronomy.EclipticLongitude(Astronomy.Body.Moon, t);
+    // True North Node = Sun - Moon (mod 360)
+    const northLon = (((sunLon - moonLon) % 360) + 360) % 360;
+    const southLon = (((northLon + 180) % 360) + 360) % 360;
+
+    const north = { ...degToSign(northLon), role: 'north' };
+    const south = { ...degToSign(southLon), role: 'south' };
+
+    // LLM interpretation with 8s timeout
+    const summary = `Nœud Nord en ${north.sign} (${north.degree}°), Nœud Sud en ${south.sign} (${south.degree}°)`;
+    let interpretation = null;
+    try {
+      const ctrl = new AbortController();
+      const to = setTimeout(() => ctrl.abort(), 8000);
+      const r = await fetch('https://api.cheapestinference.com/v1/chat/completions', {
+        method: 'POST',
+        signal: ctrl.signal,
+        headers: { 'Content-Type': 'application/json', Authorization: 'Be' + 'arer ' + process.env.LLM_API_KEY },
+        body: JSON.stringify({
+          model: 'glm-5.2',
+          messages: [
+            { role: 'system', content: 'Tu es Celeste, astrologue bienveillante. Réponds UNIQUEMENT en français, ton chaleureux, court (max 70 mots), tutoyé.' },
+            { role: 'user', content: `Voici les nœuds lunaires natals d'un utilisateur : ${summary}. Le Nœud Sud représente ce qu'il maîtrise déjà (passé, confort), le Nœud Nord représente ce vers quoi son âme veut évoluer (mission, croissance). Donne une interprétation douce reliant ces deux pôles à son chemin d'évolution.` }
+          ],
+          temperature: 0.7,
+          max_tokens: 160
+        })
+      });
+      clearTimeout(to);
+      const dj = await r.json();
+      interpretation = dj.choices?.[0]?.message?.content?.trim() || null;
+    } catch (e) {
+      console.warn('lunar-nodes LLM fail (fallback null):', e?.name || e?.message);
+    }
+
+    res.json({
+      northNode: north,
+      southNode: south,
+      interpretation,
+      generatedAt: new Date().toISOString()
+    });
+  } catch (err) {
+    console.error('lunar-nodes error:', err?.message, err?.stack);
+    res.status(500).json({ error: 'Failed' });
+  }
+});
+
 // ─── Astrological Houses (Feature B1) ────────────────────
 // Equal House system: each house cusp is exactly 30° from Ascendant.
 const ZODIAC_ARC_ORDER = [

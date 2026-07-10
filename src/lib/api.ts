@@ -354,4 +354,12 @@ export const api = {
     interpretation: string | null;
     generatedAt: string;
   }>('/chart/asteroids'),
+
+  // ─── Lunar Nodes (Feature B3) ──────────────────────
+  getLunarNodes: () => apiCall<{
+    northNode: { sign: string; degree: number; absDeg: number; role: string };
+    southNode: { sign: string; degree: number; absDeg: number; role: string };
+    interpretation: string | null;
+    generatedAt: string;
+  }>('/chart/lunar-nodes'),
 };
