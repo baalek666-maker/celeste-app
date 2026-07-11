@@ -167,6 +167,19 @@ export const api = {
       streak?: number;
     }>('/horoscope', { method: 'POST' }),
 
+  // Daily Tarot draw (cached per day, 1 card per day)
+  getDailyTarot: () =>
+    apiCall<{
+      cardName: string;
+      cardId: number;
+      roman: string;
+      emoji: string;
+      isReversed: boolean;
+      archetype: string;
+      message: string;
+      question: string;
+    }>('/tarot/daily', { method: 'GET' }),
+
   // Compatibility (LLM-powered) — supports romantic/family/friend/colleague contexts
   getCompatibility: (partnerBirthData: BirthData, context: 'romantic' | 'family' | 'friend' | 'colleague' = 'romantic') =>
     apiCall<{

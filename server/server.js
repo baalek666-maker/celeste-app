@@ -906,6 +906,116 @@ app.get('/api/horoscope/week', auth, async (req, res) => {
   }
 });
 
+// ─── Tarot — Daily Draw (LLM-powered, cached per day) ─────
+const TAROT_DECK = [
+  { id: 0, name: 'Le Fou', roman: '0', emoji: '🃏', archetype: 'Liberté, commencement, spontanéité', upright: 'Un nouveau départ vous appelle. Osez le saut.', reversed: 'L\'impulsivité risque de vous égarer.' },
+  { id: 1, name: 'Le Bateleur', roman: 'I', emoji: '🎩', archetype: 'Créativité, habileté, initiative', upright: 'Vous avez tous les outils en main.', reversed: 'Attention aux illusions.' },
+  { id: 2, name: 'La Papesse', roman: 'II', emoji: '🌙', archetype: 'Intuition, savoir caché, mystère', upright: 'Écoutez votre voix intérieure.', reversed: 'Vous ignorez votre sagesse.' },
+  { id: 3, name: 'L\'Impératrice', roman: 'III', emoji: '👑', archetype: 'Fécondité, abondance, création', upright: 'La créativité coule.', reversed: 'Un blocage créatif.' },
+  { id: 4, name: 'L\'Empereur', roman: 'IV', emoji: '🏛️', archetype: 'Autorité, structure, maîtrise', upright: 'Prenez les rennes.', reversed: 'La rigidité vous limite.' },
+  { id: 5, name: 'Le Pape', roman: 'V', emoji: '🔑', archetype: 'Sagesse, enseignement, spiritualité', upright: 'Un guide croise votre chemin.', reversed: 'Remettez en question les croyances.' },
+  { id: 6, name: 'L\'Amoureux', roman: 'VI', emoji: '💕', archetype: 'Choix du cœur, union, dualité', upright: 'Un choix de cœur se présente.', reversed: 'Une indécision sentimentale.' },
+  { id: 7, name: 'Le Chariot', roman: 'VII', emoji: '⚔️', archetype: 'Victoire, volonté, maîtrise', upright: 'Votre détermination mène à la victoire.', reversed: 'L\'agitation vous disperse.' },
+  { id: 8, name: 'La Justice', roman: 'VIII', emoji: '⚖️', archetype: 'Équilibre, vérité, justesse', upright: 'L\'équité prévaut.', reversed: 'Un déséquilibre à corriger.' },
+  { id: 9, name: 'L\'Ermite', roman: 'IX', emoji: '🏮', archetype: 'Introspection, retraite, lumière intérieure', upright: 'Votre lumière intérieure guide.', reversed: 'L\'isolement devient repli.' },
+  { id: 10, name: 'La Roue de Fortune', roman: 'X', emoji: '🎡', archetype: 'Cycles, destin, changement', upright: 'La roue tourne en votre faveur.', reversed: 'Un cycle se ferme.' },
+  { id: 11, name: 'La Force', roman: 'XI', emoji: '🦁', archetype: 'Courage, douceur, maîtrise de soi', upright: 'Votre force intérieure dompte les obstacles.', reversed: 'Le doute affaiblit.' },
+  { id: 12, name: 'Le Pendu', roman: 'XII', emoji: '🙃', archetype: 'Lâcher prise, vision nouvelle', upright: 'Voyez les choses autrement.', reversed: 'La stagnation vous frustre.' },
+  { id: 13, name: 'L\'Arcane sans nom', roman: 'XIII', emoji: '🦋', archetype: 'Transformation, fin, renaissance', upright: 'Une transformation profonde est en cours.', reversed: 'Vous résistez à une fin nécessaire.' },
+  { id: 14, name: 'Tempérance', roman: 'XIV', emoji: '🕊️', archetype: 'Harmonie, patience, alchimie', upright: 'Trouvez le juste milieu.', reversed: 'L\'excès déséquilibre.' },
+  { id: 15, name: 'Le Diable', roman: 'XV', emoji: '🔥', archetype: 'Désir, attachement, ombre', upright: 'Confrontez vos peurs.', reversed: 'Vous vous libérez d\'une chaîne.' },
+  { id: 16, name: 'La Maison Dieu', roman: 'XVI', emoji: '⚡', archetype: 'Changement soudain, révélation', upright: 'Un éclair de vérité bouscule.', reversed: 'Vous évitez un changement.' },
+  { id: 17, name: 'L\'Étoile', roman: 'XVII', emoji: '⭐', archetype: 'Espoir, inspiration, guidance', upright: 'L\'espoir revient.', reversed: 'Le découragement voile.' },
+  { id: 18, name: 'La Lune', roman: 'XVIII', emoji: '🌛', archetype: 'Illusion, rêves, inconscient', upright: 'Vos rêves contiennent des messages.', reversed: 'Les peurs se dissipent.' },
+  { id: 19, name: 'Le Soleil', roman: 'XIX', emoji: '🌞', archetype: 'Joie, succès, vitalité', upright: 'La joie et le succès rayonnent.', reversed: 'Une ombre voile l\'enthousiasme.' },
+  { id: 20, name: 'Le Jugement', roman: 'XX', emoji: '📯', archetype: 'Renaissance, appel, rédemption', upright: 'Un appel à vous élever.', reversed: 'Un doute persiste.' },
+  { id: 21, name: 'Le Monde', roman: 'XXI', emoji: '🌍', archetype: 'Achèvement, plénitude, accomplissement', upright: 'Un cycle s\'achève dans la plénitude.', reversed: 'La finalité est proche.' },
+];
+
+app.get('/api/tarot/daily', auth, llmLimiter, async (req, res) => {
+  try {
+    const user = db.prepare('SELECT * FROM users WHERE id = ?').get(req.user.id);
+    const today = new Date().toISOString().split('T')[0];
+
+    // Check cache
+    const cached = db.prepare('SELECT content FROM horoscope_cache WHERE user_id = ? AND date = ?').get(req.user.id, `tarot:${today}`);
+    if (cached) return res.json(JSON.parse(cached.content));
+
+    // Deterministic daily card: hash of userId + date
+    const seed = (req.user.id * 9301 + today.split('-').reduce((a, p) => a + parseInt(p), 0) * 49297) % 233280;
+    const cardId = seed % 22;
+    const isReversed = seed % 3 === 0; // ~33% chance reversed
+    const card = TAROT_DECK[cardId];
+
+    // Get user's sun sign for personalization
+    let sunSign = 'inconnu';
+    if (user?.birth_data) {
+      try {
+        const bd = JSON.parse(user.birth_data);
+        const natal = getNatalPositions(bd);
+        sunSign = natal.sun?.sign || 'inconnu';
+      } catch {}
+    }
+
+    // LLM interpretation
+    const systemPrompt = `Tu es Céleste, tarologue et astrologue française. Tu écris des interprétations de tirage de tarot courtes, poétiques et bienveillantes en français.`;
+    const userPrompt = `Carte tirée: ${card.name} (${card.roman})${isReversed ? ' — position inversée' : ' — position droite'}.
+Signe solaire de la personne: ${sunSign}.
+Mots-clés: ${card.archetype}.
+
+Génère en JSON:
+{
+  "cardName": "${card.name}",
+  "cardId": ${card.id},
+  "roman": "${card.roman}",
+  "emoji": "${card.emoji}",
+  "isReversed": ${isReversed},
+  "archetype": "${card.archetype}",
+  "message": "3-4 phrases d'interprétation personnalisée pour la journée, en liant le tarot et l'astrologie",
+  "question": "une question de réflexion ouverte pour la journée"
+}
+
+Réponds UNIQUEMENT avec le JSON.`;
+
+    const data = await callLLMWithRetry([
+      { role: 'system', content: systemPrompt },
+      { role: 'user', content: userPrompt },
+    ], 2);
+    const msg = data.choices?.[0]?.message || {};
+    const content = msg.content || msg.reasoning_content || '';
+    let cleaned = content.replace(/```json\s*/g, '').replace(/```\s*/g, '').trim();
+    const jsonMatch = cleaned.match(/\{[\s\S]*\}/);
+    let result;
+    if (jsonMatch) {
+      result = JSON.parse(jsonMatch[0]);
+    } else {
+      // Fallback: static card data
+      result = {
+        cardName: card.name, cardId: card.id, roman: card.roman, emoji: card.emoji,
+        isReversed, archetype: card.archetype,
+        message: isReversed ? card.reversed : card.upright,
+        question: 'Que vous dit cette carte aujourd\'hui ?',
+      };
+    }
+
+    // Ensure fields exist
+    result.cardId ??= card.id;
+    result.roman ??= card.roman;
+    result.emoji ??= card.emoji;
+    result.isReversed ??= isReversed;
+    result.archetype ??= card.archetype;
+
+    // Cache for the day
+    db.prepare('INSERT OR REPLACE INTO horoscope_cache (user_id, date, content) VALUES (?, ?, ?)')
+      .run(req.user.id, `tarot:${today}`, JSON.stringify(result));
+
+    res.json(result);
+  } catch (err) {
+    console.error('Tarot error:', err.message);
+    res.status(500).json({ error: 'Failed to draw tarot', detail: err.message });
+  }
+});
+
 // ─── Compatibility (LLM-powered) ───────────────────────────
 app.post('/api/compatibility', auth, llmLimiter, async (req, res) => {
   try {

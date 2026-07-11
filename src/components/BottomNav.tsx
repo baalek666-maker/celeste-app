@@ -48,6 +48,15 @@ function NavIcon({ item, active }: { item: string; active: boolean }) {
           <line x1="12" y1="6" x2="12" y2="19" />
         </svg>
       );
+    case 'explorer':
+      // Compass / astrolabe — exploration
+      return (
+        <svg width="22" height="22" viewBox="0 0 24 24" {...common}>
+          <circle cx="12" cy="12" r="9.5" />
+          <polygon points="12,5 14,12 12,19 10,12" strokeWidth={sw * 0.7} />
+          <circle cx="12" cy="12" r="1.5" />
+        </svg>
+      );
     case 'settings':
       // Hexagram / six-pointed star (Seal) — order & structure
       return (

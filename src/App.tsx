@@ -9,13 +9,14 @@ import { Compatibility } from './screens/Compatibility';
 import { Journal } from './screens/Journal';
 import { Paywall } from './screens/Paywall';
 import { Settings } from './screens/Settings';
+import { Explorer } from './screens/Explorer';
 import { BottomNav } from './components/BottomNav';
 import { getToken, clearToken, api } from './lib/api';
 import { getUser, saveUser, getFreeScans, incrementFreeScans, getFreeCompat, incrementFreeCompat } from './lib/storage';
 import { calculateNatalChart } from './lib/astrology';
 import type { User } from './types';
 
-export type Screen = 'landing' | 'auth' | 'onboarding' | 'home' | 'chart' | 'horoscope' | 'compatibility' | 'journal' | 'paywall' | 'settings';
+export type Screen = 'landing' | 'auth' | 'onboarding' | 'home' | 'chart' | 'horoscope' | 'compatibility' | 'journal' | 'explorer' | 'paywall' | 'settings';
 
 // Detect network-level failures (API unreachable) vs. auth failures.
 function isNetworkError(err: unknown): boolean {
@@ -343,10 +344,10 @@ export function App() {
     return <Paywall onClose={() => setScreen('home')} onSubscribe={(u) => { setUser(u); saveUser(u); setScreen('horoscope'); }} />;
   }
 
-  const navItems: Screen[] = ['home', 'horoscope', 'compatibility', 'journal', 'settings'];
+  const navItems: Screen[] = ['home', 'horoscope', 'journal', 'explorer', 'settings'];
   const navLabels: Record<string, string> = {
-    home: 'Accueil', horoscope: 'Horoscope', compatibility: 'Couple',
-    journal: 'Journal', settings: 'Profil',
+    home: 'Accueil', horoscope: 'Horoscope',
+    journal: 'Journal', explorer: 'Explorer', settings: 'Profil',
   };
   const showNav = navItems.includes(screen);
 
@@ -361,6 +362,7 @@ export function App() {
             {screen === 'horoscope' && <Horoscope user={user} />}
             {screen === 'compatibility' && <Compatibility user={user} />}
             {screen === 'journal' && <Journal user={user} />}
+            {screen === 'explorer' && <Explorer user={user} onNavigate={handleNavigate} />}
             {screen === 'settings' && <Settings user={user} onUpdate={(u) => { setUser(u); saveUser(u); }} />}
           </div>
         </div>
