@@ -254,6 +254,20 @@ export const api = {
     transits: Record<string, { sign: string; degree: number; longitude: number; retrograde: boolean }>;
   }>('/transits/today'),
 
+  // Natal chart — full data for premium wheel
+  getNatalChart: () => apiCall<{
+    natal: Record<string, {
+      sign?: string; degree?: number; longitude: number; retrograde?: boolean;
+    }> & {
+      ascendant?: { sign: string; degree: number; longitude: number };
+      midheaven?: { sign: string; degree: number; longitude: number };
+      northNode?: { sign: string; degree: number; longitude: number };
+      southNode?: { longitude: number };
+      houses?: Array<{ number: number; cusp: number; sign: string }>;
+      aspects?: Array<{ p1: string; p2: string; type: string; angle: number; orb: number; color: string }>;
+    };
+  }>('/natal-chart'),
+
   // Daily Aspects (Feature 9)
   getDailyAspects: () => apiCall<{
     date: string;

@@ -288,7 +288,7 @@ function getTransits(date) {
   return result;
 }
 
-function getNatalPositions(birthData) {
+function getNatalPositions(birthData, full = false) {
   const local = new Date(`${birthData.date}T${birthData.time}:00`);
   const utc = new Date(local.getTime() - birthData.timezone * 3600000);
   const time = new AstroTime(utc);
@@ -299,19 +299,75 @@ function getNatalPositions(birthData) {
     result[p] = {
       sign: SIGNS[Math.floor(lon/30)],
       degree: Math.round(lon % 30 * 10) / 10,
+      longitude: Math.round(lon * 100) / 100,
       retrograde: isRetrograde(p, time),
     };
   }
-  // Ascendant
-  const gst = SiderealTime(time); // returns hours (0-24), NOT degrees
-  const gstDeg = gst * 15; // convert hours → degrees (1h = 15°)
+  // Ascendant + MC + Houses
+  const gst = SiderealTime(time); // hours 0-24
+  const gstDeg = gst * 15; // → degrees
   const lst = ((gstDeg + birthData.longitude) % 360 + 360) % 360;
   const eps = 23.4393 * Math.PI / 180;
   const latR = birthData.latitude * Math.PI / 180;
   const lstR = lst * Math.PI / 180;
+
+  // MC (Midheaven) — ecliptic longitude on the upper meridian
+  let mc = Math.atan2(Math.sin(lstR), Math.cos(lstR) * Math.cos(eps)) * 180 / Math.PI;
+  mc = ((mc % 360) + 360) % 360;
+
+  // Ascendant
   let asc = Math.atan2(-Math.cos(lstR), Math.sin(lstR)*Math.cos(eps)+Math.tan(latR)*Math.sin(eps)) * 180/Math.PI;
-  asc = ((asc + 180) % 360 + 360) % 360; // +180°: formula gives descendant, flip to ascendant
-  result.ascendant = { sign: SIGNS[Math.floor(asc/30)], degree: Math.round(asc%30 * 10) / 10 };
+  asc = ((asc + 180) % 360 + 360) % 360;
+
+  result.ascendant = { sign: SIGNS[Math.floor(asc/30)], degree: Math.round(asc%30 * 10) / 10, longitude: Math.round(asc * 100) / 100 };
+  result.midheaven = { sign: SIGNS[Math.floor(mc/30)], degree: Math.round(mc%30 * 10) / 10, longitude: Math.round(mc * 100) / 100 };
+
+  // Lunar Nodes (Mean Node)
+  const T = (time.tt - 2451545.0) / 36525.0;
+  let nodeLon = 125.04452 - 1934.136261 * T + 0.0020708 * T * T + T * T * T / 450000.0;
+  nodeLon = ((nodeLon % 360) + 360) % 360;
+  result.northNode = { sign: SIGNS[Math.floor(nodeLon/30)], degree: Math.round(nodeLon % 30 * 10) / 10, longitude: Math.round(nodeLon * 100) / 100 };
+  result.southNode = { longitude: Math.round(((nodeLon + 180) % 360) * 100) / 100 };
+
+  if (full) {
+    // Equal House system: House 1 = Ascendant, each subsequent +30°
+    result.houses = [];
+    for (let i = 0; i < 12; i++) {
+      const cuspLon = ((asc + i * 30) % 360 + 360) % 360;
+      result.houses.push({
+        number: i + 1,
+        cusp: Math.round(cuspLon * 100) / 100,
+        sign: SIGNS[Math.floor(cuspLon / 30)],
+      });
+    }
+
+    // Aspects between planets
+    const allBodies = ['sun','moon','mercury','venus','mars','jupiter','saturn','uranus','neptune','pluto','northNode'];
+    const aspectTypes = [
+      { name: 'conjunction', angle: 0, orb: 8, color: '#fbbf24' },
+      { name: 'opposition', angle: 180, orb: 8, color: '#ef4444' },
+      { name: 'trine', angle: 120, orb: 8, color: '#22d3ee' },
+      { name: 'square', angle: 90, orb: 8, color: '#f97316' },
+      { name: 'sextile', angle: 60, orb: 6, color: '#4ade80' },
+    ];
+    result.aspects = [];
+    for (let i = 0; i < allBodies.length; i++) {
+      for (let j = i + 1; j < allBodies.length; j++) {
+        const p1 = allBodies[i], p2 = allBodies[j];
+        const lon1 = result[p1]?.longitude;
+        const lon2 = result[p2]?.longitude;
+        if (lon1 == null || lon2 == null) continue;
+        let diff = Math.abs(lon1 - lon2);
+        if (diff > 180) diff = 360 - diff;
+        for (const at of aspectTypes) {
+          if (Math.abs(diff - at.angle) <= at.orb) {
+            result.aspects.push({ p1, p2, type: at.name, angle: at.angle, orb: Math.round((Math.abs(diff - at.angle)) * 10) / 10, color: at.color });
+            break;
+          }
+        }
+      }
+    }
+  }
   return result;
 }
 
@@ -543,6 +599,17 @@ app.use((req, res, next) => {
 // Health check
 app.get('/api/health', (req, res) => {
   res.json({ status: 'ok', ephemeris: 'astronomy-engine v2' });
+});
+
+// ─── Natal Chart (full data for premium wheel) ────────────
+app.get('/api/natal-chart', auth, (req, res) => {
+  const row = db.prepare('SELECT birth_data FROM profiles WHERE user_id = ? AND is_self = 1').get(req.user.id);
+  if (!row || !row.birth_data) {
+    return res.status(400).json({ error: 'No birth data found' });
+  }
+  const birthData = JSON.parse(row.birth_data);
+  const natal = getNatalPositions(birthData, true);
+  res.json({ natal });
 });
 
 // ─── Moon phase (public — used by Home widget) ─────────────

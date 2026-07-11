@@ -3,7 +3,7 @@ import type { Screen } from '../App';
 import { ZODIAC_SIGNS } from '../data/zodiac';
 import StreakCelebration from '../components/StreakCelebration';
 import DailyTarot from '../components/DailyTarot';
-import SkyMap from '../components/SkyMap';
+import NatalChart from '../components/NatalChart';
 
 export function Home({ user, onNavigate }: { user: User; onNavigate: (s: Screen) => void }) {
   const streak = user.streak ?? 0;
@@ -94,8 +94,8 @@ export function Home({ user, onNavigate }: { user: User; onNavigate: (s: Screen)
         </div>
       </div>
 
-      {/* ── 4. Carte du ciel (SkyMap) ── */}
-      <SkyMap size={300} />
+      {/* ── 4. Theme natal (roue astronomique precise) ── */}
+      <NatalChart size={340} />
 
       {/* ── 5. Horoscope preview ── */}
       <button
