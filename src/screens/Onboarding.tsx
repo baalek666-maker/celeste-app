@@ -4,6 +4,7 @@ import { setBirthData, setOnboarded } from '../lib/storage';
 import { api } from '../lib/api';
 import type { User, BirthData, NatalChart } from '../types';
 import { ZODIAC_SIGNS } from '../data/zodiac';
+import { toast } from '../components/Toast';
 
 // Strip diacritics so "Strasbourg" matches "strasboug" and "Côte" matches "cote".
 function normalize(s: string): string {
@@ -145,7 +146,9 @@ export function Onboarding({ onComplete }: { onComplete: (u: User) => void }) {
     const chart = calculateNatalChart(birth);
     setBirthData(birth, chart);
     setOnboarded();
-    const save = api.saveBirthData(birth).catch(() => {/* offline-queue handles retry */});
+    const save = api.saveBirthData(birth)
+      .then(() => { toast.success('Thème natal sauvegardé ✨'); return 'synced'; })
+      .catch(() => { toast.info('Sauvegardé localement — sync dès que possible'); return 'queued'; });
 
     // 1500ms (was 2800ms — felt too long during testing) plus save.
     const minDelay = new Promise(r => setTimeout(r, 1500));
@@ -288,14 +291,29 @@ export function Onboarding({ onComplete }: { onComplete: (u: User) => void }) {
       <div className="w-full max-w-xs space-y-2 mb-4 max-h-64 overflow-y-auto">
         {filteredCities.map((c, i) => {
           const realIdx = CITIES.indexOf(c);
+          const isSelected = cityIdx === realIdx;
           return (
             <button
               key={realIdx}
               onClick={() => setCityIdx(realIdx)}
-              className={`w-full py-3 px-4 rounded-xl text-left transition-all ${cityIdx === realIdx ? 'glass border border-cosmic-500' : 'glass border border-transparent'}`}
+              className={`w-full py-3 px-4 rounded-xl text-left transition-all flex items-center gap-3 ${
+                isSelected
+                  ? 'glass border-2 border-gold-500 bg-gold-500/10 shadow-md shadow-gold-900/30'
+                  : 'glass border border-transparent hover:border-cosmic-500/40'
+              }`}
             >
-              <span className="text-night-100">{c.city}</span>
-              <span className="text-night-400 text-sm ml-2">{c.country}</span>
+              <span
+                aria-hidden="true"
+                className={`shrink-0 w-5 h-5 rounded-full flex items-center justify-center text-xs ${
+                  isSelected ? 'bg-gold-500 text-night-950' : 'bg-night-800/60 text-night-600'
+                }`}
+              >
+                {isSelected ? '✓' : ''}
+              </span>
+              <span className="flex-1 min-w-0">
+                <span className="text-night-100">{c.city}</span>
+                <span className="text-night-400 text-sm ml-2">{c.country}</span>
+              </span>
             </button>
           );
         })}
@@ -303,6 +321,18 @@ export function Onboarding({ onComplete }: { onComplete: (u: User) => void }) {
           <p className="text-night-500 text-sm text-center py-4">Aucune ville trouvée. Essayez une autre recherche.</p>
         )}
       </div>
+
+      {/* Selection confirmation banner — tells user exactly what will be used. */}
+      <div className="w-full max-w-xs mb-4 px-4 py-3 rounded-2xl glass border border-gold-500/30 bg-gold-500/5 animate-fade-in">
+        <p className="text-night-400 text-xs uppercase tracking-widest mb-1">Ville sélectionnée</p>
+        <p className="text-gold-300 text-sm font-medium">
+          ✦ {CITIES[cityIdx].city}, {CITIES[cityIdx].country}
+        </p>
+        <p className="text-night-500 text-xs mt-1">
+          Fuseau UTC{CITIES[cityIdx].tz >= 0 ? '+' : ''}{CITIES[cityIdx].tz} · {CITIES[cityIdx].lat.toFixed(2)}°, {CITIES[cityIdx].lng.toFixed(2)}°
+        </p>
+      </div>
+
       <div className="mt-auto w-full max-w-xs pb-8">
         <button
           onClick={handleSubmit}

@@ -64,10 +64,17 @@ function EditBirthData({ user, onUpdate, onCancel }: {
       // Persist locally
       setBirthData(birth, newChart);
       // Sync to backend (best-effort)
-      try { await api.saveBirthData(birth); } catch { /* offline OK */ }
+      try {
+        await api.saveBirthData(birth);
+        toast.success('Thème natal mis à jour ✨');
+      } catch {
+        toast.info('Sauvegardé localement — sync dès que possible');
+      }
       onUpdate({ ...user, birthData: birth, natalChart: newChart });
     } catch (e) {
-      setErr(`Erreur : ${e instanceof Error ? e.message : 'inconnue'}`);
+      const msg = e instanceof Error ? e.message : 'inconnue';
+      setErr(`Erreur : ${msg}`);
+      toast.error(`Recalcul impossible : ${msg}`);
     } finally {
       setSaving(false);
     }
@@ -254,9 +261,27 @@ export function Settings({ user, onUpdate }: { user: User; onUpdate: (u: User) =
 
 // ─── Notification Panel (Feature 3) ───────────────────────
 function NotificationPanel() {
-  const { status, loading, error, subscribe, unsubscribe, updateHour, test } = useNotifications();
+  const { status, loading, error, subscribe, unsubscribe, updateHour, test, refresh } = useNotifications();
   const [testing, setTesting] = useState(false);
   const [testResult, setTestResult] = useState<{ sent: number; total: number } | null>(null);
+
+  // Initial load failed (status never resolved) — surface a retry instead of
+  // an infinite "Chargement…". Distinguish from the brief flicker before first
+  // fetch resolves.
+  if (!status && error) {
+    return (
+      <div className="glass rounded-2xl p-4">
+        <p className="text-night-200 text-sm font-medium mb-1">🔔 Notifications quotidiennes</p>
+        <p className="text-red-400 text-xs mb-3">Impossible de charger le statut ({error})</p>
+        <button
+          onClick={() => { void refresh(); }}
+          className="text-xs px-3 py-1.5 rounded-lg bg-cosmic-500/20 text-cosmic-200 border border-cosmic-500/40 hover:bg-cosmic-500/30"
+        >
+          Réessayer
+        </button>
+      </div>
+    );
+  }
 
   if (!status) {
     return (
@@ -285,7 +310,16 @@ function NotificationPanel() {
     setTesting(true);
     setTestResult(null);
     const r = await test();
-    if (r) setTestResult(r);
+    if (r) {
+      setTestResult(r);
+      if (r.sent === r.total && r.total > 0) {
+        toast.success(`Notification test envoyée ✓ (${r.sent}/${r.total})`);
+      } else if (r.sent > 0) {
+        toast.info(`Partiel : ${r.sent}/${r.total} envoyées`);
+      } else {
+        toast.error('Aucune notification envoyée — vérifie la permission');
+      }
+    }
     setTesting(false);
   };
 

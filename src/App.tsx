@@ -30,7 +30,7 @@ function isNetworkError(err: unknown): boolean {
 }
 
 // ─── Splash / loading screen ───────────────────────────
-function Splash() {
+function Splash({ stuckHint }: { stuckHint?: string }) {
   return (
     <div className="cosmic-bg star-field min-h-screen text-night-100 flex items-center justify-center relative">
       <div className="flex flex-col items-center relative z-10 animate-fade-in-scale">
@@ -45,6 +45,11 @@ function Splash() {
           </svg>
         </div>
         <h1 className="text-3xl font-bold text-gold-gradient font-display tracking-wider mb-4">Céleste</h1>
+        {stuckHint ? (
+          <p className="text-night-400 text-xs leading-relaxed max-w-xs text-center font-body mb-4 px-4">
+            {stuckHint}
+          </p>
+        ) : null}
         <div className="flex gap-1.5">
           <span className="splash-dot" style={{ animationDelay: '0s' }} />
           <span className="splash-dot" style={{ animationDelay: '0.16s' }} />
@@ -87,6 +92,7 @@ export function App() {
   const [isAuthed, setIsAuthed] = useState<boolean>(!!getToken());
   const [booting, setBooting] = useState<boolean>(!!getToken());
   const [apiDown, setApiDown] = useState<boolean>(false);
+  const [bootStuck, setBootStuck] = useState<boolean>(false);
 
   const retryBoot = () => {
     setApiDown(false);
@@ -131,37 +137,91 @@ export function App() {
       setBooting(false);
       return;
     }
-    api.getProfile().then(profile => {
-      const updated: User = {
-        ...user,
-        email: profile.email,
-        isPremium: profile.isPremium,
-        scansRemaining: profile.scansRemaining,
-        premiumUntil: profile.premiumUntil ?? null,
-        streak: profile.streak ?? user.streak ?? 0,
-      };
-      // If birth data is on the server, sync it
-      if (profile.birthData) {
-        updated.birthData = profile.birthData;
-        // Recompute natalChart if missing (e.g. fresh browser, cleared localStorage)
-        if (!updated.natalChart) {
-          updated.natalChart = calculateNatalChart(profile.birthData);
-        }
-      }
-      setUser(updated);
-      saveUser(updated);
+
+    let cancelled = false;
+    const clearCancelled = () => { cancelled = true; };
+
+    // Hard timeout: if profile fetch takes too long (proxy hang, network slow),
+    // show a hint instead of letting the splash spin forever. The cached localStorage
+    // user keeps the app usable offline / behind flaky proxies.
+    const stuckTimer = window.setTimeout(() => {
+      // After 6s with no response, fall back to cached localStorage user so the
+      // app is still usable. setBootStuck(true) shows a hint on the splash.
+      if (cancelled) return;
+      // 1. Use cached profile (don't force logout — user might just be on flaky proxy)
       setIsAuthed(true);
       setBooting(false);
-    }).catch((err) => {
-      // Distinguish API unreachable from expired/invalid token
-      if (isNetworkError(err)) {
-        setApiDown(true);
-      } else {
-        clearToken();
-        setIsAuthed(false);
+      setBootStuck(true);
+    }, 6000);
+
+    // Retry profile fetch up to 3 times on transient network errors.
+    // - Network error / timeout → retry with exponential backoff (500ms, 1s, 2s)
+    // - Auth error (401 / token) → clearToken ONCE, never retry
+    // - Other error → treat as API down after retries exhausted
+    const fetchProfile = async () => {
+      const attempts = 3;
+      for (let i = 0; i < attempts; i++) {
+        if (cancelled) return;
+        try {
+          const profile = await api.getProfile();
+          if (cancelled) return;
+          window.clearTimeout(stuckTimer);
+          const updated: User = {
+            ...user,
+            email: profile.email,
+            isPremium: profile.isPremium,
+            scansRemaining: profile.scansRemaining,
+            premiumUntil: profile.premiumUntil ?? null,
+            streak: profile.streak ?? user.streak ?? 0,
+          };
+          // If birth data is on the server, sync it
+          if (profile.birthData) {
+            updated.birthData = profile.birthData;
+            // Recompute natalChart if missing (e.g. fresh browser, cleared localStorage)
+            if (!updated.natalChart) {
+              updated.natalChart = calculateNatalChart(profile.birthData);
+            }
+          }
+          setUser(updated);
+          saveUser(updated);
+          setIsAuthed(true);
+          setBooting(false);
+          return;
+        } catch (err) {
+          if (cancelled) return;
+          const msg = (err instanceof Error ? err.message : String(err)).toLowerCase();
+          const isNet = isNetworkError(err);
+          // Auth failure: invalid/expired token → clearToken ONCE, no retry
+          const isAuthFail =
+            msg.includes('401') ||
+            msg.includes('unauthorized') ||
+            msg.includes('token') ||
+            msg.includes('forbidden');
+          if (isAuthFail) {
+            window.clearTimeout(stuckTimer);
+            clearToken();
+            setIsAuthed(false);
+            setBooting(false);
+            return;
+          }
+          // Last attempt: surface ApiDown
+          if (i === attempts - 1) {
+            window.clearTimeout(stuckTimer);
+            if (isNet) setApiDown(true);
+            setBooting(false);
+            return;
+          }
+          // Otherwise: backoff and retry
+          await new Promise((r) => setTimeout(r, 500 * Math.pow(2, i)));
+        }
       }
-      setBooting(false);
-    });
+    };
+
+    void fetchProfile();
+    return () => {
+      clearCancelled();
+      window.clearTimeout(stuckTimer);
+    };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
@@ -171,6 +231,32 @@ export function App() {
       setScreen('onboarding');
     }
   }, [isAuthed, user.birthData]);
+
+  // Safety net: if we have birthData but no natalChart (or the cached chart
+  // is stale relative to a change in city/timezone without changing date+time),
+  // recompute it. Persisted via saveUser() so subsequent mounts skip the work.
+  const [chartError, setChartError] = useState<string | null>(null);
+
+  const chartKey = user.birthData
+    ? `${user.birthData.date}|${user.birthData.time}|${user.birthData.city}|${user.birthData.timezone}|${user.birthData.latitude.toFixed(3)}|${user.birthData.longitude.toFixed(3)}`
+    : null;
+
+  useEffect(() => {
+    if (!user.birthData || !chartKey) return;
+    if (user.natalChart && (user as User & { _chartKey?: string })._chartKey === chartKey) return;
+    try {
+      const chart = calculateNatalChart(user.birthData);
+      const patched = { ...user, natalChart: chart, _chartKey: chartKey } as User;
+      setUser(patched);
+      saveUser(patched);
+      setChartError(null);
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : String(err);
+      console.error('[App] Failed to compute natalChart:', msg);
+      setChartError(msg);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [chartKey]);
 
   const handleNavigate = (s: Screen) => {
     if (!user.isPremium) {
@@ -197,7 +283,7 @@ export function App() {
 
   // ─── Splash while verifying token ───
   if (booting) {
-    return <Splash />;
+    return <Splash stuckHint={bootStuck ? "Connexion lente… on affiche quand même votre profil (mis en cache local)." : undefined} />;
   }
 
   // ─── API unreachable: clear message instead of blank page ───
@@ -231,6 +317,10 @@ export function App() {
           setUser(updated);
           saveUser(updated);
           setIsAuthed(true);
+          // CRITICAL: route to home after successful login.
+          // Without this, screen stays at 'auth' and the main content
+          // area renders an empty div (only cosmic-bg visible = black screen).
+          setScreen('home');
         }} />
       );
     }

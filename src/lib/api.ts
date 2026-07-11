@@ -305,7 +305,7 @@ export const api = {
     }[];
   }>('/profiles'),
 
-  getProfile: (id: number) => apiCall<{
+  getProfileById: (id: number) => apiCall<{
     id: number;
     name: string;
     relation: string;
