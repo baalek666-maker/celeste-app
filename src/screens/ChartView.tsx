@@ -72,7 +72,7 @@ export function ChartView({ user }: { user: User }) {
 
       {/* Premium natal chart wheel */}
       <div className="mb-2">
-        <NatalChart size={340} />
+        <NatalChart />
       </div>
 
       {/* Planet Details */}

@@ -91,31 +91,33 @@ export default function NatalChart({ size }: { size?: number }) {
     return () => { mounted = false; };
   }, []);
 
-  // Responsive: measure parent width
+  // Responsive: measure own width via ResizeObserver (works even during loading)
   const ref = useRef<HTMLDivElement>(null);
   useEffect(() => {
-    if (!ref.current || size) return;
-    const update = () => setContainerW(ref.current?.parentElement?.clientWidth ?? 0);
-    update();
-    window.addEventListener('resize', update);
-    return () => window.removeEventListener('resize', update);
+    if (size || !ref.current) return;
+    const ro = new ResizeObserver(entries => {
+      for (const e of entries) {
+        setContainerW(e.contentRect.width);
+      }
+    });
+    ro.observe(ref.current);
+    return () => ro.disconnect();
   }, [size]);
 
-  const actualSize = size ?? Math.min(containerW - 8, 360);
-  const ready = size ? true : containerW > 0;
+  const actualSize = size ?? Math.min(containerW || 300, 340);
 
-  if (loading || !ready) {
+  if (loading) {
     return (
-      <div className="glass rounded-3xl p-4 mb-4 flex items-center justify-center" style={{ height: actualSize || 300 }}>
-        <p className="text-night-400 text-sm">Calcul de votre theme natal...</p>
+      <div ref={ref} className="w-full flex items-center justify-center mb-4" style={{ minHeight: 200 }}>
+        <p className="text-night-400 text-sm">Calcul de votre thème natal…</p>
       </div>
     );
   }
 
   if (err || !natal) {
     return (
-      <div className="glass rounded-3xl p-4 mb-4">
-        <p className="text-rose-400 text-sm">Theme natal indisponible ({err})</p>
+      <div ref={ref} className="glass rounded-3xl p-4 mb-4">
+        <p className="text-rose-400 text-sm">Thème natal indisponible ({err})</p>
       </div>
     );
   }
