@@ -263,6 +263,47 @@
   }
 }
 
+/* ═══════════════════════════════════════════════════════════
+   CELESTE COMPONENT ALIASES — bridge old naming to new theme
+   (6 classes used by 7+ components: DailyRituals, WeeklyChallenge,
+   AsteroidInsights, LunarNodes, HousesChart, OnboardingChecklist, PremiumBadge)
+   ═══════════════════════════════════════════════════════════ */
+@layer components {
+  /* Card — glass-gold style with rounded corners + padding + border */
+  .celeste-card {
+    background: linear-gradient(135deg, rgba(28, 24, 14, 0.75), rgba(14, 12, 8, 0.6));
+    backdrop-filter: blur(24px) saturate(1.3);
+    -webkit-backdrop-filter: blur(24px) saturate(1.3);
+    border-radius: 1rem;
+    padding: 1.25rem;
+    border: 1px solid rgba(197, 160, 89, 0.15);
+    box-shadow:
+      0 2px 16px rgba(0, 0, 0, 0.5),
+      inset 0 1px 0 rgba(197, 160, 89, 0.15);
+  }
+
+  /* Accent text — aged gold */
+  .celeste-accent {
+    color: #e2c47c;
+  }
+
+  /* Primary — gold-500 (works for both bg-celeste-primary and text-celeste-primary) */
+  .text-celeste-primary { color: #c5a059; }
+  .bg-celeste-primary { background-color: #c5a059; }
+  .border-celeste-primary { border-color: #c5a059; }
+
+  /* Text — light grey on dark */
+  .text-celeste-text { color: #f0f0f0; }
+
+  /* Success — viridian/leaf */
+  .text-celeste-success { color: #6f8a6a; }
+  .bg-celeste-success { background-color: #6f8a6a; }
+  .border-celeste-success { border-color: #6f8a6a; }
+
+  /* Background — near-black obsidian */
+  .bg-celeste-bg { background-color: #050505; }
+}
+
 /* ═════ Keyframes ═════ */
 @keyframes twinkle {
   0%, 100% { opacity: 0.3; }

@@ -11,6 +11,7 @@ import HousesChart from '../components/HousesChart';
 import AsteroidInsights from '../components/AsteroidInsights';
 import LunarNodes from '../components/LunarNodes';
 import WeeklyChallenge from '../components/WeeklyChallenge';
+import StreakCelebration from '../components/StreakCelebration';
 
 const DAILY_QUOTES = [
   'Les étoiles ne brillent jamais plus fort qu\'en pleine obscurité.',
@@ -142,6 +143,7 @@ export function Home({ user, onNavigate }: { user: User; onNavigate: (s: Screen)
 
   return (
     <div className="px-5 pt-12 relative z-10">
+      <StreakCelebration streak={streak} />
       {/* Header */}
       <div className="flex items-center justify-between mb-6 animate-fade-in">
         <div>

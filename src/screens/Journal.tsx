@@ -3,14 +3,33 @@ import type { User, JournalEntry } from '../types';
 import { getJournal, addJournalEntry } from '../lib/storage';
 import { api, getToken } from '../lib/api';
 
+function calcStreak(entries: JournalEntry[]): number {
+  if (entries.length === 0) return 0;
+  const dates = new Set(entries.map(e => e.date));
+  let streak = 0;
+  const d = new Date();
+  // If today not written yet, start from yesterday
+  if (!dates.has(d.toISOString().split('T')[0])) {
+    d.setDate(d.getDate() - 1);
+  }
+  while (dates.has(d.toISOString().split('T')[0])) {
+    streak++;
+    d.setDate(d.getDate() - 1);
+  }
+  return streak;
+}
+
 export function Journal({ user }: { user: User }) {
   const [entries, setEntries] = useState<JournalEntry[]>(() => getJournal());
   const [note, setNote] = useState('');
   const [rating, setRating] = useState(0);
   const [syncing, setSyncing] = useState(false);
   const [syncMsg, setSyncMsg] = useState('');
+  const [saveFlash, setSaveFlash] = useState(false);
   const today = new Date().toISOString().split('T')[0];
   const todayFr = new Date().toLocaleDateString('fr-FR', { weekday: 'long', day: 'numeric', month: 'long' });
+  const streak = calcStreak(entries);
+  const hasToday = entries.some(e => e.date === today);
 
   // On mount, if logged in, fetch server-side entries and merge with local.
   // Server is source of truth; localStorage acts as offline cache.
@@ -57,6 +76,8 @@ export function Journal({ user }: { user: User }) {
     setEntries(getJournal());
     setNote('');
     setRating(0);
+    setSaveFlash(true);
+    setTimeout(() => setSaveFlash(false), 2500);
     // 2. Best-effort sync to backend
     if (getToken()) {
       try {
@@ -74,7 +95,35 @@ export function Journal({ user }: { user: User }) {
   return (
     <div className="px-5 pt-12 pb-4">
       <h1 className="text-2xl font-bold mb-1 text-gold-gradient">Journal</h1>
-      <p className="text-night-400 text-sm mb-6">Vos ressentis et votre parcours astral</p>
+      <p className="text-night-400 text-sm mb-4">Vos ressentis et votre parcours astral</p>
+
+      {/* Save flash */}
+      {saveFlash && (
+        <div className="glass-gold rounded-xl px-4 py-3 mb-4 animate-fade-in border border-gold-500/30 flex items-center gap-3">
+          <span className="text-xl">✨</span>
+          <div>
+            <p className="text-gold-300 text-sm font-semibold">Entrée enregistrée !</p>
+            {streak > 0 && streak % 7 === 0 && (
+              <p className="text-night-300 text-xs">🔥 Série de {streak} jours — bravo !</p>
+            )}
+          </div>
+        </div>
+      )}
+
+      {/* Streak badge */}
+      {streak >= 2 && (
+        <div className="glass rounded-2xl px-4 py-2.5 mb-4 flex items-center justify-between border border-cosmic-500/20 animate-fade-in">
+          <div className="flex items-center gap-2">
+            <span className="text-lg">{streak >= 7 ? '🔥' : '☾'}</span>
+            <span className="text-night-200 text-sm font-medium">
+              {streak} jour{streak > 1 ? 's' : ''} de suite
+            </span>
+          </div>
+          {!hasToday && (
+            <span className="text-cosmic-400 text-xs">Écrivez aujourd'hui pour continuer !</span>
+          )}
+        </div>
+      )}
 
       {/* Sync status */}
       {(syncing || syncMsg) && (

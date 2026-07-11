@@ -42,6 +42,7 @@ export function ProfilesScreen({ user, onClose }: { user: User; onClose: () => v
   const [loading, setLoading] = useState(true);
   const [editing, setEditing] = useState<Profile | null>(null);
   const [showAdd, setShowAdd] = useState(false);
+  const [confirmDelete, setConfirmDelete] = useState<Profile | null>(null);
 
   const reload = async () => {
     if (!getToken()) return;
@@ -61,8 +62,8 @@ export function ProfilesScreen({ user, onClose }: { user: User; onClose: () => v
   }, [user.email]);
 
   const handleDelete = async (id: number) => {
-    if (!confirm('Supprimer ce profil ? Cette action est irréversible.')) return;
     await api.deleteProfile(id);
+    setConfirmDelete(null);
     await reload();
   };
 
@@ -143,7 +144,7 @@ export function ProfilesScreen({ user, onClose }: { user: User; onClose: () => v
                   ✏️ Modifier
                 </button>
                 <button
-                  onClick={() => handleDelete(p.id)}
+                  onClick={() => setConfirmDelete(p)}
                   className="text-[11px] text-white/60 hover:text-red-300 px-2 py-1 rounded hover:bg-white/5"
                 >
                   🗑️ Supprimer
@@ -160,6 +161,33 @@ export function ProfilesScreen({ user, onClose }: { user: User; onClose: () => v
           onClose={() => { setShowAdd(false); setEditing(null); }}
           onSaved={async () => { setShowAdd(false); setEditing(null); await reload(); }}
         />
+      )}
+
+      {/* Inline delete confirmation */}
+      {confirmDelete && (
+        <div className="fixed inset-0 z-[60] bg-black/70 flex items-center justify-center p-5 animate-fade-in" onClick={() => setConfirmDelete(null)}>
+          <div className="glass-gold rounded-2xl p-6 max-w-xs w-full text-center" onClick={e => e.stopPropagation()}>
+            <div className="text-3xl mb-3">🗑️</div>
+            <p className="text-night-100 font-medium mb-1">Supprimer ce profil ?</p>
+            <p className="text-night-400 text-xs mb-5">
+              « {confirmDelete.name} » sera définitivement supprimé. Cette action est irréversible.
+            </p>
+            <div className="flex gap-3">
+              <button
+                onClick={() => setConfirmDelete(null)}
+                className="flex-1 bg-white/5 hover:bg-white/10 rounded-lg py-2.5 text-sm text-night-200"
+              >
+                Annuler
+              </button>
+              <button
+                onClick={() => handleDelete(confirmDelete.id)}
+                className="flex-1 bg-red-500/80 hover:bg-red-500 text-white font-medium rounded-lg py-2.5 text-sm"
+              >
+                Supprimer
+              </button>
+            </div>
+          </div>
+        </div>
       )}
     </div>
   );
