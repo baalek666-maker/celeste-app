@@ -8,6 +8,7 @@ import { useNotifications } from '../lib/useNotifications';
 import { useFavorites } from '../lib/useFavorites';
 import { ProfilesScreen } from './ProfilesScreen';
 import PremiumBadge from '../components/PremiumBadge';
+import { toast } from '../components/Toast';
 
 // eslint-disable-next-line @typescript-eslint/ban-ts-comment
 // @ts-ignore — Vite resolves this to the package.json version at build time.
@@ -127,6 +128,7 @@ export function Settings({ user, onUpdate }: { user: User; onUpdate: (u: User) =
   const handleLogout = () => {
     const u = logout();
     onUpdate(u);
+    toast.info('À bientôt ✨');
     window.location.reload();
   };
 

@@ -4,6 +4,7 @@ import './index.css';
 import { App } from './App';
 import { ErrorBoundary } from './components/ErrorBoundary';
 import OfflineIndicator from './components/OfflineIndicator';
+import ToastHost from './components/Toast';
 
 // Service worker : push notifications + cache offline (lecture astro).
 // En dev Vite, le SW est servi depuis /sw.js, Vite ne l'intercepte pas.
@@ -20,6 +21,7 @@ createRoot(document.getElementById('root')!).render(
     <ErrorBoundary>
       {/* Toujours visible, peu importe l'écran (auth/onboarding/home). */}
       <OfflineIndicator />
+      <ToastHost />
       <App />
     </ErrorBoundary>
   </StrictMode>,

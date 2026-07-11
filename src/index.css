@@ -329,6 +329,19 @@
 .animate-glow { animation: glow-pulse 3s ease-in-out infinite; }
 .animate-gold-glow { animation: gold-glow-pulse 3s ease-in-out infinite; }
 .animate-mystic { animation: mystic-shimmer 4s ease-in-out infinite; }
+.animate-shimmer { animation: shimmer 1.8s linear infinite; }
+
+/* ─── Toast entry/exit animations ─── */
+@keyframes slide-down {
+  0%   { opacity: 0; transform: translate(-50%, -16px) scale(0.95); }
+  100% { opacity: 1; transform: translate(-50%, 0)     scale(1); }
+}
+@keyframes fade-out-up {
+  0%   { opacity: 1; transform: translate(-50%, 0)    scale(1); }
+  100% { opacity: 0; transform: translate(-50%, -8px) scale(0.95); }
+}
+.animate-slide-down   { animation: slide-down   0.28s cubic-bezier(0.16, 1, 0.3, 1) both; }
+.animate-fade-out-up  { animation: fade-out-up  0.25s ease-in    both; }
 
 /* ─── Page & element transition utilities ─── */
 .page-transition {

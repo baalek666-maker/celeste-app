@@ -2,6 +2,7 @@ import { useState } from 'react';
 import type { User, ZodiacSign, BirthData, CompatibilityResult } from '../types';
 import { api } from '../lib/api';
 import { ZODIAC_SIGNS, ZODIAC_ORDER } from '../data/zodiac';
+import { Skeleton, SkeletonCard } from '../components/Skeleton';
 
 // Representative dates per sign (used in quick mode as approximation only).
 // NOTE: in quick mode the moon is computed by the backend from this date, so
@@ -205,13 +206,22 @@ export function Compatibility({ user }: { user: User }) {
       )}
 
       {loading && (
-        <div className="flex flex-col items-center justify-center min-h-[50vh]">
-          <svg width="80" height="80" viewBox="0 0 80 80" className="animate-spin-slow mb-6">
-            <circle cx="40" cy="40" r="34" fill="none" stroke="#383964" strokeWidth="0.5" />
-            <circle cx="40" cy="6" r="2" fill="#ec4899" />
-            <circle cx="40" cy="40" r="3" fill="#c084fc" opacity="0.6" />
-          </svg>
-          <p className="text-night-400 text-sm">Analyse des résonances astrales...</p>
+        <div role="status" aria-label="Analyse en cours">
+          <div className="flex flex-col items-center mb-6">
+            <svg width="64" height="64" viewBox="0 0 80 80" className="animate-spin-slow mb-4">
+              <circle cx="40" cy="40" r="34" fill="none" stroke="#383964" strokeWidth="0.5" />
+              <circle cx="40" cy="6" r="2" fill="#ec4899" />
+              <circle cx="40" cy="40" r="3" fill="#c084fc" opacity="0.6" />
+            </svg>
+            <p className="text-night-400 text-sm">Analyse des résonances astrales...</p>
+          </div>
+          <div className="flex justify-center gap-4 mb-4">
+            <Skeleton className="h-16 w-16 rounded-full" />
+            <Skeleton className="h-16 w-20 rounded-full" />
+            <Skeleton className="h-16 w-16 rounded-full" />
+          </div>
+          <SkeletonCard lines={4} className="mb-4" />
+          <SkeletonCard lines={3} />
         </div>
       )}
 

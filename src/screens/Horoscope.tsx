@@ -2,9 +2,11 @@ import { useState, useEffect, useRef } from 'react';
 import type { User } from '../types';
 import { api } from '../lib/api';
 import { getCachedHoroscope, cacheHoroscope } from '../lib/storage';
+import { Skeleton, SkeletonCard } from '../components/Skeleton';
 import { useFavorites } from '../lib/useFavorites';
 import ShareCard from '../components/ShareCard';
 import SkyMap from '../components/SkyMap';
+import { toast } from '../components/Toast';
 
 const LOADING_MESSAGES = [
   'Alignement des planètes...',
@@ -131,8 +133,12 @@ export function Horoscope({ user }: { user: User }) {
         setHoroscope(entry);
         if (typeof h.streak === 'number') setStreak(h.streak);
         cacheHoroscope(today, entry);
+        toast.success('Horoscope rafraîchi');
       })
-      .catch(err => setError(err.message || 'Erreur'))
+      .catch(err => {
+        setError(err.message || 'Erreur');
+        toast.error('Impossible de rafraîchir');
+      })
       .finally(() => setRefreshing(false));
   };
 
@@ -155,18 +161,33 @@ export function Horoscope({ user }: { user: User }) {
 
   if (loading) {
     return (
-      <div className="px-5 pt-12 flex flex-col items-center justify-center min-h-[60vh] relative z-10">
-        <svg width="80" height="80" viewBox="0 0 80 80" className="animate-spin-slow mb-6">
-          <circle cx="40" cy="40" r="34" fill="none" stroke="#383964" strokeWidth="0.5" />
-          <circle cx="40" cy="40" r="24" fill="none" stroke="#56589c" strokeWidth="0.5" />
-          <circle cx="40" cy="40" r="14" fill="none" stroke="#a855f7" strokeWidth="0.5" opacity="0.5" />
-          <circle cx="40" cy="6" r="2" fill="#fbbf24" />
-          <circle cx="40" cy="40" r="3" fill="#fcd34d" opacity="0.6" />
-          <circle cx="74" cy="40" r="1.5" fill="#c084fc" />
-          <circle cx="40" cy="74" r="1.5" fill="#a855f7" />
-          <circle cx="6" cy="40" r="1.5" fill="#757bc4" />
-        </svg>
-        <p key={loadingMsg} className="text-night-400 text-sm animate-fade-in">{loadingMsg}</p>
+      <div className="px-5 pt-12 pb-4 relative z-10" role="status" aria-label="Chargement de l'horoscope">
+        {/* Header placeholder */}
+        <div className="flex items-center justify-between mb-6">
+          <div>
+            <Skeleton className="h-3 w-24 mb-2" />
+            <Skeleton className="h-7 w-40" />
+          </div>
+          <Skeleton className="h-9 w-9 rounded-full" />
+        </div>
+        {/* Animated cosmic SVG + rotating message */}
+        <div className="flex flex-col items-center mb-8">
+          <svg width="64" height="64" viewBox="0 0 80 80" className="animate-spin-slow mb-4">
+            <circle cx="40" cy="40" r="34" fill="none" stroke="#383964" strokeWidth="0.5" />
+            <circle cx="40" cy="40" r="24" fill="none" stroke="#56589c" strokeWidth="0.5" />
+            <circle cx="40" cy="40" r="14" fill="none" stroke="#a855f7" strokeWidth="0.5" opacity="0.5" />
+            <circle cx="40" cy="6" r="2" fill="#fbbf24" />
+            <circle cx="40" cy="40" r="3" fill="#fcd34d" opacity="0.6" />
+            <circle cx="74" cy="40" r="1.5" fill="#c084fc" />
+            <circle cx="40" cy="74" r="1.5" fill="#a855f7" />
+            <circle cx="6" cy="40" r="1.5" fill="#757bc4" />
+          </svg>
+          <p key={loadingMsg} className="text-night-400 text-xs animate-fade-in">{loadingMsg}</p>
+        </div>
+        {/* Skeleton cards preview */}
+        <SkeletonCard lines={4} className="mb-4" />
+        <SkeletonCard lines={3} className="mb-4" />
+        <SkeletonCard lines={2} className="mb-4" />
       </div>
     );
   }
