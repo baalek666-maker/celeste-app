@@ -1,7 +1,8 @@
 import { useState } from 'react';
 import type { User } from '../types';
-import { ZODIAC_SIGNS, PLANET_DATA } from '../data/zodiac';
+import { ZODIAC_SIGNS } from '../data/zodiac';
 import NatalChart from '../components/NatalChart';
+import { PlanetDetailCard } from '../components/PlanetDetailCard';
 
 export function ChartView({ user }: { user: User }) {
   if (!user.natalChart) {
@@ -75,33 +76,19 @@ export function ChartView({ user }: { user: User }) {
         <NatalChart />
       </div>
 
-      {/* Planet Details */}
+      {/* Planet Details — clickable expandable cards */}
       <div className="space-y-3 mb-6">
-        {chart.positions.map(pos => {
-          const signData = ZODIAC_SIGNS[pos.sign];
-          const planetData = PLANET_DATA[pos.planet];
-          return (
-            <div key={pos.planet} className="glass rounded-2xl p-4 flex items-center gap-4">
-              <div className="w-12 h-12 rounded-full flex items-center justify-center flex-shrink-0"
-                   style={{ background: `${planetData.color}18`, border: `1px solid ${planetData.color}33` }}>
-                <span className="text-xl" style={{ color: planetData.color }}>{planetData.symbol}</span>
-              </div>
-              <div className="flex-1 min-w-0">
-                <div className="flex items-center gap-2">
-                  <p className="text-night-100 font-semibold">{planetData.name}</p>
-                  {pos.retrograde && <span className="text-xs text-red-400 font-mono">℞ rétrograde</span>}
-                </div>
-                <p className="text-night-400 text-sm">
-                  en <span className="text-night-200">{signData.name}</span> {signData.symbol} · Maison {pos.house}
-                </p>
-                <p className="text-night-500 text-xs mt-0.5">{planetData.meaning}</p>
-              </div>
-              <div className="text-right">
-                <p className="text-night-300 text-xs font-mono">{Math.floor(pos.degree)}°</p>
-              </div>
-            </div>
-          );
-        })}
+        <p className="text-night-400 text-xs uppercase tracking-widest px-1">Vos planètes en détail</p>
+        {chart.positions.map(pos => (
+          <PlanetDetailCard
+            key={pos.planet}
+            planet={pos.planet}
+            sign={pos.sign}
+            degree={pos.degree}
+            house={pos.house}
+            retrograde={pos.retrograde}
+          />
+        ))}
       </div>
     </div>
   );

@@ -373,7 +373,7 @@ function getNatalPositions(birthData, full = false) {
 
 // ─── LLM Horoscope Generation ──────────────────────────────
 // Retry with exponential backoff on 429 (rate limit) and 5xx
-async function callLLMWithRetry(messages, maxRetries = 3) {
+async function callLLMWithRetry(messages, maxRetries = 3, maxTokens = 800) {
   let lastErr;
   for (let attempt = 0; attempt <= maxRetries; attempt++) {
     const response = await fetch(LLM_API_URL, {
@@ -386,7 +386,7 @@ async function callLLMWithRetry(messages, maxRetries = 3) {
         model: LLM_MODEL,
         messages,
         temperature: 0.85,
-        max_tokens: 800,
+        max_tokens: maxTokens,
       }),
     });
     if (response.ok) return await response.json();
@@ -610,6 +610,157 @@ app.get('/api/natal-chart', auth, (req, res) => {
   const birthData = JSON.parse(row.birth_data);
   const natal = getNatalPositions(birthData, true);
   res.json({ natal });
+});
+
+// ─── Planet Interpretation (LLM-powered, cached) ───────────
+db.exec(`CREATE TABLE IF NOT EXISTS planet_interpretations (
+  user_id INTEGER NOT NULL,
+  planet TEXT NOT NULL,
+  data TEXT NOT NULL,
+  created_at INTEGER DEFAULT (strftime('%s','now')),
+  PRIMARY KEY(user_id, planet)
+)`);
+
+const PLANET_FR = {
+  sun: 'Soleil', moon: 'Lune', mercury: 'Mercure', venus: 'Vénus',
+  mars: 'Mars', jupiter: 'Jupiter', saturn: 'Saturne',
+  uranus: 'Uranus', neptune: 'Neptune', pluto: 'Pluton',
+};
+const PLANET_SYMBOLS = {
+  sun: '☉', moon: '☽', mercury: '☿', venus: '♀', mars: '♂',
+  jupiter: '♃', saturn: '♄', uranus: '♅', neptune: '♆', pluto: '♇',
+};
+const ASPECT_FR = {
+  conjunction: 'conjonte', opposition: 'opposition', trine: 'trigone',
+  square: 'carré', sextile: 'sextile', semisextile: 'semi-sextile',
+  semisquare: 'semi-carré', quincunx: 'quinconce',
+};
+const SIGN_ELEMENTS = {
+  'Bélier': 'Feu', 'Lion': 'Feu', 'Sagittaire': 'Feu',
+  'Taureau': 'Terre', 'Vierge': 'Terre', 'Capricorne': 'Terre',
+  'Gémeaux': 'Air', 'Balance': 'Air', 'Verseau': 'Air',
+  'Cancer': 'Eau', 'Scorpion': 'Eau', 'Poissons': 'Eau',
+};
+
+function findHouse(longitude, houses) {
+  for (let i = 0; i < 12; i++) {
+    const cusp1 = houses[i].cusp;
+    const cusp2 = houses[(i + 1) % 12].cusp;
+    if (cusp2 > cusp1) {
+      if (longitude >= cusp1 && longitude < cusp2) return i + 1;
+    } else {
+      if (longitude >= cusp1 || longitude < cusp2) return i + 1;
+    }
+  }
+  return 1;
+}
+
+async function generatePlanetInterpretation(planet, natal) {
+  const planetData = natal[planet];
+  if (!planetData) throw new Error(`Planet ${planet} not found`);
+
+  const planetName = PLANET_FR[planet] || planet;
+  const symbol = PLANET_SYMBOLS[planet] || '';
+  const signName = planetData.sign;
+  const element = SIGN_ELEMENTS[signName] || '';
+  const deg = Math.floor(planetData.degree);
+  const min = Math.floor((planetData.degree - deg) * 60);
+  const retroStr = planetData.retrograde ? ' (rétrograde)' : '';
+  const houseNum = findHouse(planetData.longitude, natal.houses);
+
+  // Collect aspects involving this planet
+  const aspects = (natal.aspects || []).filter(a => a.p1 === planet || a.p2 === planet).map(a => {
+    const other = a.p1 === planet ? a.p2 : a.p1;
+    const otherName = PLANET_FR[other] || other;
+    const aspectName = ASPECT_FR[a.type] || a.type;
+    const orbSign = a.orb >= 0 ? '+' : '';
+    const orbDeg = Math.floor(a.orb);
+    const orbMin = Math.floor((Math.abs(a.orb) - Math.abs(orbDeg)) * 60);
+    return {
+      other, otherName, aspectName,
+      text: `${otherName} ${aspectName} ${planetName} orbe ${orbSign}${orbDeg}°${String(orbMin).padStart(2,'0')}'`,
+      orb: a.orb, color: a.color,
+    };
+  });
+
+  // LLM generation
+  const systemPrompt = `Tu es un astrologue expert francophone de très haut niveau, dans le style d'Astrotheme et de la tradition astrologique française. Tu écris des interprétations riches, nuancées, profondes, avec un vocabulaire astrologique précis. Tu écris en français.`;
+
+  const userPrompt = `Génère une interprétation détaillée pour ${planetName} (${symbol}) dans ce thème natal.
+
+Position exacte: ${planetName} ${deg}°${String(min).padStart(2,'0')}' ${signName} (élément ${element})${retroStr}, Maison ${houseNum}.
+${aspects.length > 0 ? `Aspects reçus: ${aspects.map(a => a.text).join('; ')}.` : 'Aucun aspect majeur.'}
+
+Réponds UNIQUEMENT en JSON valide:
+{
+  "general": "Signification générale et mythologique de ${planetName} (250-350 mots). Inclure: son rôle en astrologie, ses thèmes, ses correspondances (élément, qualité, anatomie associée, signes qu'il maîtrise et où il est en exil/chute/exaltation), ce qu'il représente dans la vie (archétypes, figures, âge de vie).",
+  "inSign": "Interprétation de ${planetName} en ${signName} (180-250 mots). Ce que cette position spécifique révèle: forces, défis, nuances psychologiques, tendances. Si c'est une planète lente (Jupiter au-delà), préciser que c'est moins personnel. Mentionner l'effet de ${planetData.retrograde ? 'la rétrogradation' : 'la marche directe'}.",
+  "degree": "Symbolisme du degré ${deg} ${signName} dans la tradition Janduz (80-120 mots). Commence par une image symbolique descriptive entre guillemets (style 'Un vieil homme...'), puis donne l'interprétation du caractère et des potentialités de ce degré.",
+  "temperament": "Tempérament (ex: Nerveux, Bilieux, Sanguin, Lymphatique)",
+  "characterology": "Caractérologie en 3-4 mots (ex: Non-Emotif, Actif, Secondaire)",
+  "keywords": ["5 mots-clés pertinents"]
+}`;
+
+  const data = await callLLMWithRetry([
+    { role: 'system', content: systemPrompt },
+    { role: 'user', content: userPrompt },
+  ], 4, 3000);
+
+  const msg = data.choices?.[0]?.message || {};
+  const content = msg.content || msg.reasoning_content || '';
+  let cleaned = content.replace(/```json\s*/g, '').replace(/```\s*/g, '').trim();
+  const jsonMatch = cleaned.match(/\{[\s\S]*\}/);
+  if (!jsonMatch) throw new Error('No JSON in planet interpretation LLM response');
+  const parsed = JSON.parse(jsonMatch[0]);
+
+  return {
+    planet,
+    planetName,
+    symbol,
+    sign: signName,
+    element,
+    degree: planetData.degree,
+    degreeStr: `${deg}°${String(min).padStart(2,'0')}'`,
+    retrograde: !!planetData.retrograde,
+    house: houseNum,
+    aspects,
+    ...parsed,
+  };
+}
+
+app.get('/api/natal-chart/planet/:name', auth, async (req, res) => {
+  try {
+    const planet = req.params.name;
+    const validPlanets = ['sun','moon','mercury','venus','mars','jupiter','saturn','uranus','neptune','pluto'];
+    if (!validPlanets.includes(planet)) {
+      return res.status(400).json({ error: 'Invalid planet name' });
+    }
+
+    // Check cache
+    const cached = db.prepare('SELECT data FROM planet_interpretations WHERE user_id = ? AND planet = ?').get(req.user.id, planet);
+    if (cached) {
+      return res.json(JSON.parse(cached.data));
+    }
+
+    // Get natal data
+    const row = db.prepare('SELECT birth_data FROM profiles WHERE user_id = ? AND is_self = 1').get(req.user.id);
+    if (!row || !row.birth_data) {
+      return res.status(400).json({ error: 'No birth data found' });
+    }
+    const birthData = JSON.parse(row.birth_data);
+    const natal = getNatalPositions(birthData, true);
+
+    const interpretation = await generatePlanetInterpretation(planet, natal);
+
+    // Save to cache
+    db.prepare('INSERT OR REPLACE INTO planet_interpretations (user_id, planet, data) VALUES (?, ?, ?)')
+      .run(req.user.id, planet, JSON.stringify(interpretation));
+
+    res.json(interpretation);
+  } catch (err) {
+    console.error('[planet-interpretation]', err.message);
+    res.status(500).json({ error: 'Failed to generate interpretation: ' + err.message });
+  }
 });
 
 // ─── Moon phase (public — used by Home widget) ─────────────

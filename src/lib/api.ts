@@ -268,6 +268,28 @@ export const api = {
     };
   }>('/natal-chart'),
 
+  // Planet interpretation (LLM-generated, cached per user)
+  getPlanetInterpretation: (planet: string) => apiCall<{
+    planet: string;
+    planetName: string;
+    symbol: string;
+    sign: string;
+    element: string;
+    degree: number;
+    degreeStr: string;
+    retrograde: boolean;
+    house: number;
+    aspects: Array<{ other: string; otherName: string; aspectName: string; text: string; orb: number; color: string }>;
+    general: string;
+    inSign: string;
+    degree_symbolism?: string;
+    degree2?: string;
+    degreeText?: string;
+    temperament: string;
+    characterology: string;
+    keywords: string[];
+  }>(`/natal-chart/planet/${planet}`),
+
   // Daily Aspects (Feature 9)
   getDailyAspects: () => apiCall<{
     date: string;
