@@ -533,6 +533,50 @@ app.get('/api/health', (req, res) => {
   res.json({ status: 'ok', ephemeris: 'astronomy-engine v2' });
 });
 
+// ─── Moon phase (public — used by Home widget) ─────────────
+// Uses astronomy-engine for ±1h precision. Cache-friendly:
+// the phase only changes ~hourly, so we round to the hour.
+const MOON_PHASES = [
+  { name: 'Nouvelle Lune', emoji: '🌑', description: 'Temps des nouveaux commencements', min: 0,    max: 1.845 },
+  { name: 'Premier croissant', emoji: '🌒', description: 'Intention et croissance', min: 1.845, max: 5.535 },
+  { name: 'Premier quartier', emoji: '🌓', description: 'Action et décision',     min: 5.535, max: 9.225 },
+  { name: 'Gibbeuse croissante', emoji: '🌔', description: 'Affinement et ajustement', min: 9.225, max: 12.915 },
+  { name: 'Pleine Lune', emoji: '🌕', description: 'Illumination et clarté',  min: 12.915, max: 16.605 },
+  { name: 'Gibbeuse décroissante', emoji: '🌖', description: 'Gratitude et partage',   min: 16.605, max: 20.295 },
+  { name: 'Dernier quartier', emoji: '🌗', description: 'Lâcher prise et pardon', min: 20.295, max: 23.985 },
+  { name: 'Dernier croissant', emoji: '🌘', description: 'Introspection et repos', min: 23.985, max: 27.675 },
+  { name: 'Nouvelle Lune', emoji: '🌑', description: 'Temps des nouveaux commencements', min: 27.675, max: 29.530 },
+];
+
+function moonPhaseForDate(date) {
+  // Sun-Moon ecliptic longitude difference → phase angle (0..360°).
+  // 0° = new moon, 180° = full moon, 270° = last quarter.
+  const sunLon  = ((geoEclipticLongitude('sun',  new AstroTime(date)) % 360) + 360) % 360;
+  const moonLon = ((EclipticGeoMoon(new AstroTime(date)).lon % 360) + 360) % 360;
+  let diff = moonLon - sunLon;
+  if (diff < 0) diff += 360;
+  // 29.530 days synodic month, so age (days since new moon) = diff/360 * 29.530
+  const age = (diff / 360) * 29.530;
+  const phase = MOON_PHASES.find(p => age >= p.min && age < p.max) || MOON_PHASES[0];
+  return { name: phase.name, emoji: phase.emoji, description: phase.description, age: Math.round(age * 10) / 10 };
+}
+
+app.get('/api/astro/moon-phase', (req, res) => {
+  try {
+    const dateParam = req.query.date;
+    let date = new Date();
+    if (typeof dateParam === 'string') {
+      const parsed = new Date(dateParam);
+      if (!isNaN(parsed.getTime())) date = parsed;
+    }
+    // Round to the hour — phase barely changes in 60min, big cache win.
+    date.setMinutes(0, 0, 0);
+    res.json({ ...moonPhaseForDate(date), date: date.toISOString() });
+  } catch (e) {
+    res.status(500).json({ error: 'Failed to compute moon phase' });
+  }
+});
+
 // ─── Auth: Register ────────────────────────────────────────
 app.post('/api/auth/register', authLimiter, async (req, res) => {
   const { email, password } = req.body;

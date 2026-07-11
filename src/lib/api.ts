@@ -435,4 +435,14 @@ export const api = {
     method: 'POST',
     body: { note }
   }),
+
+  // ─── Moon phase (public — Home widget) ──────────────────
+  // Server uses astronomy-engine for ±1h precision. Cached at hour granularity.
+  getMoonPhase: () => apiCall<{
+    name: string;
+    emoji: string;
+    description: string;
+    age: number;
+    date: string;
+  }>('/astro/moon-phase'),
 };

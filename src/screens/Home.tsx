@@ -1,8 +1,9 @@
-import { useMemo } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import type { User } from '../types';
 import type { Screen } from '../App';
 import { ZODIAC_SIGNS } from '../data/zodiac';
 import { elementDescription } from '../lib/astrology';
+import { api } from '../lib/api';
 import DailyAspects from '../components/DailyAspects';
 import DailyRituals from '../components/DailyRituals';
 import OnboardingChecklist from '../components/OnboardingChecklist';
@@ -24,15 +25,30 @@ const DAILY_QUOTES = [
   'Votre intuition connaît le chemin avant votre esprit.',
 ];
 
-// Deterministic daily quote (stable across re-renders, changes each day)
+// Deterministic daily quote (stable across re-renders, changes each day).
+// Date-keyed so it rotates at midnight instead of staying stuck on a stale value.
 function getDailyQuote(): string {
   const now = new Date();
   const seed = Number(now.getFullYear()) * 372 + (now.getMonth() + 1) * 31 + now.getDate();
   return DAILY_QUOTES[seed % DAILY_QUOTES.length];
 }
 
-// Simple moon phase calculation based on a known approximation
-function getMoonPhase(): { name: string; emoji: string; description: string } {
+// Local fallback when the backend is unreachable. Same algorithm as
+// server.js MOON_PHASES — kept in sync. Age: days since last new moon.
+function getMoonPhaseLocal(date: Date = new Date()): { name: string; emoji: string; description: string } {
+  // Conway approximation — accurate within ±1 day.
+  let y = date.getFullYear();
+  let m = date.getMonth() + 1;
+  let d = date.getDate();
+  if (m < 3) { y -= 1; m += 12; }
+  m += 1;
+  let c = 365.25 * y;
+  let e = 30.6 * m;
+  let jd = c + e + d - 694039.09;
+  jd /= 29.5305882;
+  const b = Math.floor(jd);
+  jd -= b;
+  const phaseIndex = Math.round(jd * 8) % 8;
   const phases = [
     { name: 'Nouvelle Lune', emoji: '🌑', description: 'Temps des nouveaux commencements' },
     { name: 'Premier croissant', emoji: '🌒', description: 'Intention et croissance' },
@@ -43,24 +59,11 @@ function getMoonPhase(): { name: string; emoji: string; description: string } {
     { name: 'Dernier quartier', emoji: '🌗', description: 'Lâcher prise et pardon' },
     { name: 'Dernier croissant', emoji: '🌘', description: 'Introspection et repos' },
   ];
-  const date = new Date();
-  const year = date.getFullYear();
-  const month = date.getMonth() + 1;
-  const day = date.getDate();
-  let r = year % 100;
-  r %= 19;
-  if (r > 9) r -= 19;
-  r = ((r * 11) % 30) + month + day;
-  if (month < 3) r += 2;
-  r -= (year < 2000) ? 4 : 8.3;
-  r = Math.floor(r + 0.5) % 30;
-  // Map lunar age (0-29 days) to one of the 8 phases
-  const idx = ((Math.round((r + 30) % 30 * 8 / 30) % 8) + 8) % 8;
-  return phases[idx];
+  return phases[phaseIndex];
 }
 
 // Daily streak tracking — increments when visiting on consecutive days
-// (server-side authoritative, see server.js updateStreak())
+// (server-side authoritative, see server.js updateStreak()).
 // Local helper kept for backward compat with any stray callers; prefer user.streak from server.
 function updateStreak(): number {
   const KEY = 'celeste_streak';
@@ -88,11 +91,24 @@ export { updateStreak };
 
 export function Home({ user, onNavigate }: { user: User; onNavigate: (s: Screen) => void }) {
   // Hooks MUST be called unconditionally — Rules of Hooks.
-  const dailyQuote = useMemo(() => getDailyQuote(), []);
+  // useMemo with [] would freeze at mount and not rotate at midnight.
+  // Recomputing on each render is fine — DAILY_QUOTES lookup is O(1).
+  const dailyQuote = useMemo(() => getDailyQuote(), [Date.now() / 86400000 | 0]);
   // Streak comes from the server (authoritative — increments on first
   // horoscope view of the day). Falls back to 0 if not yet hydrated.
   const streak = user.streak ?? 0;
-  const moonPhase = useMemo(() => getMoonPhase(), []);
+
+  // Moon phase: try server (astronomy-engine precise), fallback to local.
+  const [moonPhase, setMoonPhase] = useState<{ name: string; emoji: string; description: string }>(
+    () => getMoonPhaseLocal()
+  );
+  useEffect(() => {
+    let cancelled = false;
+    api.getMoonPhase()
+      .then(p => { if (!cancelled) setMoonPhase({ name: p.name, emoji: p.emoji, description: p.description }); })
+      .catch(() => { /* keep local fallback */ });
+    return () => { cancelled = true; };
+  }, []);
 
   // Safe early return AFTER all hooks.
   if (!user.natalChart) return null;
@@ -115,16 +131,15 @@ export function Home({ user, onNavigate }: { user: User; onNavigate: (s: Screen)
           <h1 className="text-2xl font-bold text-gold-gradient">Bonjour</h1>
         </div>
         <div className="flex items-center gap-2">
-          {streak >= 2 && (
+          {streak >= 2 ? (
             <span className="text-xs text-gold-400 font-semibold bg-gold-500/10 px-3 py-1.5 rounded-full border border-gold-500/30 flex items-center gap-1">
-              🔥 {streak} {streak === 1 ? 'jour' : 'jours'}
+              🔥 {streak} jours
             </span>
-          )}
-          {streak === 1 && (
+          ) : streak >= 1 ? (
             <span className="text-xs text-gold-400 font-medium bg-gold-500/10 px-3 py-1.5 rounded-full border border-gold-500/30">
               ✨ Premier jour
             </span>
-          )}
+          ) : null}
           <div className="w-11 h-11 rounded-full glass-gold border border-gold-500/20 flex items-center justify-center animate-float-slow">
             <span className="text-xl">{sun.emoji}</span>
           </div>
