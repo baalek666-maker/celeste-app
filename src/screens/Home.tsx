@@ -21,10 +21,29 @@ export function Home({ user, onNavigate }: { user: User; onNavigate: (s: Screen)
     );
   }
 
-  const chart = user.natalChart;
+  const chart = user.natalChart!;
   const sun = ZODIAC_SIGNS[chart.sun];
   const moon = ZODIAC_SIGNS[chart.moon];
   const rising = ZODIAC_SIGNS[chart.rising];
+
+  // Guard: if any Big 3 sign is missing/invalid, show fallback instead of crashing
+  if (!sun || !moon || !rising) {
+    return (
+      <div className="cosmic-bg star-field min-h-screen flex flex-col items-center justify-center text-night-100 px-6">
+        <div className="text-4xl mb-4 animate-float-slow">✦</div>
+        <h2 className="text-xl font-semibold text-gold-gradient mb-2">Ciel en cours de calibration</h2>
+        <p className="text-night-300 text-sm text-center max-w-xs mb-6">
+          Une donnée astrale semble incomplète. Revenez dans un instant.
+        </p>
+        <button
+          onClick={() => location.reload()}
+          className="glass-gold rounded-full px-6 py-2.5 text-sm text-gold-300 hover:scale-105 transition"
+        >
+          Réessayer
+        </button>
+      </div>
+    );
+  }
   const today = new Date().toLocaleDateString('fr-FR', { weekday: 'long', day: 'numeric', month: 'long' });
 
   return (

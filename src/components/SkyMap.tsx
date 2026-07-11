@@ -15,6 +15,19 @@ interface SkyMapProps {
 
 const PLANET_ORDER = ['sun', 'moon', 'mercury', 'venus', 'mars', 'jupiter', 'saturn', 'uranus', 'neptune', 'pluto'];
 
+/** Map French sign names from API (e.g. "Cancer") → English keys (e.g. "cancer") */
+const FR_TO_EN: Record<string, string> = {};
+ZODIAC_ORDER.forEach(en => { FR_TO_EN[ZODIAC_SIGNS[en].name] = en; });
+
+function resolveSignKey(raw: string): string | null {
+  if (!raw) return null;
+  const lower = raw.toLowerCase();
+  if (ZODIAC_SIGNS[lower as keyof typeof ZODIAC_SIGNS]) return lower;   // already english key
+  if (FR_TO_EN[raw]) return FR_TO_EN[raw];                                // french name → english
+  if (FR_TO_EN[raw.charAt(0).toUpperCase() + raw.slice(1).toLowerCase()]) return FR_TO_EN[raw.charAt(0).toUpperCase() + raw.slice(1).toLowerCase()];
+  return null;
+}
+
 /**
  * Convert an absolute ecliptic longitude (0-360°) to an SVG angle.
  * Convention: 0° = Aries = left (9 o'clock). Increases counter-clockwise.
@@ -197,7 +210,9 @@ export default function SkyMap({ size = 320 }: SkyMapProps) {
         {PLANET_ORDER.filter(p => transits[p]).map(p => {
           const t = transits[p];
           const planet = PLANET_DATA[p];
-          const sign = ZODIAC_SIGNS[t.sign as keyof typeof ZODIAC_SIGNS];
+          const signKey = resolveSignKey(t.sign);
+          const sign = signKey ? ZODIAC_SIGNS[signKey as keyof typeof ZODIAC_SIGNS] : null;
+          if (!sign || !planet) return null;
           return (
             <div key={p} className="flex items-center gap-1 text-night-300">
               <span style={{ color: planet.color }} className="text-sm leading-none">{planet.symbol}</span>
