@@ -1,6 +1,7 @@
 import { useState } from 'react';
-import type { User, PlanetPosition, ZodiacSign } from '../types';
-import { ZODIAC_SIGNS, ZODIAC_ORDER, PLANET_DATA, formatDegree } from '../data/zodiac';
+import type { User } from '../types';
+import { ZODIAC_SIGNS, PLANET_DATA } from '../data/zodiac';
+import NatalChart from '../components/NatalChart';
 
 export function ChartView({ user }: { user: User }) {
   if (!user.natalChart) {
@@ -69,87 +70,9 @@ export function ChartView({ user }: { user: User }) {
         {user.birthData?.city}, {user.birthData?.date}
       </p>
 
-      {/* SVG Chart Wheel */}
-      <div className="glass rounded-3xl p-6 mb-6 flex justify-center">
-        <svg width="320" height="320" viewBox="0 0 320 320">
-          {/* Outer circle */}
-          <circle cx="160" cy="160" r="150" fill="none" stroke="rgba(197,160,89,0.25)" strokeWidth="1" />
-          <circle cx="160" cy="160" r="135" fill="none" stroke="rgba(197,160,89,0.15)" strokeWidth="0.5" />
-
-          {/* Zodiac sign dividers (12 segments) */}
-          {ZODIAC_ORDER.map((sign, i) => {
-            const angle = (i * 30 - 90) * Math.PI / 180;
-            const x1 = 160 + 135 * Math.cos(angle);
-            const y1 = 160 + 135 * Math.sin(angle);
-            const x2 = 160 + 150 * Math.cos(angle);
-            const y2 = 160 + 150 * Math.sin(angle);
-            const textAngle = (i * 30 + 15 - 90) * Math.PI / 180;
-            const tx = 160 + 142 * Math.cos(textAngle);
-            const ty = 160 + 142 * Math.sin(textAngle);
-            return (
-              <g key={sign}>
-                <line x1={x1} y1={y1} x2={x2} y2={y2} stroke="rgba(197,160,89,0.3)" strokeWidth="0.5" />
-                <text x={tx} y={ty} fill={ZODIAC_SIGNS[sign].color} fontSize="10" textAnchor="middle" dominantBaseline="middle" opacity="0.8">
-                  {ZODIAC_SIGNS[sign].symbol}
-                </text>
-              </g>
-            );
-          })}
-
-          {/* House dividers — use REAL cusps from chart.houses, not fixed 30° intervals */}
-          {chart.houses.map((house, i) => {
-            // house.cusp is in absolute degrees (0-360). Convert to SVG angle:
-            // subtract 90° so 0° Aries renders at the top (12 o'clock).
-            const angle = (house.cusp - 90) * Math.PI / 180;
-            const x = 160 + 120 * Math.cos(angle);
-            const y = 160 + 120 * Math.sin(angle);
-            return (
-              <g key={`house-${i}`}>
-                <line x1="160" y1="160" x2={x} y2={y} stroke="rgba(197,160,89,0.12)" strokeWidth="0.5" opacity="0.5" />
-                {/* house number near the rim */}
-                {(() => {
-                  const labelAngle = (house.cusp + 15 - 90) * Math.PI / 180;
-                  const lx = 160 + 128 * Math.cos(labelAngle);
-                  const ly = 160 + 128 * Math.sin(labelAngle);
-                  return (
-                    <text x={lx} y={ly} fill="rgba(197,160,89,0.5)" fontSize="7" textAnchor="middle" dominantBaseline="middle" opacity="0.6">
-                      {i + 1}
-                    </text>
-                  );
-                })()}
-              </g>
-            );
-          })}
-
-          {/* Inner circles */}
-          <circle cx="160" cy="160" r="120" fill="none" stroke="rgba(197,160,89,0.1)" strokeWidth="0.5" />
-          <circle cx="160" cy="160" r="40" fill="none" stroke="rgba(197,160,89,0.2)" strokeWidth="0.5" opacity="0.5" />
-
-          {/* Planet positions */}
-          {chart.positions.map(pos => {
-            const signIdx = ZODIAC_ORDER.indexOf(pos.sign);
-            const totalDeg = signIdx * 30 + pos.degree;
-            const angle = (totalDeg - 90) * Math.PI / 180;
-            const radius = 75;
-            const x = 160 + radius * Math.cos(angle);
-            const y = 160 + radius * Math.sin(angle);
-            const planetData = PLANET_DATA[pos.planet];
-            return (
-              <g key={pos.planet}>
-                <circle cx={x} cy={y} r="9" fill="#0a0a0a" stroke={planetData.color} strokeWidth="1" />
-                <text x={x} y={y} fill={planetData.color} fontSize="9" textAnchor="middle" dominantBaseline="middle">
-                  {planetData.symbol}
-                </text>
-                {pos.retrograde && (
-                  <text x={x + 8} y={y - 8} fill="#ef4444" fontSize="7" textAnchor="middle">℞</text>
-                )}
-              </g>
-            );
-          })}
-
-          {/* Center */}
-          <circle cx="160" cy="160" r="3" fill="#fbbf24" opacity="0.6" />
-        </svg>
+      {/* Premium natal chart wheel */}
+      <div className="mb-2">
+        <NatalChart size={340} />
       </div>
 
       {/* Planet Details */}

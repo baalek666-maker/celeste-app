@@ -95,7 +95,7 @@ export function Home({ user, onNavigate }: { user: User; onNavigate: (s: Screen)
       </div>
 
       {/* ── 4. Theme natal (roue astronomique precise) ── */}
-      <NatalChart size={340} />
+      <NatalChart />
 
       {/* ── 5. Horoscope preview ── */}
       <button

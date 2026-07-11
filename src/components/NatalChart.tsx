@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useState, useRef } from 'react';
 import { api } from '../lib/api';
 
 // ─── Types ──────────────────────────────────────────────
@@ -76,11 +76,12 @@ function arcPath(cx: number, cy: number, r: number, startDeg: number, endDeg: nu
 }
 
 // ─── Component ──────────────────────────────────────────
-export default function NatalChart({ size = 360 }: { size?: number }) {
+export default function NatalChart({ size }: { size?: number }) {
   const [natal, setNatal] = useState<NatalData | null>(null);
   const [loading, setLoading] = useState(true);
   const [err, setErr] = useState<string | null>(null);
   const [rotating, setRotating] = useState(true);
+  const [containerW, setContainerW] = useState(0);
 
   useEffect(() => {
     let mounted = true;
@@ -90,9 +91,22 @@ export default function NatalChart({ size = 360 }: { size?: number }) {
     return () => { mounted = false; };
   }, []);
 
-  if (loading) {
+  // Responsive: measure parent width
+  const ref = useRef<HTMLDivElement>(null);
+  useEffect(() => {
+    if (!ref.current || size) return;
+    const update = () => setContainerW(ref.current?.parentElement?.clientWidth ?? 0);
+    update();
+    window.addEventListener('resize', update);
+    return () => window.removeEventListener('resize', update);
+  }, [size]);
+
+  const actualSize = size ?? Math.min(containerW - 8, 360);
+  const ready = size ? true : containerW > 0;
+
+  if (loading || !ready) {
     return (
-      <div className="glass rounded-3xl p-4 mb-4 flex items-center justify-center" style={{ height: size }}>
+      <div className="glass rounded-3xl p-4 mb-4 flex items-center justify-center" style={{ height: actualSize || 300 }}>
         <p className="text-night-400 text-sm">Calcul de votre theme natal...</p>
       </div>
     );
@@ -106,9 +120,9 @@ export default function NatalChart({ size = 360 }: { size?: number }) {
     );
   }
 
-  const cx = size / 2;
-  const cy = size / 2;
-  const outerR = size / 2 - 8;
+  const cx = actualSize / 2;
+  const cy = actualSize / 2;
+  const outerR = actualSize / 2 - 8;
   const zodiacR = outerR - 18;       // inner edge of zodiac ring
   const tickOuterR = zodiacR;
   const tickInnerR = zodiacR - 12;   // degree ticks zone
@@ -150,11 +164,11 @@ export default function NatalChart({ size = 360 }: { size?: number }) {
         </button>
       </div>
 
-      <div className="relative mx-auto" style={{ width: size, height: size }}>
+      <div ref={ref} className="relative mx-auto" style={{ width: actualSize, height: actualSize }}>
         <svg
-          width={size}
-          height={size}
-          viewBox={`0 0 ${size} ${size}`}
+          width={actualSize}
+          height={actualSize}
+          viewBox={`0 0 ${actualSize} ${actualSize}`}
           className="overflow-visible"
           style={rotating ? { animation: 'natal-spin 300s linear infinite' } : undefined}
         >
@@ -206,7 +220,7 @@ export default function NatalChart({ size = 360 }: { size?: number }) {
                   y={sy}
                   textAnchor="middle"
                   dominantBaseline="middle"
-                  fontSize={size > 320 ? 15 : 12}
+                  fontSize={actualSize > 320 ? 15 : 12}
                   fill={sign.color}
                   opacity="0.9"
                   style={{ fontWeight: 600 }}
