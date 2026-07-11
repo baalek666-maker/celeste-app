@@ -5,6 +5,11 @@ import { api } from '../lib/api';
 import type { User, BirthData, NatalChart } from '../types';
 import { ZODIAC_SIGNS } from '../data/zodiac';
 
+// Strip diacritics so "Strasbourg" matches "strasboug" and "Côte" matches "cote".
+function normalize(s: string): string {
+  return s.normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase();
+}
+
 const CITIES = [
   // France — grandes villes
   { city: 'Paris', country: 'France', lat: 48.8566, lng: 2.3522, tz: 2 },
@@ -121,8 +126,8 @@ export function Onboarding({ onComplete }: { onComplete: (u: User) => void }) {
 
   const filteredCities = CITIES.filter(c => {
     if (!citySearch) return true;
-    const q = citySearch.toLowerCase();
-    return c.city.toLowerCase().includes(q) || c.country.toLowerCase().includes(q);
+    const q = normalize(citySearch);
+    return normalize(c.city).includes(q) || normalize(c.country).includes(q);
   });
 
   const handleSubmit = () => {
@@ -134,16 +139,49 @@ export function Onboarding({ onComplete }: { onComplete: (u: User) => void }) {
       latitude: c.lat, longitude: c.lng, timezone: c.tz,
     };
 
-    setTimeout(async () => {
-      const chart = calculateNatalChart(birth);
-      setBirthData(birth, chart);
-      setOnboarded();
-      // Save birth data to backend
-      try { await api.saveBirthData(birth); } catch {}
+    // Compute chart immediately (sync), fire-and-forget backend save, then
+    // transition after the cosmic animation window so the user gets feedback
+    // while the request actually completes in parallel.
+    const chart = calculateNatalChart(birth);
+    setBirthData(birth, chart);
+    setOnboarded();
+    const save = api.saveBirthData(birth).catch(() => {/* offline-queue handles retry */});
+
+    // 1500ms (was 2800ms — felt too long during testing) plus save.
+    const minDelay = new Promise(r => setTimeout(r, 1500));
+    Promise.all([minDelay, save]).finally(() => {
       const user = JSON.parse(localStorage.getItem('celeste_user') || '{}');
       onComplete(user);
-    }, 2800);
+    });
   };
+
+  // Step indicator: 3 dots + progress bar (visible on steps 1-3)
+  const ProgressBar = ({ current }: { current: number }) => (
+    <div className="fixed top-0 left-0 right-0 px-8 pt-4 z-50">
+      <div className="flex gap-2 mb-2">
+        {[1, 2, 3].map(n => (
+          <div key={n} className="flex-1 h-1 rounded-full bg-night-800 overflow-hidden">
+            <div
+              className={`h-full bg-gradient-to-r from-cosmic-500 to-gold-500 transition-all duration-500 ${current >= n ? 'w-full' : 'w-0'}`}
+            />
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+
+  const BackButton = ({ to }: { to: number }) => (
+    step > 0 && (
+      <button
+        type="button"
+        onClick={() => setStep(to)}
+        aria-label="Retour à l'étape précédente"
+        className="absolute top-4 left-4 z-50 w-10 h-10 rounded-full glass flex items-center justify-center text-night-300 hover:text-gold-400 transition-colors"
+      >
+        ←
+      </button>
+    )
+  );
 
   const steps = [
     // Step 0: Welcome
@@ -177,7 +215,9 @@ export function Onboarding({ onComplete }: { onComplete: (u: User) => void }) {
     </div>,
 
     // Step 1: Date of birth
-    <div key="1" className="flex flex-col items-center justify-center min-h-screen px-8 animate-fade-in">
+    <div key="1" className="flex flex-col items-center justify-center min-h-screen px-8 animate-fade-in relative">
+      <ProgressBar current={1} />
+      <BackButton to={0} />
       <p className="text-gold-400 text-sm uppercase tracking-widest mb-3">Étape 1 sur 3</p>
       <h2 className="text-2xl font-bold mb-2 text-center">Quand êtes-vous né·e ?</h2>
       <p className="text-night-400 text-sm mb-8 text-center max-w-xs">La position des planètes change chaque jour. Votre date de naissance est le point de départ.</p>
@@ -197,7 +237,9 @@ export function Onboarding({ onComplete }: { onComplete: (u: User) => void }) {
     </div>,
 
     // Step 2: Time of birth
-    <div key="2" className="flex flex-col items-center justify-center min-h-screen px-8 animate-fade-in">
+    <div key="2" className="flex flex-col items-center justify-center min-h-screen px-8 animate-fade-in relative">
+      <ProgressBar current={2} />
+      <BackButton to={1} />
       <p className="text-gold-400 text-sm uppercase tracking-widest mb-3">Étape 2 sur 3</p>
       <h2 className="text-2xl font-bold mb-2 text-center">À quelle heure exactement ?</h2>
       <p className="text-night-400 text-sm mb-8 text-center max-w-xs">L'heure exacte détermine votre Ascendant et vos Maisons astrologiques. Sans elle, votre thème sera incomplet.</p>
@@ -229,7 +271,9 @@ export function Onboarding({ onComplete }: { onComplete: (u: User) => void }) {
     </div>,
 
     // Step 3: Place of birth
-    <div key="3" className="flex flex-col items-center justify-center min-h-screen px-8 animate-fade-in">
+    <div key="3" className="flex flex-col items-center justify-center min-h-screen px-8 animate-fade-in relative">
+      <ProgressBar current={3} />
+      <BackButton to={2} />
       <p className="text-gold-400 text-sm uppercase tracking-widest mb-3">Étape 3 sur 3</p>
       <h2 className="text-2xl font-bold mb-2 text-center">Où êtes-vous né·e ?</h2>
       <p className="text-night-400 text-sm mb-6 text-center max-w-xs">Le lieu de naissance complète votre carte du ciel.</p>

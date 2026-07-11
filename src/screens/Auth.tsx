@@ -81,31 +81,22 @@ export function Auth({ onSuccess }: { onSuccess: (user: any) => void }) {
             />
           </div>
           <div>
-            <label className="text-night-400 text-xs uppercase tracking-widest mb-2 block">Mot de passe</label>
+            <label htmlFor="password" className="text-night-400 text-xs uppercase tracking-widest mb-2 block">Mot de passe</label>
             <input
+              id="password"
               type="password"
               value={password}
               onChange={(e) => setPassword(e.target.value)}
               placeholder={mode === 'register' ? '6 caractères minimum' : '••••••'}
               required
               minLength={mode === 'register' ? 6 : 1}
+              autoComplete={mode === 'register' ? 'new-password' : 'current-password'}
               className="w-full px-4 py-3.5 rounded-2xl glass border border-night-700 text-night-100 placeholder:text-night-500 focus:border-gold-500/50 focus:outline-none transition-colors"
             />
-            {mode === 'login' && (
-              <div className="flex justify-end mt-2">
-                <button
-                  type="button"
-                  onClick={() => setError('La récupération de mot de passe arrivera bientôt. ✦')}
-                  className="text-cosmic-400/80 text-xs hover:text-cosmic-300 transition-colors underline decoration-dotted decoration-cosmic-500/40"
-                >
-                  Mot de passe oublié ?
-                </button>
-              </div>
-            )}
           </div>
 
           {error && (
-            <div className="flex items-start gap-2 px-4 py-3 rounded-2xl bg-red-500/10 border border-red-500/20 animate-fade-in">
+            <div className="flex items-start gap-2 px-4 py-3 rounded-2xl bg-red-500/10 border border-red-500/20 animate-fade-in" role="alert">
               <span className="text-red-400 text-sm leading-relaxed">{error}</span>
             </div>
           )}
@@ -113,7 +104,7 @@ export function Auth({ onSuccess }: { onSuccess: (user: any) => void }) {
           <button
             type="submit"
             disabled={loading}
-            className="w-full py-4 rounded-2xl bg-gradient-to-r from-cosmic-600 via-cosmic-600 to-cosmic-700 text-white font-semibold text-lg transition-all duration-300 disabled:opacity-70 shadow-lg shadow-cosmic-900/40 hover:shadow-cosmic-700/50 hover:scale-[1.01] active:scale-[0.99]"
+            className="w-full py-3.5 rounded-2xl bg-gradient-to-r from-cosmic-600 via-cosmic-600 to-cosmic-700 text-white font-semibold text-lg transition-all duration-300 disabled:opacity-70 shadow-lg shadow-cosmic-900/40 hover:shadow-cosmic-700/50 hover:scale-[1.01] active:scale-[0.99]"
           >
             {loading ? (
               <span className="flex items-center justify-center gap-3">
