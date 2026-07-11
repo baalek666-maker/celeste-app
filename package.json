@@ -26,6 +26,7 @@
     "@types/react": "^19.2.17",
     "@types/react-dom": "^19.2.3",
     "@vitejs/plugin-react": "^6.0.3",
+    "lighthouse": "^13.4.0",
     "lucide-react": "^1.23.0",
     "oxlint": "^1.71.0",
     "react-router-dom": "^7.18.1",
