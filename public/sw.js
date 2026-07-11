@@ -1,8 +1,21 @@
 // Service worker Celeste — push notifications + mode hors ligne
 // Stratégies cache : cache-first pour lectures astro (données stables), network-first pour le reste.
-const CACHE_VERSION = 'celeste-v1';
+const CACHE_VERSION = 'celeste-v2';
 const STATIC_CACHE = `${CACHE_VERSION}-static`;
 const RUNTIME_CACHE = `${CACHE_VERSION}-runtime`;
+
+// Shell critique — nécessaire pour démarrer offline après install PWA
+const PRECACHE_URLS = [
+  '/',
+  '/index.html',
+  '/manifest.json',
+  '/icon.svg',
+  '/favicon-32.png',
+  '/icons/icon-192.png',
+  '/icons/icon-512.png',
+  '/icons/icon-512-maskable.png',
+  '/icons/apple-touch-icon.png',
+];
 
 // Endpoints lectures astro : safe à servir offline (cache-first, TTL 24h)
 const CACHE_FIRST_PATTERNS = [
@@ -23,10 +36,12 @@ const CACHE_FIRST_PATTERNS = [
 const NEVER_CACHE_METHODS = ['POST', 'PUT', 'DELETE', 'PATCH'];
 
 self.addEventListener('install', (e) => {
-  // Precacher juste la shell. Le reste se remplira au fil de l'eau.
+  // Precacher la shell + assets PWA (manifest, icônes) — nécessaire pour démarrer offline après install
   e.waitUntil(
     caches.open(STATIC_CACHE).then((cache) =>
-      cache.addAll(['/', '/index.html']).catch(() => {})
+      cache.addAll(PRECACHE_URLS).catch((err) => {
+        console.warn('[SW] precache partiel:', err.message);
+      })
     )
   );
   self.skipWaiting();
