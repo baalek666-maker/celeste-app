@@ -1,0 +1,19 @@
+# Céleste
+
+> Astrologie hermétique & alchimie céleste. Carte du ciel personnalisée, transits, rituels quotidiens.
+
+## Pages principales
+
+- [Thème natal](https://pokevendrepro.com/celeste/chart) : carte du ciel complète avec maisons, aspects et interprétation
+- [Horoscope du jour](https://pokevendrepro.com/celeste/horoscope) : prédictions personnalisées alimentées par IA
+- [Compatibilité](https://pokevendrepro.com/celeste/compatibility) : synastrie entre deux profils
+- [Journal](https://pokevendrepro.com/celeste/journal) : suivi des influences célestes et ressentis
+- [Rituels quotidiens](https://pokevendrepro.com/celeste/rituals) : pratiques alignées sur les phases lunaires
+
+## API publique
+
+L'authentification se fait via JWT. Les endpoints sont documentés dans le code source.
+
+## Licence
+
+Propriétaire — © 2026 Céleste

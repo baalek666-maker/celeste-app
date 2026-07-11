@@ -249,7 +249,7 @@ export function App() {
   return (
     <div className="cosmic-bg star-field min-h-screen text-night-100">
       <div className="max-w-md mx-auto min-h-screen relative">
-        {/* Keyed wrapper re-triggers slide-in transition on every screen change */}
+        {/* Contenu principal (main landmark déjà dans index.html pour SPA) */}
         <div className="pb-24">
           <div key={screen} className="page-transition">
             {screen === 'home' && <Home user={user} onNavigate={handleNavigate} />}

@@ -9,11 +9,10 @@
     <meta name="apple-mobile-web-app-capable" content="yes" />
     <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
     <meta name="apple-mobile-web-app-title" content="Céleste" />
-    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover, user-scalable=no" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
     <meta name="theme-color" content="#0a0a15" />
     <meta name="mobile-web-app-capable" content="yes" />
     <meta name="application-name" content="Céleste" />
-    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
     <meta name="description" content="Céleste — Astrologie hermétique & alchimie céleste. Votre carte du ciel, votre destin gravé dans les étoiles." />
     <link rel="preconnect" href="https://fonts.googleapis.com" />
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
@@ -21,7 +20,10 @@
     <title>Céleste — Astrologie Hermétique</title>
   </head>
   <body>
-    <div id="root"></div>
+    <!-- Main landmark statique — Lighthouse check le HTML initial avant React hydrate -->
+    <main id="main-content">
+      <div id="root"></div>
+    </main>
     <script type="module" src="/src/main.tsx"></script>
   </body>
 </html>
