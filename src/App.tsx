@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react';
 import { Onboarding } from './screens/Onboarding';
 import { Auth } from './screens/Auth';
+import { Landing } from './screens/Landing';
 import { Home } from './screens/Home';
 import { ChartView } from './screens/ChartView';
 import { Horoscope } from './screens/Horoscope';
@@ -14,7 +15,7 @@ import { getUser, saveUser, getFreeScans, incrementFreeScans, getFreeCompat, inc
 import { calculateNatalChart } from './lib/astrology';
 import type { User } from './types';
 
-export type Screen = 'onboarding' | 'home' | 'chart' | 'horoscope' | 'compatibility' | 'journal' | 'paywall' | 'settings';
+export type Screen = 'landing' | 'auth' | 'onboarding' | 'home' | 'chart' | 'horoscope' | 'compatibility' | 'journal' | 'paywall' | 'settings';
 
 // Detect network-level failures (API unreachable) vs. auth failures.
 function isNetworkError(err: unknown): boolean {
@@ -204,27 +205,40 @@ export function App() {
     return <ApiDown onRetry={retryBoot} />;
   }
 
-  // ─── NOT AUTHED: show Auth screen ───
+  // ─── NOT AUTHED: Landing first visit, Auth for returning users ───
   if (!isAuthed) {
-    return (
-      <Auth onSuccess={(serverUser) => {
-        const updated: User = {
-          ...user,
-          email: serverUser.email,
-          isPremium: serverUser.isPremium,
-          scansRemaining: serverUser.scansRemaining,
-          streak: serverUser.streak ?? 0,
-        };
-        if (serverUser.birthData) {
-          updated.birthData = serverUser.birthData;
-          if (!updated.natalChart) {
-            updated.natalChart = calculateNatalChart(serverUser.birthData);
+    if (screen === 'onboarding' && getToken()) {
+      // Token exists after onboarding-stage signup — wait for effect
+      return <Splash />;
+    }
+    // Show Auth screen if user clicked "Connexion" or set screen to a non-landing state
+    if (screen === 'auth') {
+      return (
+        <Auth onSuccess={(serverUser) => {
+          const updated: User = {
+            ...user,
+            email: serverUser.email,
+            isPremium: serverUser.isPremium,
+            scansRemaining: serverUser.scansRemaining,
+            streak: serverUser.streak ?? 0,
+          };
+          if (serverUser.birthData) {
+            updated.birthData = serverUser.birthData;
+            if (!updated.natalChart) {
+              updated.natalChart = calculateNatalChart(serverUser.birthData);
+            }
           }
-        }
-        setUser(updated);
-        saveUser(updated);
-        setIsAuthed(true);
-      }} />
+          setUser(updated);
+          saveUser(updated);
+          setIsAuthed(true);
+        }} />
+      );
+    }
+    return (
+      <Landing
+        onStart={() => setScreen('auth')}
+        onLogin={() => setScreen('auth')}
+      />
     );
   }
 
