@@ -8,11 +8,10 @@ import ToastHost from './components/Toast';
 
 // Service worker : push notifications + cache offline (lecture astro).
 // En dev Vite, le SW est servi depuis /sw.js, Vite ne l'intercepte pas.
-if ('serviceWorker' in navigator) {
-  window.addEventListener('load', () => {
-    navigator.serviceWorker
-      .register('/sw.js', { scope: '/' })
-      .catch((err) => console.warn('SW registration failed:', err));
+// Désactivé pour debug : on l'active seulement en production (build prod).
+if ("serviceWorker" in navigator && !import.meta.env.DEV) {
+  window.addEventListener("load", () => {
+    navigator.serviceWorker.register("/sw.js", { scope: "/" }).catch((err) => console.warn("SW registration failed:", err));
   });
 }
 

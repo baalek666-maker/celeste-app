@@ -528,6 +528,18 @@ app.post(
 // JSON parser pour le reste de l'API
 app.use(express.json({ limit: '2mb' }));
 
+// ─── DEBUG: logger TOUTES les requêtes POST entrantes ───
+app.use((req, res, next) => {
+  if (req.method === 'POST') {
+    console.log('[POST IN]', req.path, JSON.stringify({
+      body: req.body,
+      ip: req.ip,
+      ua: (req.headers['user-agent'] || '').substring(0, 50),
+    }));
+  }
+  next();
+});
+
 // Health check
 app.get('/api/health', (req, res) => {
   res.json({ status: 'ok', ephemeris: 'astronomy-engine v2' });
@@ -595,6 +607,7 @@ app.post('/api/auth/register', authLimiter, async (req, res) => {
 // ─── Auth: Login ───────────────────────────────────────────
 app.post('/api/auth/login', authLimiter, async (req, res) => {
   const { email, password } = req.body;
+  console.log('[LOGIN]', JSON.stringify({ email, pwLen: password?.length, pwType: typeof password }));
   const user = db.prepare('SELECT * FROM users WHERE email = ?').get(email?.toLowerCase());
   if (!user || !bcrypt.compareSync(password, user.password_hash)) {
     return res.status(401).json({ error: 'Email ou mot de passe incorrect' });

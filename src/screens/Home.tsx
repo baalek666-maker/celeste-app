@@ -110,8 +110,26 @@ export function Home({ user, onNavigate }: { user: User; onNavigate: (s: Screen)
     return () => { cancelled = true; };
   }, []);
 
-  // Safe early return AFTER all hooks.
-  if (!user.natalChart) return null;
+  // Safe early return AFTER all hooks — replaced "return null" by a visible
+  // diagnostic so we never silently ship a black screen again. See TG convo
+  // 2026-07-11: post-login black screen = Home rendered null because user.natalChart
+  // wasn't hydrated fast enough.
+  if (!user.natalChart) {
+    return (
+      <div className="cosmic-bg star-field min-h-screen flex flex-col items-center justify-center text-night-100 px-6">
+        <div className="text-4xl mb-4 animate-float-slow">✦</div>
+        <h2 className="text-xl font-semibold text-gold-gradient mb-2">Préparation de votre ciel</h2>
+        <p className="text-night-300 text-sm text-center max-w-xs">
+          Chargement du thème natal en cours — cela prend généralement 1 à 2 secondes.
+        </p>
+        <p className="text-night-500 text-xs mt-4 text-center max-w-xs">
+          Connecté : {user.email}.{user.birthData
+            ? ' Données de naissance détectées.'
+            : ' Aucune donnée de naissance — complétez l\'onboarding.'}
+        </p>
+      </div>
+    );
+  }
 
   const chart = user.natalChart;
   const sun = ZODIAC_SIGNS[chart.sun];
