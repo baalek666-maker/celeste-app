@@ -8,7 +8,7 @@ export const TAROT_IMAGE_MAP: Record<number, string> = {
   2:  '/tarot/02-la-papesse.jpg',
   3:  '/tarot/03-limperatrice.jpg',
   4:  '/tarot/04-lempereur.jpg',
-  // 5:  '/tarot/05-le-pape.jpg',
+  5:  '/tarot/05-le-pape.jpg',
   // 6:  '/tarot/06-lamoureux.jpg',
   // 7:  '/tarot/07-le-chariot.jpg',
   // 8:  '/tarot/08-la-justice.jpg',
