@@ -75,6 +75,15 @@ db.exec(`
     UNIQUE(user_id, date)
   );
 
+  CREATE TABLE IF NOT EXISTS horoscope_global_daily (
+    sun_sign TEXT NOT NULL,
+    date TEXT NOT NULL,
+    transits TEXT NOT NULL,
+    content TEXT NOT NULL,
+    generated_at INTEGER DEFAULT (strftime('%s','now')),
+    PRIMARY KEY (sun_sign, date)
+  );
+
   CREATE TABLE IF NOT EXISTS stripe_events (
     id TEXT PRIMARY KEY,
     type TEXT NOT NULL,
@@ -407,7 +416,52 @@ async function callLLMWithRetry(messages, maxRetries = 3, maxTokens = 800, extra
   throw lastErr;
 }
 
-// Shorter prompt for week view summaries — only 4 fields instead of 7
+// ─── FALLBACK horoscopes (par signe, pré-écrits) ─────────────────
+// Utilisés si le LLM rate-limit ou panne. Garantit un horoscope TOUJOURS disponible.
+const FALLBACK_HOROSCOPES = {
+  Aries: { general: "Le feu intérieur brûle fort aujourd'hui — agis, mais choisis ta bataille avec discernement.", amour: "Ta magnétise, mais l'autre a besoin d'être rassuré(e) autant qu'impressionné(e).", carriere: "Lance-toi sur le projet qui te trotte dans la tête depuis des semaines.", energie: 85, mood: "Combatif", luckyNumber: 7, luckyColor: "Rouge" },
+  Taurus: { general: "Une journée pour ancrer, ralentir, savourer. La patience paie aujourd'hui plus que l'élan.", amour: "Les gestes tendres comptent plus que les grandes déclarations. Présence.", carriere: "Avance méthodique. Tu poses les bases solides.", energie: 60, mood: "Stable", luckyNumber: 4, luckyColor: "Vert forêt" },
+  Gemini: { general: "Ton esprit vole d'idée en idée — canalise-le sur un seul sujet à la fois.", amour: "Communication, dialogue, légèreté. La curiosité nourrit le lien.", carriere: "Multiples pistes s'ouvrent — choisis, engage-toi.", energie: 75, mood: "Curieux", luckyNumber: 5, luckyColor: "Jaune" },
+  Cancer: { general: "Lune en phase sensible aujourd'hui — écoute ton ventre plus que ta tête.", amour: "Coquille protectrice ou cœur ouvert ? Les deux à la fois.", carriere: "Ta sensibilité est un super-pouvoir, pas une faiblesse.", energie: 55, mood: "Introspectif", luckyNumber: 2, luckyColor: "Blanc argenté" },
+  Leo: { general: "Rayonne sans écraser. Le leadership aujourd'hui, c'est inspirer.", amour: "Cœur en scène — sois généreux(se), mais laisse l'autre briller aussi.", carriere: "Visibilité, reconnaissance. Assume ta place au centre.", energie: 90, mood: "Lumineux", luckyNumber: 1, luckyColor: "Or" },
+  Virgo: { general: "Le détail qui te sauve aujourd'hui. Prends le temps de bien faire.", amour: "L'attention aux petits gestes fait toute la différence.", carriere: "Organisation, méthode, clarté — c'est ton terrain de jeu.", energie: 65, mood: "Concentré", luckyNumber: 3, luckyColor: "Beige" },
+  Libra: { general: "Équilibre, harmonie, mais aussi : sache dire ton vrai oui et ton vrai non.", amour: "Le lien se nourrit d'authenticité autant que de douceur.", carriere: "Négociations facilitées. Trouve l'accord élégant.", energie: 70, mood: "Harmonieux", luckyNumber: 6, luckyColor: "Rose poudré" },
+  Scorpio: { general: "Plongée en profondeur. Tout ce qui est superficiel ne t'intéresse pas aujourd'hui.", amour: "Intensité magnétique. Laisse l'autre respirer dans ton espace.", carriere: "Stratégie, intuition, percée. Tu vois ce que d'autres ne voient pas.", energie: 80, mood: "Mystérieux", luckyNumber: 8, luckyColor: "Bordeaux" },
+  Sagittarius: { general: "Élan d'aventure, besoin d'horizon. Une idée t'appelle au loin.", amour: "Liberté et engagement ne sont pas ennemis — dialogue.", carriere: "Vise haut, lance-toi, apprends de l'élan même imparfait.", energie: 85, mood: "Aventurier", luckyNumber: 9, luckyColor: "Bleu indigo" },
+  Capricorn: { general: "Discipline et patience. Chaque pas compte. Le long terme t'appartient.", amour: "Construire, durable. La tendresse peut rimer avec constance.", carriere: "Avancement concret, reconnaissance du travail bien fait.", energie: 70, mood: "Déterminé", luckyNumber: 10, luckyColor: "Gris anthracite" },
+  Aquarius: { general: "Vision décalée, idées qui sortent du cadre. Ose penser à l'envers.", amour: "Indépendance chérie, mais le lien vrai se construit.", carriere: "Innovation, originalité. Ton regard neuf est précieux.", energie: 75, mood: "Visionnaire", luckyNumber: 11, luckyColor: "Turquoise" },
+  Pisces: { general: "Vague intuitive forte. Écoute tes rêves, ton imagination sait des choses.", amour: "Romantisme, compassion, fusion. Mais garde ton centre.", carriere: "Créativité, art, intuition. Laisse parler ta part sensible.", energie: 65, mood: "Rêveur", luckyNumber: 12, luckyColor: "Lavande" },
+};
+function personalizeHoroscope(base, natalPositions, transits, birthData) {
+  const out = { ...base };
+  const rising = natalPositions.rising?.sign;
+  if (rising && rising !== natalPositions.sun?.sign) {
+    const tag = `Avec ton ascendant ${rising}, cette énergie se vit avant tout dans ta manière d'apparaître au monde — la sphère de ta ${getAscendantHouseKeyword(rising)}.`;
+    if (out.general && !out.general.includes(tag)) {
+      out.general = out.general + '\n\n' + tag;
+    }
+  }
+  return out;
+}
+
+function getAscendantHouseKeyword(risingSign) {
+  // Crude house-of-life mapping per rising sign (1ère maison = moi, identité)
+  const map = {
+    Aries: '1ère maison (identité, élans personnels)',
+    Taurus: '2ème maison (valeurs, ressources, sensorialité)',
+    Gemini: '3ème maison (communication, proches, idées)',
+    Cancer: '4ème maison (foyer, racines, intimité)',
+    Leo: '5ème maison (créativité, plaisir, cœur)',
+    Virgo: '6ème maison (quotidien, santé, service)',
+    Libra: '7ème maison (relations, accords, autres)',
+    Scorpio: '8ème maison (intimité profonde, transformations)',
+    Sagittarius: '9ème maison (sens, voyages, philosophie)',
+    Capricorn: '10ème maison (vocation, statut, ambitions)',
+    Aquarius: '11ème maison (projets, communautés, idéaux)',
+    Pisces: '12ème maison (intériorité, spiritualité, repli)',
+  };
+  return map[risingSign] || 'maison angulaire';
+}
 async function generateHoroscopeSummary(natalPositions, transits, sign, dateLabel) {
   const systemPrompt = `Tu es Céleste, un astrologue français. Tu écris des résumés d'horoscope très courts et poétiques (2-3 phrases maximum) en français. Ton ton est introspectif et moderne.`;
 
@@ -746,24 +800,34 @@ Réponds UNIQUEMENT en JSON valide:
   "keywords": ["5 mots-clés pertinents"]
 }`;
 
-  const data = await callLLMWithRetry([
-    { role: 'system', content: systemPrompt },
-    { role: 'user', content: userPrompt },
-  ], 4, 4000, { response_format: { type: 'json_object' } });
-
-  const msg = data.choices?.[0]?.message || {};
-  let content = (msg.content || msg.reasoning_content || '').trim();
-  if (!content) throw new Error('Empty LLM response');
-  // Strip markdown fences if present
-  content = content.replace(/^```(?:json)?\s*/i, '').replace(/```\s*$/i, '').trim();
-  // Try to parse directly, fallback to extract first {...}
   let parsed;
   try {
-    parsed = JSON.parse(content);
-  } catch {
-    const jsonMatch = content.match(/\{[\s\S]*\}/);
-    if (!jsonMatch) throw new Error('No JSON in planet interpretation LLM response');
-    parsed = JSON.parse(jsonMatch[0]);
+    const data = await callLLMWithRetry([
+      { role: 'system', content: systemPrompt },
+      { role: 'user', content: userPrompt },
+    ], 4, 4000, { response_format: { type: 'json_object' } });
+
+    const msg = data.choices?.[0]?.message || {};
+    let content = (msg.content || msg.reasoning_content || '').trim();
+    if (!content) throw new Error('Empty LLM response');
+    content = content.replace(/^```(?:json)?\s*/i, '').replace(/```\s*$/i, '').trim();
+    try {
+      parsed = JSON.parse(content);
+    } catch {
+      const jsonMatch = content.match(/\{[\s\S]*\}/);
+      if (!jsonMatch) throw new Error('No JSON in planet interpretation LLM response');
+      parsed = JSON.parse(jsonMatch[0]);
+    }
+  } catch (llmErr) {
+    console.warn(`[planet-interp] LLM failed (${llmErr.message}), using FALLBACK template`);
+    // Fallback: minimal but always-available text
+    parsed = {
+      general: `${planetName} (${symbol}) en astrologie — position en ${signName} (élément ${element}), Maison ${houseNum}. ${planetData.retrograde ? 'En phase rétrograde, son énergie s\'intériorise et se réinterprète.' : 'En marche directe, son énergie s\'exprime vers l\'extérieur.'} Réinterprétation détaillée dès que le service est rétabli.`,
+      inSign: `${planetName} en ${signName} — combinaison de l'archétype ${planetName} avec les qualités ${element === 'Feu' ? 'enthousiastes, créatives et impulsives' : element === 'Terre' ? 'stables, concrètes et pratiques' : element === 'Air' ? 'intellectuelles, communicatives et sociales' : 'émotionnelles, intuitives et profondes'} du signe. Affinage en cours.`,
+      degree: `Degré ${deg} ${signName} — symbolisme traditionnel à compléter. Position ${planetData.retrograde ? 'rétrograde' : 'directe'}.`,
+      keywords: [planetName, signName, `${houseNum}e maison`, planetData.retrograde ? 'Rétrograde' : 'Direct', element],
+    };
+    parsed.isFallback = true;
   }
 
   // Persist to GLOBAL template cache (next user = 0 LLM calls)
@@ -787,7 +851,7 @@ Réponds UNIQUEMENT en JSON valide:
     inSign: parsed.inSign,
     degree: parsed.degree,
     keywords: parsed.keywords,
-    source: 'llm',
+    source: parsed.isFallback ? 'fallback' : 'llm',
     cacheHit: false,
   };
 }
@@ -1033,49 +1097,80 @@ app.get('/api/profiles/:id', auth, (req, res) => {
   });
 });
 
-// ─── Horoscope (LLM-powered) ───────────────────────────────
-app.post('/api/horoscope', auth, llmLimiter, async (req, res) => {
+// ─── Horoscope (LLM-powered, GLOBAL cache per (sun_sign, date)) ───────
+// Architecture: 12 appels LLM/jour max (un par signe), partagés par tous les users.
+// Coût marginal = 0 pour 100% des hits après le premier par signe/jour.
+app.post('/api/horoscope', auth, async (req, res) => {
   try {
     const user = db.prepare('SELECT * FROM users WHERE id = ?').get(req.user.id);
     if (!user?.birth_data) return res.status(400).json({ error: 'Birth data required' });
 
-    // Premium expiry check (defence-in-depth on top of Stripe webhook)
     const now = Math.floor(Date.now() / 1000);
     const isPremium = !!user.is_premium && (!user.premium_until || user.premium_until > now);
 
     const today = new Date().toISOString().split('T')[0];
 
-    // Check cache first (cached responses bypass the free-tier gate)
-    const cached = db.prepare('SELECT content FROM horoscope_cache WHERE user_id = ? AND date = ?').get(req.user.id, today);
-    if (cached) {
+    // Per-user cache hit (legacy)
+    const userCached = db.prepare('SELECT content FROM horoscope_cache WHERE user_id = ? AND date = ?').get(req.user.id, today);
+    if (userCached) {
       const streak = updateStreak(req.user.id, today);
-      return res.json({ ...JSON.parse(cached.content), streak });
-    }
-
-    // Free-tier gate (server-side, authoritative)
-    if (!isPremium) {
-      if ((user.scans_remaining ?? 0) <= 0) {
-        return res.status(402).json({ error: 'Free scans exhausted', code: 'paywall_required', scansRemaining: 0 });
-      }
-      db.prepare('UPDATE users SET scans_remaining = scans_remaining - 1 WHERE id = ?').run(req.user.id);
+      return res.json({ ...JSON.parse(userCached.content), streak });
     }
 
     const birthData = JSON.parse(user.birth_data);
     const natalPositions = getNatalPositions(birthData);
     const transits = getTransits(new Date());
     const sunSign = natalPositions.sun.sign;
+    const transitsStr = JSON.stringify(transits);
 
-    const horoscope = await generateHoroscope(natalPositions, transits, sunSign);
+    // ── Tier 1: GLOBAL cache (shared across all users of same sun sign) ──
+    const globalCached = db.prepare(
+      'SELECT content FROM horoscope_global_daily WHERE sun_sign = ? AND date = ?'
+    ).get(sunSign, today);
 
-    // Cache for the day
+    let horoscope;
+    if (globalCached) {
+      console.log(`[horoscope] global hit (sign=${sunSign}, date=${today})`);
+      const base = JSON.parse(globalCached.content);
+      horoscope = personalizeHoroscope(base, natalPositions, transits, birthData);
+    } else {
+      // ── Tier 2: LLM generation with graceful fallback ──
+      console.log(`[horoscope] LLM miss (sign=${sunSign}, date=${today})`);
+      let base;
+      try {
+        base = await generateHoroscope(natalPositions, transits, sunSign);
+      } catch (llmErr) {
+        console.warn(`[horoscope] LLM failed (${llmErr.message}), using FALLBACK for sign=${sunSign}`);
+        base = { ...FALLBACK_HOROSCOPES[sunSign] || FALLBACK_HOROSCOPES.Aries, isFallback: true };
+      }
+
+      // Persist GLOBAL cache (one-time per sign/day)
+      try {
+        db.prepare(`INSERT OR IGNORE INTO horoscope_global_daily
+          (sun_sign, date, transits, content) VALUES (?, ?, ?, ?)`).run(
+          sunSign, today, transitsStr, JSON.stringify(base),
+        );
+      } catch (e) {
+        console.warn('[horoscope] global cache write failed:', e.message);
+      }
+
+      horoscope = personalizeHoroscope(base, natalPositions, transits, birthData);
+    }
+
+    // Free-tier gate (only when we actually generated a fresh horoscope)
+    if (!isPremium && !globalCached) {
+      if ((user.scans_remaining ?? 0) <= 0) {
+        return res.status(402).json({ error: 'Free scans exhausted', code: 'paywall_required', scansRemaining: 0 });
+      }
+      db.prepare('UPDATE users SET scans_remaining = scans_remaining - 1 WHERE id = ?').run(req.user.id);
+    }
+
+    // Per-user cache for fast subsequent loads
     db.prepare('INSERT OR REPLACE INTO horoscope_cache (user_id, date, content) VALUES (?, ?, ?)')
       .run(req.user.id, today, JSON.stringify(horoscope));
 
-    // Streak: counting today (first view of today's horoscope)
     const streak = updateStreak(req.user.id, today);
-
-    // Return current scans_remaining so the frontend can show it
-    const remaining = isPremium ? null : (user.scans_remaining - 1);
+    const remaining = isPremium ? null : Math.max(0, (user.scans_remaining ?? 0) - (globalCached ? 0 : 1));
     res.json({ ...horoscope, scansRemaining: remaining, streak });
   } catch (err) {
     console.error('Horoscope error:', err.message);
