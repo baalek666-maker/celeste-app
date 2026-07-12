@@ -7,6 +7,7 @@ import { useFavorites } from '../lib/useFavorites';
 import ShareCard from '../components/ShareCard';
 import SkyMap from '../components/SkyMap';
 import { toast } from '../components/Toast';
+import HoroscopeFeedback from '../components/HoroscopeFeedback';
 
 const LOADING_MESSAGES = [
   'Alignement des planètes...',
@@ -429,6 +430,11 @@ export function Horoscope({ user }: { user: User }) {
             })}
           </div>
         )}
+      </div>
+
+      {/* Feedback widget — improves LLM quality over time */}
+      <div className="mt-6">
+        <HoroscopeFeedback />
       </div>
 
       <p className="text-night-500 text-xs text-center mt-6 italic">

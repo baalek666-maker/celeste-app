@@ -509,4 +509,51 @@ export const api = {
     age: number;
     date: string;
   }>('/astro/moon-phase'),
+
+  // ─── Gamification ─────────────────────────────────────────
+  getGamificationStatus: () => apiCall<{
+    xp: number;
+    level: number;
+    levelTitle: string;
+    xpIntoLevel: number;
+    xpForNext: number;
+    progressPct: number;
+    quests: { quest_key: string; quest_label: string; xp_reward: number; completed: boolean }[];
+    badges: { id: string; emoji: string; title: string; desc: string; earned: boolean }[];
+    badgesEarned: number;
+    badgesTotal: number;
+    questsCompleted: number;
+    questsTotal: number;
+  }>('/gamification/status'),
+
+  completeQuest: (questKey: string) => apiCall<{
+    ok: boolean;
+    xpAwarded: number;
+    newLevel: number;
+    leveledUp: boolean;
+  }>(`/gamification/quest/${questKey}/complete`, { method: 'POST' }),
+
+  getBadges: () => apiCall<{
+    badges: { id: string; emoji: string; title: string; desc: string; earned: boolean; earnedAt: number | null }[];
+    earnedCount: number;
+    totalCount: number;
+  }>('/gamification/badges'),
+
+  // ─── Cosmic Calendar ──────────────────────────────────────
+  getCosmicEvents: () => apiCall<{
+    events: { date: string; type: string; title: string; description: string; emoji: string }[];
+  }>('/astro/events'),
+
+  // ─── Astrological Portrait ────────────────────────────────
+  getAstroPortrait: () => apiCall<{
+    portrait: string;
+    wordCount: number;
+    cached: boolean;
+  }>('/natal-chart/portrait'),
+
+  // ─── Horoscope Feedback ───────────────────────────────────
+  submitHoroscopeFeedback: (rating: number, note?: string) => apiCall<{ ok: boolean }>('/horoscope/feedback', {
+    method: 'POST',
+    body: { rating, note },
+  }),
 };

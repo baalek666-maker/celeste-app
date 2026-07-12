@@ -4,6 +4,8 @@ import { ZODIAC_SIGNS } from '../data/zodiac';
 import StreakCelebration from '../components/StreakCelebration';
 import DailyTarot from '../components/DailyTarot';
 import NatalChart from '../components/NatalChart';
+import XpBar from '../components/XpBar';
+import DailyQuests from '../components/DailyQuests';
 
 export function Home({ user, onNavigate }: { user: User; onNavigate: (s: Screen) => void }) {
   const streak = user.streak ?? 0;
@@ -68,6 +70,9 @@ export function Home({ user, onNavigate }: { user: User; onNavigate: (s: Screen)
         </div>
       </div>
 
+      {/* ── 1b. XP Bar (gamification) ── */}
+      <XpBar />
+
       {/* ── 2. Tarot du jour (gamification) ── */}
       <DailyTarot />
 
@@ -93,6 +98,9 @@ export function Home({ user, onNavigate }: { user: User; onNavigate: (s: Screen)
           ))}
         </div>
       </div>
+
+      {/* ── 3b. Quêtes quotidiennes (gamification) ── */}
+      <DailyQuests />
 
       {/* ── 4. Theme natal (roue astronomique precise) ── */}
       <NatalChart />

@@ -90,3 +90,44 @@ export interface DailyEntry {
   date: string;
   text: string;
 }
+
+// ─── Gamification Types ───────────────────────────────────────────
+
+export interface DailyQuest {
+  quest_key: string;
+  quest_label: string;
+  xp_reward: number;
+  completed: boolean;
+}
+
+export interface Badge {
+  id: string;
+  emoji: string;
+  title: string;
+  desc: string;
+  earned: boolean;
+  earnedAt?: number | null;
+}
+
+export interface GamificationStatus {
+  xp: number;
+  level: number;
+  levelTitle: string;
+  xpIntoLevel: number;
+  xpForNext: number;
+  progressPct: number;
+  quests: DailyQuest[];
+  badges: Badge[];
+  badgesEarned: number;
+  badgesTotal: number;
+  questsCompleted: number;
+  questsTotal: number;
+}
+
+export interface CosmicEvent {
+  date: string;
+  type: string;
+  title: string;
+  description: string;
+  emoji: string;
+}

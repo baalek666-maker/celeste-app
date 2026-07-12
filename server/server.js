@@ -11,6 +11,7 @@ import { readFileSync } from 'fs';
 import { fileURLToPath } from 'url';
 import { dirname, join } from 'path';
 import billingRouter, { stripeWebhookHandler, isStripeConfigured } from './billing.js';
+import { registerGamificationRoutes } from './gamification.js';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const JWT_SECRET = process.env.JWT_SECRET;
@@ -2426,6 +2427,9 @@ app.get('/api/premium/status', auth, (req, res) => {
     res.status(500).json({ error: 'Failed' });
   }
 });
+
+// ─── Gamification: XP, Levels, Quests, Badges, Portrait, Cosmic Events ───
+registerGamificationRoutes(app, db, auth, callLLMWithRetry);
 
 // ─── Serve static frontend in production ───────────────────
 app.use(express.static(join(__dirname, '..', 'dist')));

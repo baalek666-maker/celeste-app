@@ -13,13 +13,18 @@ import WeeklyChallenge from '../components/WeeklyChallenge';
 import { YiJingOracle } from '../components/YiJingOracle';
 import RuneOracle from '../components/RuneOracle';
 import ChineseAstrology from '../components/ChineseAstrology';
+import CosmicCalendar from '../components/CosmicCalendar';
+import BadgeGrid from '../components/BadgeGrid';
+import AstroPortrait from '../screens/AstroPortrait';
 
-type ExplorerSection = 'overview' | 'chart' | 'compatibility' | 'insights' | 'yijing' | 'runes' | 'chinese';
+type ExplorerSection = 'overview' | 'chart' | 'compatibility' | 'insights' | 'portrait' | 'cosmic' | 'yijing' | 'runes' | 'chinese';
 
 const SECTIONS: { key: ExplorerSection; label: string; emoji: string; desc: string }[] = [
   { key: 'overview', label: 'Vue d\u2019ensemble', emoji: '✦', desc: 'Tout pour approfondir votre ciel' },
+  { key: 'portrait', label: 'Portrait astral', emoji: '📜', desc: 'Votre portrait profond de 1500 mots' },
   { key: 'chart', label: 'Thème natal', emoji: '☀', desc: 'Toutes vos planètes et maisons' },
   { key: 'compatibility', label: 'Compatibilité', emoji: '☽', desc: 'Affinités avec un proche' },
+  { key: 'cosmic', label: 'Calendrier cosmique', emoji: '🗓', desc: 'Les prochaines étapes célestes' },
   { key: 'insights', label: 'Explorations', emoji: '◈', desc: 'Aspects, nœuds, astéroïdes, rituels' },
   { key: 'yijing', label: 'Yi Jing', emoji: '☰', desc: 'L\u2019oracle chinois croisé avec l\u2019astro' },
   { key: 'runes', label: 'Runomancie', emoji: 'ᚱ', desc: 'Les 24 runes du Futhark ancien' },
@@ -48,6 +53,26 @@ export function Explorer({ user, onNavigate }: { user: User; onNavigate: (s: Scr
           <h1 className="text-xl font-bold text-gold-gradient">Compatibilité</h1>
         </div>
         <Compatibility user={user} />
+      </div>
+    );
+  }
+  if (section === 'portrait') {
+    return (
+      <div className="page-transition">
+        <AstroPortrait />
+      </div>
+    );
+  }
+  if (section === 'cosmic') {
+    return (
+      <div className="page-transition">
+        <div className="px-5 pt-12 pb-3 flex items-center gap-3">
+          <button onClick={() => setSection('overview')} className="text-gold-400 text-sm">‹ Retour</button>
+          <h1 className="text-xl font-bold text-gold-gradient">Calendrier cosmique</h1>
+        </div>
+        <div className="px-5 pb-6">
+          <CosmicCalendar />
+        </div>
       </div>
     );
   }
@@ -120,13 +145,8 @@ export function Explorer({ user, onNavigate }: { user: User; onNavigate: (s: Scr
           <button
             key={s.key}
             onClick={() => {
-              if (s.key === 'overview') setSection('overview');
-              else if (s.key === 'chart') { setSection('chart'); window.scrollTo(0, 0); }
-              else if (s.key === 'compatibility') { setSection('compatibility'); window.scrollTo(0, 0); }
-              else if (s.key === 'insights') { setSection('insights'); window.scrollTo(0, 0); }
-              else if (s.key === 'yijing') { setSection('yijing'); window.scrollTo(0, 0); }
-              else if (s.key === 'runes') { setSection('runes'); window.scrollTo(0, 0); }
-              else if (s.key === 'chinese') { setSection('chinese'); window.scrollTo(0, 0); }
+              setSection(s.key);
+              window.scrollTo(0, 0);
             }}
             className="w-full glass rounded-2xl p-5 text-left hover:border-gold-500/40 border border-transparent transition-all duration-300 group stagger-card"
             style={{ animationDelay: `${0.05 * i}s` }}
@@ -143,6 +163,11 @@ export function Explorer({ user, onNavigate }: { user: User; onNavigate: (s: Scr
             </div>
           </button>
         ))}
+      </div>
+
+      {/* Badge Grid — trophy case */}
+      <div className="mt-6">
+        <BadgeGrid />
       </div>
 
       {/* Premium banner moved here — less in-your-face */}
