@@ -373,7 +373,7 @@ function getNatalPositions(birthData, full = false) {
 
 // ─── LLM Horoscope Generation ──────────────────────────────
 // Retry with exponential backoff on 429 (rate limit) and 5xx
-async function callLLMWithRetry(messages, maxRetries = 3, maxTokens = 800) {
+async function callLLMWithRetry(messages, maxRetries = 3, maxTokens = 800, extraBody = {}) {
   let lastErr;
   for (let attempt = 0; attempt <= maxRetries; attempt++) {
     const response = await fetch(LLM_API_URL, {
@@ -387,6 +387,7 @@ async function callLLMWithRetry(messages, maxRetries = 3, maxTokens = 800) {
         messages,
         temperature: 0.85,
         max_tokens: maxTokens,
+        ...extraBody,
       }),
     });
     if (response.ok) return await response.json();
@@ -704,14 +705,22 @@ Réponds UNIQUEMENT en JSON valide:
   const data = await callLLMWithRetry([
     { role: 'system', content: systemPrompt },
     { role: 'user', content: userPrompt },
-  ], 4, 3000);
+  ], 4, 4000, { response_format: { type: 'json_object' } });
 
   const msg = data.choices?.[0]?.message || {};
-  const content = msg.content || msg.reasoning_content || '';
-  let cleaned = content.replace(/```json\s*/g, '').replace(/```\s*/g, '').trim();
-  const jsonMatch = cleaned.match(/\{[\s\S]*\}/);
-  if (!jsonMatch) throw new Error('No JSON in planet interpretation LLM response');
-  const parsed = JSON.parse(jsonMatch[0]);
+  let content = (msg.content || msg.reasoning_content || '').trim();
+  if (!content) throw new Error('Empty LLM response');
+  // Strip markdown fences if present
+  content = content.replace(/^```(?:json)?\s*/i, '').replace(/```\s*$/i, '').trim();
+  // Try to parse directly, fallback to extract first {...}
+  let parsed;
+  try {
+    parsed = JSON.parse(content);
+  } catch {
+    const jsonMatch = content.match(/\{[\s\S]*\}/);
+    if (!jsonMatch) throw new Error('No JSON in planet interpretation LLM response');
+    parsed = JSON.parse(jsonMatch[0]);
+  }
 
   return {
     planet,
