@@ -117,7 +117,7 @@ export default function ShareCard({ open, onClose, data }: ShareCardProps) {
       drawBadge(ctx, W / 2, badgeY, data.mood.toUpperCase(), COSMIC);
     }
     if (data.energy) {
-      drawBadge(ctx, W / 2, badgeY + 90, 'Énergie ' + '●'.repeat(data.energy) + '○'.repeat(5 - data.energy), GOLD);
+      drawBadge(ctx, W / 2, badgeY + 90, 'Énergie ' + '●'.repeat(Math.max(0, Math.min(5, data.energy))) + '○'.repeat(5 - Math.max(0, Math.min(5, data.energy))), GOLD);
     }
 
     // 10. Lucky number + color (si présents)

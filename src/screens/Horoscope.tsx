@@ -205,7 +205,8 @@ export function Horoscope({ user }: { user: User }) {
   }
 
   if (!horoscope) return null;
-  const energyBars = '◆'.repeat(horoscope.energy) + '◇'.repeat(5 - horoscope.energy);
+  const safeEnergy = Math.max(0, Math.min(5, horoscope.energy ?? 3));
+  const energyBars = '◆'.repeat(safeEnergy) + '◇'.repeat(5 - safeEnergy);
 
   return (
     <div className="px-5 pt-12 pb-4 relative z-10">
