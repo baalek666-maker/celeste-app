@@ -38,6 +38,107 @@ export function getPriceIdForPlan(plan) {
 
 const router = express.Router();
 
+// ─── Billing status check (public) ────────────────────────────────────────
+/**
+ * GET /api/billing/status
+ * Renvoie { configured: true|false }. Le frontend affiche le bon message
+ * dans le Paywall sans exposer les clés secrètes.
+ */
+router.get('/status', (req, res) => {
+  res.json({ configured: isStripeConfigured() });
+});
+
+/**
+ * POST /api/billing/restore  (Fix #2 — Restore Purchases)
+ *
+ * Sur iOS, Apple EXIGE qu'une app avec auto-renewable subscriptions propose
+ * un mécanisme "Restore Purchases" sinon REJET App Store Review (Guideline 3.1.5).
+ * Sur Android et Web, ce bouton est facultatif mais bon pour l'UX.
+ *
+ * Sur le web : si l'user a une stripe_customer_id, on fetche ses subscriptions
+ * actives chez Stripe et on (ré)applique is_premium + premium_until en DB.
+ * Sans Stripe configuré : on renvoie ok=false avec un message clair
+ * (l'user n'a rien à restaurer sur cette instance de dev).
+ */
+router.post('/restore', async (req, res) => {
+  const userId = req.user?.id;
+  if (!userId) return res.status(401).json({ error: 'Non authentifié.' });
+
+  if (!isStripeConfigured()) {
+    // Pas de Stripe configuré : on ne peut pas vérifier les abonnements.
+    // Côté UX, le client affiche "Aucun abonnement à restaurer".
+    return res.json({
+      restored: false,
+      configured: false,
+      isPremium: false,
+      message: 'Le système de paiement n\'est pas configuré sur cette instance.',
+    });
+  }
+
+  const row = req.db.prepare(
+    'SELECT stripe_customer_id, is_premium, premium_until FROM users WHERE id = ?'
+  ).get(userId);
+
+  if (!row?.stripe_customer_id) {
+    // User n'a jamais payé — rien à restaurer
+    return res.json({
+      restored: false,
+      configured: true,
+      isPremium: row?.is_premium ?? false,
+      premiumUntil: row?.premium_until ?? null,
+      message: 'Aucun abonnement Stripe associé à ce compte.',
+    });
+  }
+
+  try {
+    // Lister les subscriptions actives de ce customer
+    const subs = await stripe.subscriptions.list({
+      customer: row.stripe_customer_id,
+      status: 'all',
+      limit: 10,
+    });
+
+    const now = Math.floor(Date.now() / 1000);
+    const active = subs.data.find(
+      (s) => s.status === 'active' || s.status === 'trialing' || s.status === 'past_due'
+    );
+
+    if (!active) {
+      // Aucune subscription active — on s'assure que le compte n'est plus premium
+      req.db.prepare(
+        'UPDATE users SET is_premium = 0, premium_until = NULL WHERE id = ?'
+      ).run(userId);
+      return res.json({
+        restored: false,
+        configured: true,
+        isPremium: false,
+        premiumUntil: null,
+        message: 'Aucun abonnement actif chez Stripe.',
+      });
+    }
+
+    // Récupère la période courante et (ré)applique le premium
+    const periodEnd = active.current_period_end
+      ? active.current_period_end * 1000
+      : Date.now() + 30 * 86400000;
+    req.db.prepare(
+      'UPDATE users SET is_premium = 1, premium_until = ?, stripe_subscription_id = COALESCE(stripe_subscription_id, ?) WHERE id = ?'
+    ).run(periodEnd, active.id, userId);
+
+    return res.json({
+      restored: true,
+      configured: true,
+      isPremium: true,
+      premiumUntil: periodEnd,
+      subscriptionId: active.id,
+      status: active.status,
+    });
+  } catch (err) {
+    console.error('[billing] restore error:', err.message);
+    return res.status(500).json({ error: 'Restauration impossible. Réessaie dans quelques secondes.' });
+  }
+});
+
 /**
  * POST /api/billing/create-checkout
  * Body : { plan: 'weekly' | 'yearly' }

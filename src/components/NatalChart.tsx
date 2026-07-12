@@ -9,7 +9,9 @@ interface PlanetPos {
   retrograde?: boolean;
 }
 interface HouseCusp { number: number; cusp: number; sign: string; }
-interface Aspect { p1: string; p2: string; type: string; angle: number; orb: number; color: string; }
+const ALL_BODIES = ['sun','moon','mercury','venus','mars','jupiter','saturn','uranus','neptune','pluto','northNode'] as const;
+type BodyKey = typeof ALL_BODIES[number];
+interface Aspect { p1: BodyKey | string; p2: BodyKey | string; type: string; angle: number; orb: number; color: string; }
 interface NatalData {
   sun?: PlanetPos; moon?: PlanetPos; mercury?: PlanetPos; venus?: PlanetPos;
   mars?: PlanetPos; jupiter?: PlanetPos; saturn?: PlanetPos; uranus?: PlanetPos;
@@ -51,8 +53,6 @@ const ZODIAC: Array<{ symbol: string; color: string; name: string }> = [
   { symbol: '\u2653', color: '#2563eb', name: 'Poissons' },    // Pisces
 ];
 
-const ALL_BODIES = ['sun','moon','mercury','venus','mars','jupiter','saturn','uranus','neptune','pluto','northNode'];
-
 // ─── Geometry helpers ───────────────────────────────────
 // All angles: ecliptic longitude relative to Ascendant at 9 o'clock (left)
 function lonToXY(lon: number, ascLon: number, radius: number, cx: number, cy: number): [number, number] {
@@ -86,7 +86,7 @@ export default function NatalChart({ size }: { size?: number }) {
   useEffect(() => {
     let mounted = true;
     api.getNatalChart()
-      .then(res => { if (mounted) { setNatal(res.natal); setLoading(false); } })
+      .then(res => { if (mounted) { setNatal(res.natal as NatalData); setLoading(false); } })
       .catch(e => { if (mounted) { setErr(e.message || 'Erreur'); setLoading(false); } });
     return () => { mounted = false; };
   }, []);
@@ -309,8 +309,9 @@ export default function NatalChart({ size }: { size?: number }) {
 
           {/* ═══ Aspect lines ═══ */}
           {natal.aspects?.map((asp, i) => {
-            const p1 = natal[asp.p1];
-            const p2 = natal[asp.p2];
+            // Cast: le backend peut renvoyer des clés non-littérales (southNode, etc.)
+            const p1 = (natal as any)[asp.p1];
+            const p2 = (natal as any)[asp.p2];
             if (!p1?.longitude || !p2?.longitude) return null;
             const [x1, y1] = lonToXY(p1.longitude, ascLon, aspectR, cx, cy);
             const [x2, y2] = lonToXY(p2.longitude, ascLon, aspectR, cx, cy);

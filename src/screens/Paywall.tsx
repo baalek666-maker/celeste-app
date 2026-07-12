@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
 import type { User } from '../types';
 import { startCheckout, isStripeConfigured, openBillingPortal } from '../lib/payment';
+import { api } from '../lib/api';
 
 export function Paywall({ onClose, onSubscribe }: {
   onClose: () => void;
@@ -34,6 +35,39 @@ export function Paywall({ onClose, onSubscribe }: {
     if (!result.success) {
       setError(result.error || 'Impossible d\'ouvrir le portail.');
       setBusy(false);
+    }
+  };
+
+  // ─── Fix #2 — Restaurer mes achats (App Store Guideline 3.1.5) ───────
+  // Sur iOS ce bouton est OBLIGATOIRE (sinon rejet App Store). Sans Stripe
+  // configuré on remonte un message clair au lieu de planter.
+  const [restoring, setRestoring] = useState(false);
+  const [restoreMsg, setRestoreMsg] = useState('');
+
+  const handleRestorePurchases = async () => {
+    setRestoring(true);
+    setRestoreMsg('');
+    setError('');
+    try {
+      const res = await api.restorePurchases();
+      if (res.restored && res.isPremium) {
+        setRestoreMsg('✓ Abonnement restauré — vous êtes Premium.');
+        // Informe le parent qu'on a retrouvé un statut Premium. Le parent rechargera
+        // l'user complet via /api/auth/me ou son équivalent.
+        onSubscribe({
+          email: '', name: '', birthData: null, natalChart: null,
+          isPremium: true, scansRemaining: 0, trialStartedAt: null,
+          premiumUntil: res.premiumUntil ?? null, createdAt: Date.now(),
+        });
+      } else if (!res.configured) {
+        setRestoreMsg('Restauration indisponible — Stripe non configuré.');
+      } else {
+        setRestoreMsg(res.message || 'Aucun abonnement trouvé pour ce compte.');
+      }
+    } catch (err: any) {
+      setRestoreMsg(`Erreur : ${err?.message || 'restauration impossible'}`);
+    } finally {
+      setRestoring(false);
     }
   };
 
@@ -138,6 +172,18 @@ export function Paywall({ onClose, onSubscribe }: {
             ? '3 jours gratuits puis 39,99€/an. Annulez à tout moment. Rappel avant prélèvement.'
             : '6,99€/semaine. Annulez à tout moment.'}
         </p>
+
+        {/* Restore Purchases (Fix #2 — obligatoire App Store Guideline 3.1.5) */}
+        <button onClick={handleRestorePurchases}
+          disabled={restoring}
+          className="w-full mt-4 py-2.5 rounded-xl glass border border-night-700 text-night-200 text-sm hover:border-cosmic-500/50 transition-all disabled:opacity-50">
+          {restoring ? 'Restauration…' : '♻️ Restaurer mes achats'}
+        </button>
+        {restoreMsg && (
+          <p className={`text-xs text-center mt-2 ${restoreMsg.startsWith('✓') ? 'text-green-400' : restoreMsg.startsWith('Restauration indisponible') ? 'text-amber-400' : restoreMsg.startsWith('Erreur') ? 'text-red-400' : 'text-night-300'}`}>
+            {restoreMsg}
+          </p>
+        )}
 
         {/* Manage existing subscription */}
         <button onClick={handleManageSubscription}

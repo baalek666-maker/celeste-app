@@ -205,6 +205,11 @@ export const api = {
       challenges: string[];
       description: string;
       context?: string;
+      // Champs calculés par le backend avec de vraies chartes (ajoutés à la réponse)
+      yourMoon?: string;
+      theirMoon?: string;
+      yourSun?: string;
+      theirSun?: string;
     }>('/compatibility', {
       method: 'POST',
       body: JSON.stringify({ partnerBirthData, context }),
@@ -335,6 +340,8 @@ export const api = {
   subscribeToNotifications: (data: {
     subscription: { endpoint: string; keys: { p256dh: string; auth: string } };
     hour?: number;
+    // Fix #6 — TZ navigateur du user pour notif à l'heure LOCALE (sinon UTC brut)
+    timezone?: string;
   }) => apiCall<{ ok: true }>('/notifications/subscribe', {
     method: 'POST',
     body: JSON.stringify(data),
@@ -457,6 +464,26 @@ export const api = {
     method: 'POST',
     body: '{}',
   }, 30_000),
+
+  // Fix #2 — Restore Purchases (obligatoire iOS, App Store Guideline 3.1.5)
+  restorePurchases: () => apiCall<{
+    restored: boolean;
+    configured: boolean;
+    isPremium: boolean;
+    premiumUntil?: number;
+    message?: string;
+  }>('/billing/restore', {
+    method: 'POST',
+    body: '{}',
+  }, 30_000),
+
+  // Fix #2 — expose Stripe-configured au client pour afficher le bon message dans le Paywall
+  getBillingStatus: () => apiCall<{ configured: boolean }>('/billing/status', {}, 5_000),
+
+  // Fix #1 — RGPD Art. 17 (droit à l'effacement)
+  deleteAccount: () => apiCall<{ ok: true; deletedAt: string }>('/account', {
+    method: 'DELETE',
+  }, 15_000),
   verifySession: (sessionId: string) => apiCall<{ ok: true; isPremium: boolean }>(`/billing/verify-session?session_id=${encodeURIComponent(sessionId)}`, {
     method: 'GET',
   }),

@@ -21,7 +21,8 @@ interface Interpretation {
   aspects: Array<{ otherName: string; aspectName: string; text: string; orb: number; color: string }>;
   general: string;
   inSign: string;
-  degree?: string;
+  // Backend renvoie un number ; accepté comme string pour rétro-compat
+  degree?: string | number;
   temperament: string;
   characterology: string;
   keywords: string[];
@@ -202,7 +203,7 @@ function SectionTitle({ children }: { children: React.ReactNode }) {
   );
 }
 
-function Paragraph({ text }: { text: string }) {
+function Paragraph({ text }: { text: string | number }) {
   return (
     <p className="text-night-300 text-sm leading-relaxed">
       {text}

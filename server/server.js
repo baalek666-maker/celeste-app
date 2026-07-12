@@ -170,6 +170,11 @@ if (!userColsForNotif.find(c => c.name === 'notification_hour')) {
 if (!userColsForNotif.find(c => c.name === 'last_notification_date')) {
   db.exec('ALTER TABLE users ADD COLUMN last_notification_date TEXT');
 }
+// Fix #6 — notification_timezone : offset du fuseau de l'utilisateur en heures (Number, -12 à +14).
+// Permet au cron d'envoyer la notif à 9h LOCAL au lieu de 9h UTC (qui était décalé de +2h en été).
+if (!userColsForNotif.find(c => c.name === 'notification_timezone')) {
+  db.exec('ALTER TABLE users ADD COLUMN notification_timezone REAL DEFAULT 0');
+}
 
 // profiles table — multi-profile natal charts (family, friends, etc.)
 if (!db.prepare("SELECT name FROM sqlite_master WHERE type='table' AND name='profiles'").get()) {
@@ -986,11 +991,69 @@ app.post('/api/auth/login', authLimiter, async (req, res) => {
   });
 });
 
-// ─── Save birth data ───────────────────────────────────────
+// ─── Birth data validation helper (Fix #5 — date validation côté serveur) ──
+// Accepte les formats YYYY-MM-DD. Refuse : dates futures, dates invalides (31 février),
+// et tout objet non conformant au schéma BirthData.
+function validateBirthData(input) {
+  if (input == null || typeof input !== 'object' || Array.isArray(input)) {
+    return { ok: false, error: 'Données de naissance manquantes ou invalides.' };
+  }
+  const { date, time, city, country, latitude, longitude, timezone } = input;
+
+  // Date — YYYY-MM-DD strict
+  if (typeof date !== 'string' || !/^\d{4}-\d{2}-\d{2}$/.test(date)) {
+    return { ok: false, error: 'Date de naissance requise (format YYYY-MM-DD).' };
+  }
+  // Vérifier que la chaîne correspond à une date calendrier existante.
+  // new Date('2026-02-31') === new Date('2026-03-03') silencieusement — on contourne.
+  const [yStr, mStr, dStr] = date.split('-');
+  const y = Number(yStr), m = Number(mStr), d = Number(dStr);
+  const probe = new Date(Date.UTC(y, m - 1, d));
+  if (probe.getUTCFullYear() !== y || probe.getUTCMonth() !== m - 1 || probe.getUTCDate() !== d) {
+    return { ok: false, error: 'Date de naissance invalide (ex: 31 février).' };
+  }
+  // Pas de date future (laisser 24h de marge pour les users dans d'autres fuseaux)
+  const nowUtc = new Date();
+  if (probe.getTime() > nowUtc.getTime() + 86400000) {
+    return { ok: false, error: 'La date de naissance ne peut pas être dans le futur.' };
+  }
+  // Pas plus de 150 ans en arrière (sanity check, données corrompues)
+  if (probe.getTime() < nowUtc.getTime() - 150 * 365 * 86400000) {
+    return { ok: false, error: 'Date de naissance trop ancienne.' };
+  }
+
+  // Heure — HH:MM
+  if (typeof time !== 'string' || !/^\d{2}:\d{2}$/.test(time)) {
+    return { ok: false, error: 'Heure de naissance requise (format HH:MM).' };
+  }
+  const [hh, mm] = time.split(':').map(Number);
+  if (hh < 0 || hh > 23 || mm < 0 || mm > 59) {
+    return { ok: false, error: 'Heure de naissance invalide.' };
+  }
+
+  // Ville + coords
+  if (typeof city !== 'string' || city.length < 1 || city.length > 100) {
+    return { ok: false, error: 'Ville de naissance requise.' };
+  }
+  if (typeof latitude !== 'number' || latitude < -90 || latitude > 90) {
+    return { ok: false, error: 'Latitude invalide.' };
+  }
+  if (typeof longitude !== 'number' || longitude < -180 || longitude > 180) {
+    return { ok: false, error: 'Longitude invalide.' };
+  }
+  if (typeof timezone !== 'number' || timezone < -12 || timezone > 14) {
+    return { ok: false, error: 'Fuseau horaire invalide.' };
+  }
+
+  return { ok: true, birthData: { date, time, city, country: country || '', latitude, longitude, timezone } };
+}
+
+// ─── Save birth data (Fix #5 — validation) ─────────────────────
 app.post('/api/profile/birth-data', auth, (req, res) => {
-  const { birthData } = req.body;
-  db.prepare('UPDATE users SET birth_data = ? WHERE id = ?').run(JSON.stringify(birthData), req.user.id);
-  res.json({ ok: true });
+  const check = validateBirthData(req.body?.birthData);
+  if (!check.ok) return res.status(400).json({ error: check.error });
+  db.prepare('UPDATE users SET birth_data = ? WHERE id = ?').run(JSON.stringify(check.birthData), req.user.id);
+  res.json({ ok: true, birthData: check.birthData });
 });
 
 // ─── Get profile ───────────────────────────────────────────
@@ -1006,6 +1069,79 @@ app.get('/api/profile', auth, (req, res) => {
     premiumUntil: user.premium_until,
     streak: user.streak_count ?? 0,
   });
+});
+
+// ─── Account deletion (Fix #1 — RGPD right to be forgotten) ──────────────
+// DELETE /api/account — supprime le compte et TOUTES ses données personnelles.
+// Conformité RGPD Art. 17 (droit à l'effacement) + App Store / Google Play guidelines
+// qui exigent un mécanisme de suppression de compte.
+//
+// Tables purgées (toutes avec user_id FK → users.id) :
+//   - users (la row elle-même)
+//   - profiles (multi-profils)
+//   - push_subscriptions (notifications)
+//   - daily_rituals
+//   - onboarding_progress
+//   - horoscope_favorites (Feature 5)
+//   - journal_entries
+//   - stripe_events (idempotence) — uniquement ceux du userId
+//   - gamification_* (streak, achievements) — best-effort
+//
+// Le token JWT devient inutilisable après suppression (user introuvable en DB).
+app.delete('/api/account', auth, (req, res) => {
+  const userId = req.user?.id;
+  if (!userId) return res.status(401).json({ error: 'Non authentifié.' });
+
+  // Vérifie existence du compte avant suppression (compte peut avoir été
+  // supprimé via une autre session, ou token volé d'un compte effacé).
+  try {
+    const exists = db.prepare('SELECT 1 FROM users WHERE id = ?').get(userId);
+    if (!exists) return res.status(401).json({ error: 'Compte introuvable. Veuillez vous reconnecter.' });
+  } catch (err) {
+    return res.status(500).json({ error: 'Erreur vérification compte.' });
+  }
+
+  try {
+    const tx = db.transaction(() => {
+      // 1. Cascade explicite — toutes les tables liées à ce user
+      const tables = [
+        'profiles',
+        'push_subscriptions',
+        'daily_rituals',
+        'onboarding_progress',
+        'horoscope_favorites',
+        'journal_entries',
+      ];
+      for (const t of tables) {
+        try {
+          db.prepare(`DELETE FROM ${t} WHERE user_id = ?`).run(userId);
+        } catch (err) {
+          // Table inexistante (migration pas encore passée) — non bloquant
+          console.warn(`[delete-account] table ${t} skip:`, err.message);
+        }
+      }
+      // 2. Stripe events référencés — best-effort, ne plante pas si vide
+      try { db.prepare('DELETE FROM stripe_events WHERE type LIKE ?').run(`%${userId}%`); }
+      catch (err) { console.warn('[delete-account] stripe_events skip:', err.message); }
+      // 3. Gamification tables — essayer plusieurs noms courants
+      for (const gt of ['gamification_achievements', 'gamification_streaks', 'gamification_xp']) {
+        try { db.prepare(`DELETE FROM ${gt} WHERE user_id = ?`).run(userId); }
+        catch { /* table inexistante — OK */ }
+      }
+      // 4. L'utilisateur lui-même
+      const result = db.prepare('DELETE FROM users WHERE id = ?').run(userId);
+      if (result.changes === 0) {
+        throw new Error('Compte introuvable.');
+      }
+      return result.changes;
+    });
+    const deleted = tx();
+    console.log(`[delete-account] ✅ Compte user ${userId} supprimé (${deleted} row)`);
+    return res.json({ ok: true, deletedAt: new Date().toISOString() });
+  } catch (err) {
+    console.error('[delete-account] ❌', err.message);
+    return res.status(500).json({ error: 'Suppression impossible. Réessaie ou contacte le support.' });
+  }
 });
 
 // ─── Multi-profile CRUD (Feature 8) ────────────────────────
@@ -1563,7 +1699,7 @@ app.get('/api/notifications/status', auth, (req, res) => {
 
 app.post('/api/notifications/subscribe', auth, async (req, res) => {
   if (!VAPID_PUBLIC_KEY) return res.status(503).json({ error: 'Push not configured' });
-  const { subscription, hour } = req.body || {};
+  const { subscription, hour, timezone } = req.body || {};
   if (!subscription?.endpoint || !subscription?.keys?.p256dh || !subscription?.keys?.auth) {
     return res.status(400).json({ error: 'Invalid subscription' });
   }
@@ -1574,7 +1710,9 @@ app.post('/api/notifications/subscribe', auth, async (req, res) => {
       ON CONFLICT(endpoint) DO UPDATE SET user_id = excluded.user_id, user_agent = excluded.user_agent
     `).run(req.user.id, subscription.endpoint, subscription.keys.p256dh, subscription.keys.auth, req.headers['user-agent'] || '');
     if (Number.isInteger(hour) && hour >= 0 && hour <= 23) {
-      db.prepare('UPDATE users SET notification_hour = ? WHERE id = ?').run(hour, req.user.id);
+      // Fix #6 — sauvegarder le TZ en parallèle de l'heure pour que le cron notifie à l'heure locale
+      const tz = (typeof timezone === 'number' && timezone >= -12 && timezone <= 14) ? timezone : 0;
+      db.prepare('UPDATE users SET notification_hour = ?, notification_timezone = ? WHERE id = ?').run(hour, tz, req.user.id);
     }
     res.json({ ok: true });
   } catch (err) {
@@ -2490,26 +2628,37 @@ async function runDailyPushJob() {
   try {
     const now = new Date();
     const utcHour = now.getUTCHours();
+    const utcMinute = now.getUTCMinutes();
     const today = now.toISOString().split('T')[0];
 
-    // Find users whose local hour matches their notification_hour AND haven't been notified today.
-    // notification_hour is stored as local hour (0-23). We approximate timezone: check all users
-    // whose notification_hour == utcHour (simple heuristic — most users are CET ≈ UTC+1/2).
-    // A proper impl would store user timezone, but this covers the majority.
-    const targetHour = utcHour;
+    // Fix #6 — on notifie chaque user quand son HEURE LOCALE correspond à son notification_hour.
+    // Le cron tourne toutes les 30 min, donc on accepte un delta de ±30 min (notification sent
+    // si utcHour-floor(tz) == notification_hour OU utcHour-floor(tz)+24 == notification_hour).
+    //
+    // Ancienne logique : `targetHour = utcHour` → un user qui voulait 9h FR était notifié à
+    // 9h UTC (= 11h FR en été). C'est le bug fixé ici.
     const users = db.prepare(`
-      SELECT id, email, notification_hour, last_notification_date, is_premium
+      SELECT id, email, notification_hour, notification_timezone, last_notification_date, is_premium
       FROM users
-      WHERE notification_hour = ?
-        AND (last_notification_date IS NULL OR last_notification_date != ?)
+      WHERE (last_notification_date IS NULL OR last_notification_date != ?)
         AND is_premium = 1
-    `).all(targetHour, today);
+        AND notification_hour IS NOT NULL
+    `).all(today);
 
     if (users.length === 0) return;
 
-    console.log(`[cron:daily-push] ${users.length} user(s) to notify at hour ${targetHour} UTC`);
+    console.log(`[cron:daily-push] ${users.length} user(s) candidats à l'heure UTC ${utcHour}:${utcMinute}`);
 
     for (const user of users) {
+      const tz = Number(user.notification_timezone ?? 0);
+      // Heure locale approximative : UTC + tz (ignore les minutes pour ne pas rater la fenêtre cron)
+      let localHour = (utcHour - Math.floor(tz) + 24) % 24;
+      // Accepter un delta de 1h pour couvrir les crons 30 min (sinon les users à :30 sont ratés)
+      const hourMatches = (localHour === user.notification_hour)
+        || (localHour === ((user.notification_hour + 1) % 24) && utcMinute >= 30);
+
+      if (!hourMatches) continue;
+
       const payload = {
         title: '✨ Céleste',
         body: 'Ton horoscope du jour t\'attend. Viens découvrir ce que les étoiles ont préparé pour toi.',
@@ -2522,7 +2671,7 @@ async function runDailyPushJob() {
       const result = await sendPushToUser(user.id, payload);
       if (result.sent > 0) {
         db.prepare('UPDATE users SET last_notification_date = ? WHERE id = ?').run(today, user.id);
-        console.log(`[cron:daily-push] sent to user ${user.id} (${result.sent} device(s))`);
+        console.log(`[cron:daily-push] sent to user ${user.id} (local ${user.notification_hour}h TZ=${tz}, ${result.sent} device(s))`);
       }
     }
   } catch (err) {

@@ -279,6 +279,30 @@ export function App() {
     setScreen(s);
   };
 
+  // Fix #3 — Listener postMessage du Service Worker.
+  // Quand l'user clique une notification push (sw.js envoie
+  // { type: 'NAVIGATE', screen }), on dispatch vers l'écran demandé.
+  // Whitelist stricte des écrans connus pour éviter du state poisoning.
+  useEffect(() => {
+    if (!('serviceWorker' in navigator)) return;
+    const VALID: ReadonlyArray<Screen> = [
+      'landing', 'auth', 'onboarding', 'home', 'chart', 'horoscope',
+      'compatibility', 'journal', 'explorer', 'paywall', 'settings',
+    ];
+    const handler = (event: MessageEvent) => {
+      const data = event.data;
+      if (!data || typeof data !== 'object') return;
+      if (data.type !== 'NAVIGATE') return;
+      const target = data.screen;
+      if (typeof target !== 'string' || !VALID.includes(target as Screen)) return;
+      // Si l'user n'est pas auth, envoyer vers landing ou auth plutôt que l'écran direct
+      if (!isAuthed && target !== 'landing' && target !== 'auth') return;
+      handleNavigate(target as Screen);
+    };
+    navigator.serviceWorker.addEventListener('message', handler);
+    return () => navigator.serviceWorker.removeEventListener('message', handler);
+  }, [isAuthed]); // eslint-disable-line react-hooks/exhaustive-deps
+
   // ─── Splash while verifying token ───
   if (booting) {
     return <Splash stuckHint={bootStuck ? "Connexion lente… on affiche quand même votre profil (mis en cache local)." : undefined} />;

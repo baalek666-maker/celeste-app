@@ -16,7 +16,7 @@ export default function LunarNodes() {
 
   useEffect(() => {
     api.getLunarNodes()
-      .then(d => setData(d))
+      .then(d => setData(d as typeof data))
       .catch(e => setErr(e.message))
       .finally(() => setLoading(false));
   }, []);

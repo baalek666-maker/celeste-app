@@ -32,22 +32,55 @@ function ManageSubscriptionButton() {
     }
   };
 
-  // Only render for premium users
-  if (!status || !status.isPremium) return null;
+  // Bou toujours offrir un chemin : les stores officiels sont TOUJOURS
+  // disponibles pour annuler un abonnement, même sans notre Stripe portal.
+  const openAppStore = () => {
+    const userAgent = navigator.userAgent.toLowerCase();
+    if (/iphone|ipad|ipod/.test(userAgent)) {
+      window.location.href = 'itms-apps://apps.apple.com/account/subscriptions';
+    } else if (/android/.test(userAgent)) {
+      window.location.href = 'https://play.google.com/store/account/subscriptions';
+    } else {
+      toast.info('Ouvre l\'App Store ou Google Play pour gérer ton abonnement.');
+    }
+  };
 
-  return (
-    <button
-      onClick={handleManage}
-      disabled={loading}
-      className="w-full glass rounded-2xl p-4 flex items-center justify-between text-left hover:border-gold-500/30 border border-transparent transition-all disabled:opacity-50"
-    >
-      <div>
-        <span className="text-gold-400 text-sm font-medium">💳 Gérer mon abonnement{status.plan === 'lifetime' ? ' (à vie)' : ''}</span>
-        <p className="text-night-500 text-xs mt-0.5">Modifier, suspendre ou annuler</p>
-      </div>
-      <span className="text-gold-400">{loading ? '⏳' : '→'}</span>
-    </button>
-  );
+  // Bouton premium : Stripe Portal (annulation, changement carte, factures)
+  if (status && status.isPremium) {
+    return (
+      <button
+        onClick={handleManage}
+        disabled={loading}
+        className="w-full glass rounded-2xl p-4 flex items-center justify-between text-left hover:border-gold-500/30 border border-transparent transition-all disabled:opacity-50"
+      >
+        <div>
+          <span className="text-gold-400 text-sm font-medium">💳 Gérer mon abonnement{status.plan === 'lifetime' ? ' (à vie)' : ''}</span>
+          <p className="text-night-500 text-xs mt-0.5">Annuler, changer de carte, voir les factures</p>
+        </div>
+        <span className="text-gold-400">{loading ? '⏳' : '→'}</span>
+      </button>
+    );
+  }
+
+  // Pas premium : donne accès direct aux abonnements du store.
+  // Fix #7 — Apple/Google peuvent demander à tester le chemin d'annulation
+  // même sans souscription active.
+  if (status && !status.isPremium) {
+    return (
+      <button
+        onClick={openAppStore}
+        className="w-full glass rounded-2xl p-4 flex items-center justify-between text-left hover:border-night-600 border border-transparent transition-all"
+      >
+        <div>
+          <span className="text-night-200 text-sm">📱 Mes abonnements (App Store / Google Play)</span>
+          <p className="text-night-500 text-xs mt-0.5">Annuler ou modifier un abonnement existant</p>
+        </div>
+        <span className="text-night-400">→</span>
+      </button>
+    );
+  }
+
+  return null;
 }
 
 // eslint-disable-next-line @typescript-eslint/ban-ts-comment
@@ -171,12 +204,29 @@ export function Settings({ user, onUpdate }: { user: User; onUpdate: (u: User) =
   const [editing, setEditing] = useState(false);
   const [showFavorites, setShowFavorites] = useState(false);
   const [showProfiles, setShowProfiles] = useState(false);
+  const [showDeleteAccount, setShowDeleteAccount] = useState(false);
+  const [deleting, setDeleting] = useState(false);
 
   const handleLogout = () => {
     const u = logout();
     onUpdate(u);
     toast.info('À bientôt ✨');
     window.location.reload();
+  };
+
+  // ─── RGPD Art. 17 — suppression définitive du compte (Fix #1) ───────
+  const handleDeleteAccount = async () => {
+    setDeleting(true);
+    try {
+      await api.deleteAccount();
+      const u = logout();
+      onUpdate(u);
+      toast.success('Compte supprimé. À bientôt ✨');
+      window.location.reload();
+    } catch (err: any) {
+      toast.error(err?.message || 'Suppression impossible — réessaie ou contacte le support.');
+      setDeleting(false);
+    }
   };
 
   if (editing && user.birthData) {
@@ -201,10 +251,43 @@ export function Settings({ user, onUpdate }: { user: User; onUpdate: (u: User) =
         <div className="glass rounded-2xl p-5 mb-4">
           <h2 className="text-night-100 font-semibold mb-2">Confidentialité (RGPD)</h2>
           <p className="text-night-400 text-sm leading-relaxed">
-            Vos données de naissance (date, heure, lieu) sont stockées localement sur votre appareil.
-            Elles ne sont jamais transmises à des tiers ni utilisées à des fins publicitaires.
-            Vous pouvez les supprimer à tout moment en vous déconnectant.
+            Vos données de naissance (date, heure, lieu) sont stockées localement sur votre appareil
+            et synchronisées sur nos serveurs (chiffrés en transit et au repos) pour vous permettre
+            d'y accéder depuis n'importe quel appareil connecté à votre compte. Elles ne sont jamais
+            transmises à des tiers ni utilisées à des fins publicitaires.
           </p>
+          <p className="text-night-400 text-sm leading-relaxed mt-2">
+            Conformément au RGPD (articles 15, 16, 17 et 21), vous pouvez à tout moment :
+          </p>
+          <ul className="text-night-400 text-sm leading-relaxed mt-1 ml-4 list-disc">
+            <li>Accéder à vos données (Profil → Modifier mes données de naissance)</li>
+            <li>Les rectifier (idem)</li>
+            <li>Les supprimer définitivement (bouton « Supprimer mon compte » ci-dessous)</li>
+            <li>Retirer votre consentement aux notifications push</li>
+          </ul>
+        </div>
+
+        <div className="glass rounded-2xl p-5 mb-4">
+          <h2 className="text-night-100 font-semibold mb-2">Documents légaux</h2>
+          <p className="text-night-400 text-sm leading-relaxed mb-3">
+            Consultez nos documents complets :
+          </p>
+          <a
+            href="/legal/privacy.html"
+            target="_blank"
+            rel="noopener noreferrer"
+            className="block w-full py-3 px-4 rounded-xl glass border border-night-700 text-night-100 text-sm hover:border-cosmic-500/50 transition-all mb-2"
+          >
+            🔒 Politique de confidentialité →
+          </a>
+          <a
+            href="/legal/terms.html"
+            target="_blank"
+            rel="noopener noreferrer"
+            className="block w-full py-3 px-4 rounded-xl glass border border-night-700 text-night-100 text-sm hover:border-cosmic-500/50 transition-all"
+          >
+            📜 Conditions générales d'utilisation (CGU) →
+          </a>
         </div>
 
         <div className="glass rounded-2xl p-5 mb-4">
@@ -297,6 +380,46 @@ export function Settings({ user, onUpdate }: { user: User; onUpdate: (u: User) =
           <span className="text-red-400 text-sm">Se déconnecter / Réinitialiser</span>
           <span className="text-red-400">→</span>
         </button>
+
+        {/* RGPD — suppression définitive du compte (Fix #1) */}
+        {!showDeleteAccount ? (
+          <button
+            onClick={() => setShowDeleteAccount(true)}
+            className="w-full glass rounded-2xl p-4 flex items-center justify-between text-left border border-transparent hover:border-red-500/30 transition-all mt-2"
+          >
+            <span className="text-red-300 text-sm">🗑️ Supprimer mon compte (RGPD)</span>
+            <span className="text-red-300">→</span>
+          </button>
+        ) : (
+          <div className="glass rounded-2xl p-5 border border-red-500/30 mt-2">
+            <p className="text-red-300 text-sm font-semibold mb-2">⚠️ Supprimer définitivement votre compte ?</p>
+            <p className="text-night-300 text-xs leading-relaxed mb-3">
+              Cette action est <strong>irréversible</strong>. Toutes vos données seront effacées :
+              profil, données de naissance, favoris, scans de compatibilité, abonnements et préférences
+              de notification. Vous devrez recréer un compte pour utiliser à nouveau Céleste.
+            </p>
+            <p className="text-night-400 text-xs mb-4">
+              Si vous avez un abonnement actif, pensez à l'annuler au préalable via le bouton
+              « Gérer mon abonnement » ci-dessus.
+            </p>
+            <div className="flex gap-2">
+              <button
+                onClick={() => setShowDeleteAccount(false)}
+                disabled={deleting}
+                className="flex-1 py-2.5 rounded-xl bg-night-800 text-night-200 text-sm hover:bg-night-700 disabled:opacity-50"
+              >
+                Annuler
+              </button>
+              <button
+                onClick={handleDeleteAccount}
+                disabled={deleting}
+                className="flex-1 py-2.5 rounded-xl bg-red-600 hover:bg-red-500 text-white text-sm font-semibold disabled:opacity-50"
+              >
+                {deleting ? 'Suppression…' : 'Confirmer la suppression'}
+              </button>
+            </div>
+          </div>
+        )}
       </div>
 
       <p className="text-night-600 text-xs text-center mt-8">Céleste · v{pkg.version}</p>

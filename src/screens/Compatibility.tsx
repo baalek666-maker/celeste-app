@@ -94,8 +94,15 @@ export function Compatibility({ user }: { user: User }) {
 
   const handleShare = async () => {
     if (!result) return;
-    const ctxEmoji = { romantic: '💞', family: '👨‍👩‍👧', friend: '🤝', colleague: '💼' }[result.context || 'romantic'];
-    const ctxLabel = { romantic: 'compatibilité', family: 'dynamique familiale', friend: 'amitié', colleague: 'dynamique pro' }[result.context || 'romantic'];
+  const ctxMap: Record<'romantic' | 'family' | 'friend' | 'colleague', string> = {
+    romantic: '💞', family: '👨‍👩‍👧', friend: '🤝', colleague: '💼',
+  };
+  const ctxLabelMap: Record<'romantic' | 'family' | 'friend' | 'colleague', string> = {
+    romantic: 'compatibilité', family: 'dynamique familiale', friend: 'amitié', colleague: 'dynamique pro',
+  };
+  const ctxKey = (result.context as 'romantic' | 'family' | 'friend' | 'colleague') || 'romantic';
+  const ctxEmoji = ctxMap[ctxKey];
+  const ctxLabel = ctxLabelMap[ctxKey];
     const text = `${ctxEmoji} Notre ${ctxLabel} astrale : ${result.score}% sur Céleste ! ${result.title}`;
     try {
       if (navigator.share) {

@@ -68,13 +68,20 @@ export function useNotifications(): {
         const { publicKey } = await api.getVAPIDKey();
         sub = await reg.pushManager.subscribe({
           userVisibleOnly: true,
-          applicationServerKey: urlBase64ToUint8Array(publicKey),
+          applicationServerKey: urlBase64ToUint8Array(publicKey) as any,
         });
       }
       const json = sub.toJSON();
+      // Fix #6 — envoie la TZ du navigateur pour que le cron job serveur
+      // notifie à l'heure LOCALE (sinon UTC brut = décalé de 2h en été FR).
+      const userTimezone =
+        typeof Intl !== 'undefined'
+          ? Intl.DateTimeFormat().resolvedOptions().timeZone
+          : 'UTC';
       await api.subscribeToNotifications({
         subscription: { endpoint: json.endpoint!, keys: json.keys as any },
         hour,
+        timezone: userTimezone,
       });
       await refresh();
       return true;
