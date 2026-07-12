@@ -623,6 +623,7 @@ const llmLimiter = rateLimit({
 
 // ─── Server ────────────────────────────────────────────────
 const app = express();
+app.set('trust proxy', 1);
 app.use(cors({ origin: true, credentials: true }));
 
 // ─── Stripe webhook (raw body AVANT express.json) ──────────
