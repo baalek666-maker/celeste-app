@@ -40,9 +40,13 @@ function isNetworkFailure(err: unknown): boolean {
 }
 
 // ─── HTTP helper ───────────────────────────────────
+const DEFAULT_TIMEOUT_MS = 20_000; // 20s pour endpoints classiques
+const LLM_TIMEOUT_MS = 90_000;    // 90s pour les endpoints LLM (planet interpretation, horoscope)
+
 async function apiCall<T = any>(
   path: string,
   options: RequestInit = {},
+  timeoutMs: number = DEFAULT_TIMEOUT_MS,
 ): Promise<T> {
   const token = getToken();
   const headers: Record<string, string> = {
@@ -70,13 +74,19 @@ async function apiCall<T = any>(
     return { ok: true, queued: true, offline: true } as unknown as T;
   }
 
+  // Timeout via AbortController pour ne pas bloquer l'UI sur un LLM lent
+  const controller = new AbortController();
+  const tid = setTimeout(() => controller.abort(), timeoutMs);
+
   let res: Response;
   try {
     res = await fetch(`${API_URL}${path}`, {
       ...options,
       headers,
+      signal: controller.signal,
     });
   } catch (err) {
+    clearTimeout(tid);
     // Mutation + échec réseau en cours ⇒ enqueue aussi (mode offline opportuniste)
     if (isMutation(method)) {
       let bodyParsed: unknown = undefined;
@@ -91,9 +101,13 @@ async function apiCall<T = any>(
       });
       return { ok: true, queued: true, offline: true } as unknown as T;
     }
+    if (err instanceof DOMException && err.name === 'AbortError') {
+      throw new Error(`Requête trop longue (>${Math.round(timeoutMs/1000)}s). Réessayez dans quelques secondes, le serveur calcule.`);
+    }
     if (isNetworkFailure(err)) throw err;
     throw err;
   }
+  clearTimeout(tid);
 
   if (!res.ok) {
     const err = await res.json().catch(() => ({ error: 'Network error' }));
@@ -165,7 +179,7 @@ export const api = {
       luckyColor: string;
       scansRemaining?: number | null;
       streak?: number;
-    }>('/horoscope', { method: 'POST' }),
+    }>('/horoscope', { method: 'POST' }, LLM_TIMEOUT_MS),
 
   // Daily Tarot draw (cached per day, 1 card per day)
   getDailyTarot: () =>
@@ -288,7 +302,7 @@ export const api = {
     temperament: string;
     characterology: string;
     keywords: string[];
-  }>(`/natal-chart/planet/${planet}`),
+  }>(`/natal-chart/planet/${planet}`, {}, LLM_TIMEOUT_MS),
 
   // Daily Aspects (Feature 9)
   getDailyAspects: () => apiCall<{

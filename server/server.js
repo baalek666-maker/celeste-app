@@ -622,6 +622,21 @@ db.exec(`CREATE TABLE IF NOT EXISTS planet_interpretations (
   PRIMARY KEY(user_id, planet)
 )`);
 
+// Global shared templates — generated ONCE, reused for ALL users
+// (planet, sign) → interpretation. Pre-populated by bootstrapTemplates().
+db.exec(`CREATE TABLE IF NOT EXISTS interpretation_templates (
+  planet TEXT NOT NULL,
+  sign TEXT NOT NULL,
+  degree INTEGER NOT NULL,
+  language TEXT NOT NULL DEFAULT 'fr',
+  general TEXT NOT NULL,
+  in_sign TEXT NOT NULL,
+  degree_symbolic TEXT NOT NULL,
+  keywords TEXT NOT NULL,
+  updated_at INTEGER DEFAULT (strftime('%s','now')),
+  PRIMARY KEY(planet, sign, degree, language)
+)`);
+
 const PLANET_FR = {
   sun: 'Soleil', moon: 'Lune', mercury: 'Mercure', venus: 'Vénus',
   mars: 'Mars', jupiter: 'Jupiter', saturn: 'Saturne',
@@ -655,7 +670,6 @@ function findHouse(longitude, houses) {
   }
   return 1;
 }
-
 async function generatePlanetInterpretation(planet, natal) {
   const planetData = natal[planet];
   if (!planetData) throw new Error(`Planet ${planet} not found`);
@@ -684,7 +698,37 @@ async function generatePlanetInterpretation(planet, natal) {
     };
   });
 
-  // LLM generation
+  const metadata = {
+    planet, planetName, symbol, sign: signName, element,
+    degree: planetData.degree,
+    degreeStr: `${deg}°${String(min).padStart(2,'0')}'`,
+    retrograde: !!planetData.retrograde,
+    house: houseNum,
+    aspects,
+  };
+
+  // ── Tier 1: GLOBAL TEMPLATE CACHE (shared across all users) ──
+  // Pre-populated by bootstrapTemplates() and lazily filled on first hit.
+  const degBucket = Math.floor(deg / 10); // 0, 1, 2 (décan)
+  const tmpl = db.prepare(
+    'SELECT general, in_sign, degree_symbolic, keywords FROM interpretation_templates WHERE planet = ? AND sign = ? AND degree = ? AND language = ?'
+  ).get(planet, signName, degBucket, 'fr');
+
+  if (tmpl) {
+    console.log(`[planet-interp] template hit (planet=${planet}, sign=${signName}, decan=${degBucket})`);
+    return {
+      ...metadata,
+      general: tmpl.general,
+      inSign: tmpl.in_sign,
+      degree: tmpl.degree_symbolic,
+      keywords: JSON.parse(tmpl.keywords),
+      source: 'template-cache',
+      cacheHit: true,
+    };
+  }
+
+  // ── Tier 2: LLM generation (lazy: fills the template cache too) ──
+  console.log(`[planet-interp] LLM fallback (planet=${planet}, sign=${signName}, decan=${degBucket})`);
   const systemPrompt = `Tu es un astrologue expert francophone de très haut niveau, dans le style d'Astrotheme et de la tradition astrologique française. Tu écris des interprétations riches, nuancées, profondes, avec un vocabulaire astrologique précis. Tu écris en français.`;
 
   const userPrompt = `Génère une interprétation détaillée pour ${planetName} (${symbol}) dans ce thème natal.
@@ -722,18 +766,29 @@ Réponds UNIQUEMENT en JSON valide:
     parsed = JSON.parse(jsonMatch[0]);
   }
 
+  // Persist to GLOBAL template cache (next user = 0 LLM calls)
+  try {
+    db.prepare(`INSERT OR REPLACE INTO interpretation_templates
+      (planet, sign, degree, language, general, in_sign, degree_symbolic, keywords, updated_at)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, strftime('%s','now'))`).run(
+      planet, signName, degBucket, 'fr',
+      parsed.general || '',
+      parsed.inSign || '',
+      parsed.degree || '',
+      JSON.stringify(parsed.keywords || []),
+    );
+  } catch (e) {
+    console.warn('[planet-interp] template write failed:', e.message);
+  }
+
   return {
-    planet,
-    planetName,
-    symbol,
-    sign: signName,
-    element,
-    degree: planetData.degree,
-    degreeStr: `${deg}°${String(min).padStart(2,'0')}'`,
-    retrograde: !!planetData.retrograde,
-    house: houseNum,
-    aspects,
-    ...parsed,
+    ...metadata,
+    general: parsed.general,
+    inSign: parsed.inSign,
+    degree: parsed.degree,
+    keywords: parsed.keywords,
+    source: 'llm',
+    cacheHit: false,
   };
 }
 
