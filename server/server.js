@@ -1396,17 +1396,24 @@ Réponds UNIQUEMENT avec le JSON.`;
   } catch (err) {
     console.error('Tarot error:', err.message);
     // Fallback: return static card data so the app never crashes
-    const fallbackCard = TAROT_DECK[cardId];
+    const fbCardId = (() => {
+      const u = db.prepare('SELECT birth_data FROM users WHERE id = ?').get(req.user.id);
+      const seed = u?.birth_data ? stringHash(u.birth_data + today) : Math.floor(Math.random() * 22);
+      return seed % 22;
+    })();
+    const fbIsReversed = fbCardId % 3 === 0;
+    const fallbackCard = TAROT_DECK[fbCardId];
+    const fbSun = typeof sunSign !== 'undefined' ? sunSign : 'inconnu';
     const fallbackResult = {
       cardName: fallbackCard.name,
       cardId: fallbackCard.id,
       roman: fallbackCard.roman,
       emoji: fallbackCard.emoji,
-      isReversed,
+      isReversed: fbIsReversed,
       archetype: fallbackCard.archetype,
-      message: isReversed ? fallbackCard.reversed : fallbackCard.upright,
+      message: fbIsReversed ? fallbackCard.reversed : fallbackCard.upright,
       question: 'Que vous dit cette carte aujourd\'hui ?',
-      reading: `${fallbackCard.archetype}. ${isReversed ? fallbackCard.reversed : fallbackCard.upright} En tant que ${sunSign}, cette énergie résonne avec votre chemin solaire. Les configurations planétaires du moment amplifient cette influence. Méditez sur les symboles de cette carte et laissez sa sagesse imprégner votre journée.`,
+      reading: `${fallbackCard.archetype}. ${fbIsReversed ? fallbackCard.reversed : fallbackCard.upright} En tant que ${fbSun}, cette énergie résonne avec votre chemin solaire. Les configurations planétaires du moment amplifient cette influence : laissez-la guider vos choix de la journée.`,
     };
     db.prepare('INSERT OR REPLACE INTO horoscope_cache (user_id, date, content) VALUES (?, ?, ?)')
       .run(req.user.id, `tarot:${today}`, JSON.stringify(fallbackResult));
