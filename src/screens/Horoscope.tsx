@@ -24,6 +24,8 @@ export function Horoscope({ user }: { user: User }) {
   const [refreshing, setRefreshing] = useState(false);
   const [streak, setStreak] = useState<number>(user.streak ?? 0);
   const [loadingMsg, setLoadingMsg] = useState(LOADING_MESSAGES[0]);
+  const [isFallback, setIsFallback] = useState(false);
+  const [isOfflineCache, setIsOfflineCache] = useState(false);
   // Week strip state (Feature 2)
   const [week, setWeek] = useState<any[] | null>(null);
   const [loadingWeek, setLoadingWeek] = useState(false);
@@ -35,17 +37,47 @@ export function Horoscope({ user }: { user: User }) {
   // 30s — laisse le temps au LLM + retry backoff (3 essais × ~7s max)
   const HOROSCOPE_TIMEOUT_MS = 30000;
 
+  // P9: Get last cached horoscope of ANY date (offline fallback)
+  const getLastCachedHoroscope = (): { entry: any; date: string } | null => {
+    try {
+      const raw = localStorage.getItem('celeste_horo_cache');
+      if (!raw) return null;
+      const cache = JSON.parse(raw);
+      if (!cache || typeof cache !== 'object') return null;
+      const dates = Object.keys(cache).sort().reverse(); // most recent first
+      for (const d of dates) {
+        if (cache[d]) return { entry: cache[d], date: d };
+      }
+    } catch { /* ignore */ }
+    return null;
+  };
+
+  const buildEntry = (h: any) => ({
+    date: today,
+    general: h.general,
+    love: h.amour,
+    career: h.carriere,
+    energy: h.energie,
+    mood: h.mood,
+    luckyNumber: h.luckyNumber,
+    luckyColor: h.luckyColor,
+    isFallback: !!h.isFallback,
+  });
+
   const fetchHoroscope = (force: boolean) => {
     if (!force) {
       const cached = getCachedHoroscope(today);
       if (cached) {
         setHoroscope(cached);
+        setIsFallback(false);
+        setIsOfflineCache(false);
         setLoading(false);
         return;
       }
     }
     setLoading(true);
     setError('');
+    setIsOfflineCache(false);
 
     // Timeout guard: si le backend hang (LLM lent), on surface une erreur claire après 30s.
     const timeoutPromise = new Promise<never>((_, reject) => {
@@ -57,17 +89,9 @@ export function Horoscope({ user }: { user: User }) {
 
     Promise.race([api.getHoroscope(), timeoutPromise])
       .then(h => {
-        const entry: any = {
-          date: today,
-          general: h.general,
-          love: h.amour,
-          career: h.carriere,
-          energy: h.energie,
-          mood: h.mood,
-          luckyNumber: h.luckyNumber,
-          luckyColor: h.luckyColor,
-        };
+        const entry = buildEntry(h);
         setHoroscope(entry);
+        setIsFallback(!!h.isFallback);
         cacheHoroscope(today, entry);
         setLoading(false);
       })
@@ -78,6 +102,16 @@ export function Horoscope({ user }: { user: User }) {
           msg = "Les étoiles sont momentanément surchargées. Réessaie dans 1 minute ✦";
         } else if (raw.includes('network') || raw.includes('failed to fetch') || raw.includes('load failed')) {
           msg = 'Connexion aux étoiles interrompue. Vérifie ton réseau.';
+        }
+        // P9: Offline fallback — try to show last cached horoscope
+        const lastCached = getLastCachedHoroscope();
+        if (lastCached) {
+          console.warn('[horoscope] Network failed, showing offline cache from', lastCached.date);
+          setHoroscope(lastCached.entry);
+          setIsOfflineCache(true);
+          setIsFallback(false);
+          setLoading(false);
+          return;
         }
         setError(msg);
         setLoading(false);
@@ -121,17 +155,10 @@ export function Horoscope({ user }: { user: User }) {
     // Bypass cache
     api.getHoroscope()
       .then(h => {
-        const entry: any = {
-          date: today,
-          general: h.general,
-          love: h.amour,
-          career: h.carriere,
-          energy: h.energie,
-          mood: h.mood,
-          luckyNumber: h.luckyNumber,
-          luckyColor: h.luckyColor,
-        };
+        const entry = buildEntry(h);
         setHoroscope(entry);
+        setIsFallback(!!h.isFallback);
+        setIsOfflineCache(false);
         if (typeof h.streak === 'number') setStreak(h.streak);
         cacheHoroscope(today, entry);
         toast.success('Horoscope rafraîchi');
@@ -228,6 +255,23 @@ export function Horoscope({ user }: { user: User }) {
           {streak >= 7 && (
             <span className="text-xs text-gold-300 font-bold tracking-wider">CONSTELLATION</span>
           )}
+        </div>
+      )}
+
+      {/* P9 — Offline cache badge */}
+      {isOfflineCache && (
+        <div className="mb-4 px-4 py-2.5 rounded-2xl border border-amber-500/40 bg-amber-500/10 flex items-center gap-2 animate-fade-in">
+          <span className="text-base">📡</span>
+          <p className="text-amber-200 text-xs">
+            Hors ligne — dernier horoscope consulté. Reconnecte-toi pour celui d'aujourd'hui.
+          </p>
+        </div>
+      )}
+
+      {/* P3 — Fallback LLM badge (discret) */}
+      {isFallback && !isOfflineCache && (
+        <div className="mb-4 px-3 py-1.5 rounded-xl border border-night-600/50 bg-night-800/40 inline-flex items-center gap-1.5 animate-fade-in">
+          <span className="text-[10px] text-night-400">✦ Contenu de référence — cosmique simplifié</span>
         </div>
       )}
 

@@ -85,6 +85,18 @@ db.exec(`
     PRIMARY KEY (sun_sign, date)
   );
 
+  -- P2: Personal cache keyed by (sun, moon, rising, date) for true personalization
+  CREATE TABLE IF NOT EXISTS horoscope_personal_daily (
+    sun_sign TEXT NOT NULL,
+    moon_sign TEXT NOT NULL,
+    rising_sign TEXT NOT NULL,
+    date TEXT NOT NULL,
+    transits TEXT NOT NULL,
+    content TEXT NOT NULL,
+    generated_at INTEGER DEFAULT (strftime('%s','now')),
+    PRIMARY KEY (sun_sign, moon_sign, rising_sign, date)
+  );
+
   CREATE TABLE IF NOT EXISTS stripe_events (
     id TEXT PRIMARY KEY,
     type TEXT NOT NULL,
@@ -1099,9 +1111,10 @@ app.get('/api/profiles/:id', auth, (req, res) => {
   });
 });
 
-// ─── Horoscope (LLM-powered, GLOBAL cache per (sun_sign, date)) ───────
-// Architecture: 12 appels LLM/jour max (un par signe), partagés par tous les users.
-// Coût marginal = 0 pour 100% des hits après le premier par signe/jour.
+// ─── Horoscope (LLM-powered, PERSONAL cache per sun+moon+rising+date) ───────
+// Architecture P2: cache personnalisé (sun, moon, rising, date) ≈ 1728 combos max.
+// Le LLM reçoit TOUTES les positions natales → le cache doit refléter cette personnalité.
+// Fallback: si pas de cache perso, on essaie le cache global (sun, date) puis LLM.
 app.post('/api/horoscope', auth, async (req, res) => {
   try {
     const user = db.prepare('SELECT * FROM users WHERE id = ?').get(req.user.id);
@@ -1112,7 +1125,7 @@ app.post('/api/horoscope', auth, async (req, res) => {
 
     const today = new Date().toISOString().split('T')[0];
 
-    // Per-user cache hit (legacy)
+    // Per-user cache hit (legacy horoscope_cache table)
     const userCached = db.prepare('SELECT content FROM horoscope_cache WHERE user_id = ? AND date = ?').get(req.user.id, today);
     if (userCached) {
       const streak = updateStreak(req.user.id, today);
@@ -1123,30 +1136,45 @@ app.post('/api/horoscope', auth, async (req, res) => {
     const natalPositions = getNatalPositions(birthData);
     const transits = getTransits(new Date());
     const sunSign = natalPositions.sun.sign;
+    const moonSign = natalPositions.moon?.sign || 'unknown';
+    const risingSign = natalPositions.ascendant?.sign || 'unknown';
     const transitsStr = JSON.stringify(transits);
 
-    // ── Tier 1: GLOBAL cache (shared across all users of same sun sign) ──
-    const globalCached = db.prepare(
-      'SELECT content FROM horoscope_global_daily WHERE sun_sign = ? AND date = ?'
-    ).get(sunSign, today);
+    // ── Tier 1: PERSONAL cache (sun + moon + rising + date) ──
+    const personalCached = db.prepare(
+      'SELECT content FROM horoscope_personal_daily WHERE sun_sign = ? AND moon_sign = ? AND rising_sign = ? AND date = ?'
+    ).get(sunSign, moonSign, risingSign, today);
 
     let horoscope;
-    if (globalCached) {
-      console.log(`[horoscope] global hit (sign=${sunSign}, date=${today})`);
-      const base = JSON.parse(globalCached.content);
+    let usedFallbackLLM = false;
+
+    if (personalCached) {
+      console.log(`[horoscope] personal hit (sun=${sunSign}, moon=${moonSign}, rising=${risingSign}, date=${today})`);
+      const base = JSON.parse(personalCached.content);
       horoscope = personalizeHoroscope(base, natalPositions, transits, birthData);
     } else {
       // ── Tier 2: LLM generation with graceful fallback ──
-      console.log(`[horoscope] LLM miss (sign=${sunSign}, date=${today})`);
+      console.log(`[horoscope] LLM miss (sun=${sunSign}, moon=${moonSign}, rising=${risingSign}, date=${today})`);
       let base;
       try {
         base = await generateHoroscope(natalPositions, transits, sunSign);
       } catch (llmErr) {
         console.warn(`[horoscope] LLM failed (${llmErr.message}), using FALLBACK for sign=${sunSign}`);
         base = { ...FALLBACK_HOROSCOPES[sunSign] || FALLBACK_HOROSCOPES.Aries, isFallback: true };
+        usedFallbackLLM = true;
       }
 
-      // Persist GLOBAL cache (one-time per sign/day)
+      // Persist PERSONAL cache (sun + moon + rising + date)
+      try {
+        db.prepare(`INSERT OR IGNORE INTO horoscope_personal_daily
+          (sun_sign, moon_sign, rising_sign, date, transits, content) VALUES (?, ?, ?, ?, ?, ?)`).run(
+          sunSign, moonSign, risingSign, today, transitsStr, JSON.stringify(base),
+        );
+      } catch (e) {
+        console.warn('[horoscope] personal cache write failed:', e.message);
+      }
+
+      // Also persist in global cache for week view / other users with same sun sign
       try {
         db.prepare(`INSERT OR IGNORE INTO horoscope_global_daily
           (sun_sign, date, transits, content) VALUES (?, ?, ?, ?)`).run(
@@ -1160,7 +1188,7 @@ app.post('/api/horoscope', auth, async (req, res) => {
     }
 
     // Free-tier gate (only when we actually generated a fresh horoscope)
-    if (!isPremium && !globalCached) {
+    if (!isPremium && !personalCached) {
       if ((user.scans_remaining ?? 0) <= 0) {
         return res.status(402).json({ error: 'Free scans exhausted', code: 'paywall_required', scansRemaining: 0 });
       }
@@ -1172,7 +1200,7 @@ app.post('/api/horoscope', auth, async (req, res) => {
       .run(req.user.id, today, JSON.stringify(horoscope));
 
     const streak = updateStreak(req.user.id, today);
-    const remaining = isPremium ? null : Math.max(0, (user.scans_remaining ?? 0) - (globalCached ? 0 : 1));
+    const remaining = isPremium ? null : Math.max(0, (user.scans_remaining ?? 0) - (personalCached ? 0 : 1));
     res.json({ ...horoscope, scansRemaining: remaining, streak });
   } catch (err) {
     console.error('Horoscope error:', err.message);
@@ -2430,6 +2458,180 @@ app.get('/api/premium/status', auth, (req, res) => {
 
 // ─── Gamification: XP, Levels, Quests, Badges, Portrait, Cosmic Events ───
 registerGamificationRoutes(app, db, auth, callLLMWithRetry);
+
+// ═══════════════════════════════════════════════════════════════════════════
+// P1 + P7: CRON SCHEDULER — Daily push notifications + Re-engagement J+3/J+7
+// Architecture sans node-cron: setInterval qui check toutes les 30 min.
+//   1. Daily horoscope push (chaque user à son notification_hour)
+//   2. Re-engagement J+3/J+7 pour users inactifs (P7)
+// ═══════════════════════════════════════════════════════════════════════════
+async function sendPushToUser(userId, payload) {
+  if (!VAPID_PUBLIC_KEY) return { sent: 0, reason: 'push not configured' };
+  const subs = db.prepare('SELECT endpoint, p256dh, auth FROM push_subscriptions WHERE user_id = ?').all(userId);
+  if (subs.length === 0) return { sent: 0, reason: 'no subscription' };
+
+  const payloadStr = JSON.stringify(payload);
+  const results = await Promise.allSettled(subs.map(s => webpush.sendNotification({
+    endpoint: s.endpoint,
+    keys: { p256dh: s.p256dh, auth: s.auth },
+  }, payloadStr)));
+
+  const sent = results.filter(r => r.status === 'fulfilled').length;
+  // Cleanup dead subs (410 Gone)
+  results.forEach((r, i) => {
+    if (r.status === 'rejected' && (r.reason?.statusCode === 404 || r.reason?.statusCode === 410)) {
+      db.prepare('DELETE FROM push_subscriptions WHERE endpoint = ?').run(subs[i].endpoint);
+    }
+  });
+  return { sent, total: subs.length };
+}
+
+async function runDailyPushJob() {
+  try {
+    const now = new Date();
+    const utcHour = now.getUTCHours();
+    const today = now.toISOString().split('T')[0];
+
+    // Find users whose local hour matches their notification_hour AND haven't been notified today.
+    // notification_hour is stored as local hour (0-23). We approximate timezone: check all users
+    // whose notification_hour == utcHour (simple heuristic — most users are CET ≈ UTC+1/2).
+    // A proper impl would store user timezone, but this covers the majority.
+    const targetHour = utcHour;
+    const users = db.prepare(`
+      SELECT id, email, notification_hour, last_notification_date, is_premium
+      FROM users
+      WHERE notification_hour = ?
+        AND (last_notification_date IS NULL OR last_notification_date != ?)
+        AND is_premium = 1
+    `).all(targetHour, today);
+
+    if (users.length === 0) return;
+
+    console.log(`[cron:daily-push] ${users.length} user(s) to notify at hour ${targetHour} UTC`);
+
+    for (const user of users) {
+      const payload = {
+        title: '✨ Céleste',
+        body: 'Ton horoscope du jour t\'attend. Viens découvrir ce que les étoiles ont préparé pour toi.',
+        icon: '/icon-192.png',
+        badge: '/badge-72.png',
+        tag: 'celeste-daily',
+        url: '/?screen=horoscope',
+        data: { type: 'daily', userId: user.id },
+      };
+      const result = await sendPushToUser(user.id, payload);
+      if (result.sent > 0) {
+        db.prepare('UPDATE users SET last_notification_date = ? WHERE id = ?').run(today, user.id);
+        console.log(`[cron:daily-push] sent to user ${user.id} (${result.sent} device(s))`);
+      }
+    }
+  } catch (err) {
+    console.error('[cron:daily-push] error:', err.message);
+  }
+}
+
+// P7: Re-engagement for inactive users (J+3 and J+7)
+async function runReengagementJob() {
+  try {
+    const now = Math.floor(Date.now() / 1000);
+    const today = new Date().toISOString().split('T')[0];
+
+    // J+3: users whose last horoscope view was ~3 days ago
+    const threeDaysAgo = now - 3 * 86400;
+    const sevenDaysAgo = now - 7 * 86400;
+
+    // Find premium users with push subscriptions who haven't checked in
+    // Using last horoscope_cache date as proxy for last activity
+    const inactiveUsers = db.prepare(`
+      SELECT DISTINCT u.id, u.email, u.last_notification_date,
+             MAX(hc.date) as last_horoscope_date
+      FROM users u
+      JOIN push_subscriptions ps ON ps.user_id = u.id
+      LEFT JOIN horoscope_cache hc ON hc.user_id = u.id
+      WHERE u.is_premium = 1
+      GROUP BY u.id
+    `).all();
+
+    let sent3 = 0, sent7 = 0;
+
+    for (const user of inactiveUsers) {
+      // Skip if already notified today (avoid spam)
+      if (user.last_notification_date === today) continue;
+
+      const lastActivityDate = user.last_horoscope_date
+        ? Math.floor(new Date(user.last_horoscope_date + 'T00:00:00Z').getTime() / 1000)
+        : null;
+
+      // If user registered but never viewed horoscope, use registration date
+      const regRow = db.prepare('SELECT created_at FROM users WHERE id = ?').get(user.id);
+      const regEpoch = regRow?.created_at || now;
+      const inactiveSince = lastActivityDate || regEpoch;
+      const daysInactive = Math.floor((now - inactiveSince) / 86400);
+
+      let payload = null;
+
+      if (daysInactive >= 7 && (!user.last_notification_date || user.last_notification_date !== today)) {
+        // J+7: stronger nudge
+        payload = {
+          title: '🌙 Les étoiles te réclament',
+          body: 'Ça fait une semaine. Le ciel a beaucoup changé — ton horoscope t\'attend.',
+          icon: '/icon-192.png',
+          badge: '/badge-72.png',
+          tag: 'celeste-reenagage-7',
+          url: '/?screen=horoscope',
+          data: { type: 'reengage-7', userId: user.id },
+        };
+        sent7++;
+      } else if (daysInactive >= 3 && daysInactive < 7) {
+        // J+3: gentle reminder
+        payload = {
+          title: '✦ Ton horoscope est prêt',
+          body: 'Tu n\'as pas consulté Céleste depuis 3 jours. Un petit coup d\'œil ?',
+          icon: '/icon-192.png',
+          badge: '/badge-72.png',
+          tag: 'celeste-reengage-3',
+          url: '/?screen=horoscope',
+          data: { type: 'reengage-3', userId: user.id },
+        };
+        sent3++;
+      }
+
+      if (payload) {
+        const result = await sendPushToUser(user.id, payload);
+        if (result.sent > 0) {
+          db.prepare('UPDATE users SET last_notification_date = ? WHERE id = ?').run(today, user.id);
+        }
+      }
+    }
+
+    if (sent3 + sent7 > 0) {
+      console.log(`[cron:reengagement] J+3: ${sent3} users, J+7: ${sent7} users notified`);
+    }
+  } catch (err) {
+    console.error('[cron:reengagement] error:', err.message);
+  }
+}
+
+// Start scheduler: check every 30 minutes
+const CRON_INTERVAL_MS = 30 * 60 * 1000;
+let cronInterval = null;
+
+function startCronScheduler() {
+  if (cronInterval) return;
+  console.log('[cron] Scheduler started (check every 30 min)');
+  // Run once at startup (after 60s delay to let server warm up)
+  setTimeout(() => {
+    runDailyPushJob();
+    runReengagementJob();
+  }, 60_000);
+  // Then every 30 min
+  cronInterval = setInterval(() => {
+    runDailyPushJob();
+    runReengagementJob();
+  }, CRON_INTERVAL_MS);
+}
+
+startCronScheduler();
 
 // ─── Serve static frontend in production ───────────────────
 app.use(express.static(join(__dirname, '..', 'dist')));

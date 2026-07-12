@@ -206,9 +206,19 @@ export function Onboarding({ onComplete }: { onComplete: (u: User) => void }) {
       <h1 className="text-4xl font-bold mb-3 text-gold-gradient">Céleste</h1>
       <p className="text-night-300 text-lg mb-2">Votre carte du ciel,</p>
       <p className="text-night-300 text-lg mb-12">votre miroir intérieur</p>
-      <p className="text-night-400 text-sm mb-12 max-w-xs">
+      <p className="text-night-400 text-sm mb-8 max-w-xs">
         Une astrologie profondément personnelle. Pas de texte générique — chaque mot est calculé à partir de vos planètes réelles.
       </p>
+      {/* P10 — Explain free tier upfront to set expectations */}
+      <div className="glass rounded-2xl px-5 py-4 mb-8 max-w-xs border border-gold-500/20">
+        <div className="flex items-center gap-2 mb-2">
+          <span className="text-lg">🎁</span>
+          <span className="text-gold-400 text-sm font-semibold">3 scans offerts</span>
+        </div>
+        <p className="text-night-400 text-xs leading-relaxed text-left">
+          Découvrez votre compatibilité amoureuse, familiale ou amicale — 3 analyses gratuites pour explorer tout le potentiel de Céleste.
+        </p>
+      </div>
       <button
         onClick={() => setStep(1)}
         className="w-full max-w-xs py-4 rounded-2xl bg-gradient-to-r from-cosmic-600 to-cosmic-700 text-white font-semibold text-lg shadow-lg shadow-cosmic-900/50 hover:shadow-cosmic-700/50 transition-all animate-glow"

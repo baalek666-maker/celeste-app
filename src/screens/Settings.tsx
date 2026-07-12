@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import type { User, BirthData } from '../types';
 import { logout, setBirthData } from '../lib/storage';
 import { ZODIAC_SIGNS } from '../data/zodiac';
@@ -9,6 +9,46 @@ import { useFavorites } from '../lib/useFavorites';
 import { ProfilesScreen } from './ProfilesScreen';
 import PremiumBadge from '../components/PremiumBadge';
 import { toast } from '../components/Toast';
+
+// ─── P6: Manage Subscription (Stripe portal) ──────────────────────────────
+// Shows a "manage subscription" button for premium users.
+// Uses /api/premium/status to detect premium, /api/billing/portal to redirect.
+function ManageSubscriptionButton() {
+  const [status, setStatus] = useState<{ isPremium: boolean; plan: string } | null>(null);
+  const [loading, setLoading] = useState(false);
+
+  useEffect(() => {
+    api.getPremiumStatus().then(s => setStatus({ isPremium: s.isPremium, plan: s.plan })).catch(() => undefined);
+  }, []);
+
+  const handleManage = async () => {
+    setLoading(true);
+    try {
+      const { url } = await api.openPortal();
+      window.location.href = url;
+    } catch (err: any) {
+      toast.error(err.message || 'Impossible d\'ouvrir le portail de gestion');
+      setLoading(false);
+    }
+  };
+
+  // Only render for premium users
+  if (!status || !status.isPremium) return null;
+
+  return (
+    <button
+      onClick={handleManage}
+      disabled={loading}
+      className="w-full glass rounded-2xl p-4 flex items-center justify-between text-left hover:border-gold-500/30 border border-transparent transition-all disabled:opacity-50"
+    >
+      <div>
+        <span className="text-gold-400 text-sm font-medium">💳 Gérer mon abonnement{status.plan === 'lifetime' ? ' (à vie)' : ''}</span>
+        <p className="text-night-500 text-xs mt-0.5">Modifier, suspendre ou annuler</p>
+      </div>
+      <span className="text-gold-400">{loading ? '⏳' : '→'}</span>
+    </button>
+  );
+}
 
 // eslint-disable-next-line @typescript-eslint/ban-ts-comment
 // @ts-ignore — Vite resolves this to the package.json version at build time.
@@ -219,6 +259,11 @@ export function Settings({ user, onUpdate }: { user: User; onUpdate: (u: User) =
         <div className="mt-4 pt-4 border-t border-night-700">
           <PremiumBadge />
         </div>
+      </div>
+
+      {/* P6 — Subscription management (Stripe portal) — visible only for premium users */}
+      <div className="mt-2">
+        <ManageSubscriptionButton />
       </div>
 
       {/* Actions */}

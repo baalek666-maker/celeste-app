@@ -179,6 +179,7 @@ export const api = {
       luckyColor: string;
       scansRemaining?: number | null;
       streak?: number;
+      isFallback?: boolean;
     }>('/horoscope', { method: 'POST' }, LLM_TIMEOUT_MS),
 
   // Daily Tarot draw (cached per day, 1 card per day)
@@ -253,7 +254,7 @@ export const api = {
   toggleFavorite: (date: string, section: string, content: string) =>
     apiCall<{ ok: boolean; action: 'added' | 'removed'; id: number }>('/favorites', {
       method: 'POST',
-      body: { date, section, content },
+      body: JSON.stringify({ date, section, content }),
     }),
   listFavorites: (limit = 100) =>
     apiCall<{ favorites: { id: number; date: string; section: string; content: string; created_at: number }[] }>(`/favorites?limit=${limit}`),
@@ -447,6 +448,19 @@ export const api = {
     benefits: string[];
   }>('/premium/status'),
 
+  // ─── Billing (Stripe) ─────────────────────────────
+  startCheckout: (plan: 'monthly' | 'annual') => apiCall<{ url: string; sessionId: string }>('/billing/create-checkout', {
+    method: 'POST',
+    body: JSON.stringify({ plan }),
+  }, 30_000),
+  openPortal: () => apiCall<{ url: string }>('/billing/portal', {
+    method: 'POST',
+    body: '{}',
+  }, 30_000),
+  verifySession: (sessionId: string) => apiCall<{ ok: true; isPremium: boolean }>(`/billing/verify-session?session_id=${encodeURIComponent(sessionId)}`, {
+    method: 'GET',
+  }),
+
   // ─── Astrological Houses (Feature B1) ─────────────────
   getHouses: () => apiCall<{
     system: string;
@@ -497,7 +511,7 @@ export const api = {
   }>('/challenge/week'),
   completeWeeklyChallenge: (note: string) => apiCall<{ ok: true }>('/challenge/week/complete', {
     method: 'POST',
-    body: { note }
+    body: JSON.stringify({ note })
   }),
 
   // ─── Moon phase (public — Home widget) ──────────────────
@@ -554,6 +568,6 @@ export const api = {
   // ─── Horoscope Feedback ───────────────────────────────────
   submitHoroscopeFeedback: (rating: number, note?: string) => apiCall<{ ok: boolean }>('/horoscope/feedback', {
     method: 'POST',
-    body: { rating, note },
+    body: JSON.stringify({ rating, note }),
   }),
 };
