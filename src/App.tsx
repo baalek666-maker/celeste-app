@@ -2,6 +2,7 @@ import { useState, useEffect } from 'react';
 import { Onboarding } from './screens/Onboarding';
 import { Auth } from './screens/Auth';
 import { Landing } from './screens/Landing';
+import CelesteLogo from './components/CelesteLogo';
 import { Home } from './screens/Home';
 import { ChartView } from './screens/ChartView';
 import { Horoscope } from './screens/Horoscope';
@@ -30,22 +31,18 @@ function isNetworkError(err: unknown): boolean {
   );
 }
 
-// ─── Splash / loading screen ───────────────────────────
+// ─── Splash / loading screen — premium with animated logo ──
 function Splash({ stuckHint }: { stuckHint?: string }) {
   return (
     <div className="cosmic-bg star-field min-h-screen text-night-100 flex items-center justify-center relative">
+      <div className="fixed inset-0 aurora-bg pointer-events-none" />
       <div className="flex flex-col items-center relative z-10 animate-fade-in-scale">
-        <div className="inline-flex items-center justify-center w-24 h-24 rounded-full glass-gold border border-gold-500/30 mb-6 animate-float-slow">
-          {/* Alchemical sigil — sun with orbiting bodies */}
-          <svg width="48" height="48" viewBox="0 0 40 40" className="animate-spin-slow">
-            <circle cx="20" cy="20" r="16" fill="none" stroke="#c5a059" strokeWidth="0.5" opacity="0.5" />
-            <circle cx="20" cy="20" r="10" fill="none" stroke="#c0c0c0" strokeWidth="0.5" opacity="0.35" />
-            <circle cx="20" cy="3" r="1.5" fill="#e2c47c" />
-            <circle cx="37" cy="20" r="1" fill="#c0c0c0" />
-            <circle cx="20" cy="20" r="2.5" fill="#d4ae5f" opacity="0.8" />
-          </svg>
+        <div className="relative mb-8 animate-breathe">
+          <div className="absolute inset-0 -m-6 rounded-full ripple-gold opacity-30" />
+          <CelesteLogo size={96} animated />
         </div>
-        <h1 className="text-3xl font-bold text-gold-gradient font-display tracking-wider mb-4">Céleste</h1>
+        <h1 className="text-3xl font-bold text-gold-gradient font-display tracking-[0.2em] mb-2">Céleste</h1>
+        <p className="text-night-500 text-[10px] uppercase tracking-[0.3em] mb-6 font-body">Astrologie Hermétique</p>
         {stuckHint ? (
           <p className="text-night-400 text-xs leading-relaxed max-w-xs text-center font-body mb-4 px-4">
             {stuckHint}

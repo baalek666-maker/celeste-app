@@ -1,102 +1,129 @@
 /**
- * Landing — public marketing page shown instead of Auth when user
- * isn't logged in but has visited the app before (or directly via
- * ?landing=1 query param). Goal: convert to onboarding/signup.
+ * Landing — premium public marketing page.
  *
  * Sections:
- *   1. Hero (sun glyph + tagline + CTA)
- *   2. Features (3 cards: horoscope, compat, journal)
- *   3. Pricing teaser (39,99/an vs 6,99/sem with savings badge)
- *   4. Footer CTA + secondary auth link
- *
- * Style: same alchemical dark theme + gold accent as rest of app.
- * Animations: animate-fade-in, animate-fade-in-up for sections.
+ *   1. Hero (animated logo + tagline + trust badge + CTA)
+ *   2. Stat strip (NASA-grade, 12 signes, temps réel)
+ *   3. Features (3 pillars with alchemical icons)
+ *   4. How it works (3 steps)
+ *   5. Testimonials (enriched with avatars)
+ *   6. Pricing teaser (annual vs weekly)
+ *   7. Footer CTA + auth link
  */
 import type { Screen } from '../App';
+import CelesteLogo from '../components/CelesteLogo';
 
 interface LandingProps {
-  onStart: () => void;       // → onboarding (then auth)
-  onLogin: () => void;       // → auth (login mode)
+  onStart: () => void;
+  onLogin: () => void;
 }
+
+const STATS = [
+  { num: 'NASA', label: 'Éphémérides officielles' },
+  { num: '12', label: 'Signes ·_ASC_Lune_Soleil' },
+  { num: '∞', label: 'Lectures personnalisées' },
+];
 
 const FEATURES = [
   {
-    symbol: '☉',
+    glyph: '☉',
     title: 'Horoscope quotidien',
-    desc: 'Lecture précise calculée par astronomy-engine, pas par template générique.',
+    desc: "Calculé par astronomy-engine depuis vos coordonnées de naissance. Pas de template — chaque lecture est unique.",
+    accent: 'gold',
   },
   {
-    symbol: '☽',
-    title: 'Compatibilité astrale',
-    desc: 'Comparez votre ciel à celui d\'un proche : synastrie Lune, Vénus, Mars.',
+    glyph: '☥',
+    title: 'Compatibilité synastrique',
+    desc: "Comparez vos Lunes, Vénus et Mars avec celles d'un proche. La chimie astrale, décryptée.",
+    accent: 'silver',
   },
   {
-    symbol: '✦',
+    glyph: '✦',
     title: 'Journal alchimique',
-    desc: 'Notez vos états et laissez l\'IA détecter vos cycles personnels.',
+    desc: "Notez vos états d'âme. L'IA détecte vos cycles émotionnels et vos Patterns planétaires.",
+    accent: 'gold',
   },
 ];
 
+const STEPS = [
+  { num: '01', title: 'Votre naissance', desc: 'Date, heure et lieu. Nous calculons votre ciel à la minute près.' },
+  { num: '02', title: 'Votre carte du ciel', desc: 'Maisons, aspects, Big 3 — un thème natal astronomiquement exact.' },
+  { num: '03', title: 'Votre quotidien', desc: 'Chaque jour, lisez les transits qui vous affectent réellement.' },
+];
+
 const TESTIMONIALS = [
-  { name: 'Camille', sign: '♏ Scorpion', text: 'Prédictions d\'une précision dérangeante.' },
-  { name: 'Julien', sign: '♑ Capricorne', text: 'L\'app la plus sobre que j\'ai testée.' },
-  { name: 'Inès', sign: '♊ Gémeaux', text: 'Le journal m\'a fait comprendre mes cycles.' },
+  { name: 'Camille', sign: '♏', role: 'Scorpion', text: "Prédictions d'une précision dérangeante. Le transit de Saturne m'a prévenue deux mois à l'avance." },
+  { name: 'Julien', sign: '♑', role: 'Capricorne', text: "L'app la plus juste que j'ai testée. Et j'en ai testé beaucoup." },
+  { name: 'Inès', sign: '♊', role: 'Gémeaux', text: "Le portrait astral IA m'a fait pleurer. C'est comme si quelqu'un me lisait de l'intérieur." },
 ];
 
 export function Landing({ onStart, onLogin }: LandingProps) {
   return (
     <div className="cosmic-bg star-field min-h-screen text-night-100 relative overflow-x-hidden">
-      {/* Top bar */}
+      {/* Aurora overlay */}
+      <div className="fixed inset-0 aurora-bg pointer-events-none" />
+
+      {/* ── Top bar ── */}
       <header className="px-6 pt-6 pb-2 flex items-center justify-between relative z-10 animate-fade-in">
-        <div className="flex items-center gap-2">
-          <svg width="22" height="22" viewBox="0 0 40 40">
-            <circle cx="20" cy="20" r="16" fill="none" stroke="#c5a059" strokeWidth="0.6" opacity="0.6" />
-            <circle cx="20" cy="20" r="10" fill="none" stroke="#c0c0c0" strokeWidth="0.5" opacity="0.4" />
-            <circle cx="20" cy="3" r="1.4" fill="#e2c47c" />
-            <circle cx="20" cy="20" r="2.5" fill="#d4ae5f" opacity="0.85" />
-          </svg>
+        <div className="flex items-center gap-2.5">
+          <CelesteLogo size={28} />
           <span className="font-display tracking-wider text-gold-gradient text-lg">Céleste</span>
         </div>
         <button
           onClick={onLogin}
-          className="text-night-300 hover:text-gold-400 text-sm transition-colors px-3 py-1.5"
+          className="text-night-300 hover:text-gold-400 text-sm transition-colors px-4 py-2 rounded-full glass border border-gold-500/15 hover:border-gold-500/30"
         >
           Connexion
         </button>
       </header>
 
-      {/* Hero */}
-      <section className="px-6 pt-10 pb-12 text-center relative z-10 animate-fade-in">
-        <div className="inline-flex items-center justify-center w-28 h-28 rounded-full glass-gold border border-gold-500/30 mb-8 animate-float-slow">
-          <svg width="64" height="64" viewBox="0 0 80 80" className="animate-spin-slow">
-            <circle cx="40" cy="40" r="34" fill="none" stroke="#c5a059" strokeWidth="0.5" opacity="0.5" />
-            <circle cx="40" cy="40" r="24" fill="none" stroke="#c0c0c0" strokeWidth="0.5" opacity="0.35" />
-            <circle cx="40" cy="6" r="2" fill="#e2c47c" />
-            <circle cx="74" cy="40" r="1.4" fill="#c0c0c0" />
-            <circle cx="40" cy="74" r="1.4" fill="#c0c0c0" />
-            <circle cx="6" cy="40" r="1.4" fill="#c0c0c0" />
-            <circle cx="40" cy="40" r="4" fill="#d4ae5f" opacity="0.85" />
-          </svg>
+      {/* ── Hero ── */}
+      <section className="px-6 pt-8 pb-10 text-center relative z-10">
+        {/* Animated logo */}
+        <div className="relative inline-block mb-8 animate-fade-in-scale">
+          <div className="absolute inset-0 -m-8 rounded-full ripple-gold opacity-40" />
+          <CelesteLogo size={120} animated />
         </div>
-        <h1 className="text-4xl md:text-5xl font-bold font-display text-gold-gradient mb-4 leading-tight">
+
+        {/* Trust badge */}
+        <div className="inline-flex items-center gap-2 px-3 py-1.5 rounded-full glass-gold border border-gold-500/20 mb-6 animate-fade-in" style={{ animationDelay: '0.15s' }}>
+          <span className="w-1.5 h-1.5 rounded-full bg-green-400 animate-pulse" />
+          <span className="text-[11px] text-night-300 uppercase tracking-wider">Éphémérides NASA · astronomy-engine v2</span>
+        </div>
+
+        <h1 className="text-4xl md:text-5xl font-bold font-display text-gold-gradient mb-4 leading-tight animate-fade-in-up" style={{ animationDelay: '0.2s' }}>
           Votre destin,<br />gravé dans les étoiles
         </h1>
-        <p className="text-night-300 text-base max-w-md mx-auto mb-10 font-body leading-relaxed">
-          Carte du ciel calculée par éphémérides NASA, lectures hermétiques,
+        <p className="text-night-300 text-base max-w-md mx-auto mb-10 font-body leading-relaxed animate-fade-in-up" style={{ animationDelay: '0.35s' }}>
+          Carte du ciel calculée par éphémérides spatiales, lectures hermétiques,
           compatibilités synastriques. L'astrologie comme elle aurait dû être.
         </p>
         <button
           onClick={onStart}
-          className="w-full max-w-xs mx-auto block py-4 rounded-2xl bg-gradient-to-r from-gold-500 to-gold-600 text-night-950 font-semibold font-display tracking-wide transition-all hover:scale-[1.02] active:scale-[0.98] shadow-lg shadow-gold-500/30"
+          className="group relative w-full max-w-xs mx-auto block py-4 rounded-2xl bg-gradient-to-r from-gold-400 to-gold-600 text-night-950 font-semibold font-display tracking-wide transition-all hover:scale-[1.02] active:scale-[0.98] shadow-lg shadow-gold-500/30 animate-fade-in-up overflow-hidden"
+          style={{ animationDelay: '0.5s' }}
         >
-          Commencer gratuitement ✨
+          <span className="relative z-10">Commencer mon thème ✨</span>
+          <span className="absolute inset-0 bg-gradient-to-r from-transparent via-white/30 to-transparent translate-x-[-100%] group-hover:translate-x-[100%] transition-transform duration-700" />
         </button>
-        <p className="text-night-500 text-xs mt-3">
+        <p className="text-night-500 text-xs mt-3 animate-fade-in" style={{ animationDelay: '0.65s' }}>
           Sans carte bancaire · 1 horoscope + 1 compatibilité offerts
         </p>
       </section>
 
-      {/* Features */}
+      {/* ── Stat strip ── */}
+      <section className="px-6 py-6 relative z-10 animate-fade-in-up" style={{ animationDelay: '0.7s' }}>
+        <div className="grid grid-cols-3 gap-2 max-w-md mx-auto">
+          {STATS.map((s) => (
+            <div key={s.label} className="glass rounded-xl p-3 text-center border border-night-800/50">
+              <p className="text-gold-400 text-lg font-bold font-display">{s.num}</p>
+              <p className="text-night-500 text-[9px] uppercase tracking-wider leading-tight mt-0.5">{s.label}</p>
+            </div>
+          ))}
+        </div>
+      </section>
+
+      {/* ── Features ── */}
       <section className="px-6 py-8 relative z-10">
         <h2 className="text-xs uppercase tracking-[0.3em] text-night-500 text-center mb-6">
           Trois piliers
@@ -105,11 +132,13 @@ export function Landing({ onStart, onLogin }: LandingProps) {
           {FEATURES.map((f, i) => (
             <div
               key={f.title}
-              className="glass rounded-2xl p-5 border border-night-700 hover:border-gold-500/30 transition-all animate-fade-in-up"
-              style={{ animationDelay: `${i * 0.12}s` }}
+              className="glass rounded-2xl p-5 border border-night-700 hover:border-gold-500/30 transition-all animate-fade-in-up group"
+              style={{ animationDelay: `${0.1 + i * 0.12}s` }}
             >
               <div className="flex items-start gap-4">
-                <div className="text-3xl text-gold-400 font-serif">{f.symbol}</div>
+                <div className={`text-3xl ${f.accent === 'gold' ? 'text-gold-400' : 'text-night-300'} font-serif group-hover:scale-110 transition-transform`}>
+                  {f.glyph}
+                </div>
                 <div>
                   <h3 className="text-night-100 font-semibold mb-1">{f.title}</h3>
                   <p className="text-night-400 text-sm leading-relaxed">{f.desc}</p>
@@ -120,7 +149,29 @@ export function Landing({ onStart, onLogin }: LandingProps) {
         </div>
       </section>
 
-      {/* Testimonials */}
+      {/* ── How it works ── */}
+      <section className="px-6 py-8 relative z-10">
+        <h2 className="text-xs uppercase tracking-[0.3em] text-night-500 text-center mb-6">
+          Comment ça marche
+        </h2>
+        <div className="space-y-3 max-w-md mx-auto">
+          {STEPS.map((s, i) => (
+            <div
+              key={s.num}
+              className="flex items-start gap-4 animate-fade-in-up"
+              style={{ animationDelay: `${0.1 + i * 0.12}s` }}
+            >
+              <div className="text-2xl font-display font-bold text-gold-500/30 shrink-0 w-12">{s.num}</div>
+              <div className="glass rounded-xl p-4 border border-night-800/50 flex-1">
+                <h3 className="text-night-100 font-semibold text-sm mb-1">{s.title}</h3>
+                <p className="text-night-400 text-xs leading-relaxed">{s.desc}</p>
+              </div>
+            </div>
+          ))}
+        </div>
+      </section>
+
+      {/* ── Testimonials ── */}
       <section className="px-6 py-8 relative z-10">
         <h2 className="text-xs uppercase tracking-[0.3em] text-night-500 text-center mb-6">
           Ce qu'ils en disent
@@ -130,20 +181,23 @@ export function Landing({ onStart, onLogin }: LandingProps) {
             <div
               key={t.name}
               className="glass rounded-2xl p-4 border border-night-700 animate-fade-in-up"
-              style={{ animationDelay: `${0.4 + i * 0.12}s` }}
+              style={{ animationDelay: `${0.1 + i * 0.12}s` }}
             >
-              <p className="text-night-200 text-sm italic leading-relaxed mb-2">
-                « {t.text} »
-              </p>
-              <p className="text-night-500 text-xs">
-                {t.name} · {t.sign}
-              </p>
+              <div className="flex items-start gap-3">
+                <div className="w-10 h-10 rounded-full glass-gold flex items-center justify-center text-lg shrink-0">
+                  {t.sign}
+                </div>
+                <div className="flex-1">
+                  <p className="text-night-200 text-sm italic leading-relaxed mb-2">« {t.text} »</p>
+                  <p className="text-night-500 text-xs">{t.name} · {t.role}</p>
+                </div>
+              </div>
             </div>
           ))}
         </div>
       </section>
 
-      {/* Pricing teaser */}
+      {/* ── Pricing ── */}
       <section className="px-6 py-8 relative z-10">
         <h2 className="text-xs uppercase tracking-[0.3em] text-night-500 text-center mb-6">
           Tarif unique
@@ -163,13 +217,17 @@ export function Landing({ onStart, onLogin }: LandingProps) {
         </div>
       </section>
 
-      {/* Footer CTA */}
+      {/* ── Footer CTA ── */}
       <section className="px-6 py-12 pb-16 relative z-10 text-center">
+        <div className="inline-flex items-center justify-center mb-6 animate-breathe">
+          <CelesteLogo size={56} />
+        </div>
         <button
           onClick={onStart}
-          className="w-full max-w-xs mx-auto block py-4 rounded-2xl bg-gradient-to-r from-gold-500 to-gold-600 text-night-950 font-semibold font-display tracking-wide transition-all hover:scale-[1.02] active:scale-[0.98] shadow-lg shadow-gold-500/30"
+          className="group relative w-full max-w-xs mx-auto block py-4 rounded-2xl bg-gradient-to-r from-gold-400 to-gold-600 text-night-950 font-semibold font-display tracking-wide transition-all hover:scale-[1.02] active:scale-[0.98] shadow-lg shadow-gold-500/30 overflow-hidden"
         >
-          Découvrir mon ciel ✨
+          <span className="relative z-10">Découvrir mon ciel ✨</span>
+          <span className="absolute inset-0 bg-gradient-to-r from-transparent via-white/30 to-transparent translate-x-[-100%] group-hover:translate-x-[100%] transition-transform duration-700" />
         </button>
         <p className="text-night-500 text-xs mt-6">
           Déjà un compte ?{' '}
@@ -179,6 +237,9 @@ export function Landing({ onStart, onLogin }: LandingProps) {
           >
             Se connecter
           </button>
+        </p>
+        <p className="text-night-600 text-[10px] mt-4 font-body">
+          Céleste · Astrologie hermétique &amp; alchimie céleste
         </p>
       </section>
     </div>

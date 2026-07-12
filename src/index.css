@@ -440,6 +440,63 @@
   animation: progress-shimmer 2.4s linear infinite;
 }
 
+/* ═════ Branding animations ═════ */
+@keyframes fade-in-up {
+  from { opacity: 0; transform: translateY(28px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+.animate-fade-in-up { animation: fade-in-up 0.6s cubic-bezier(0.22, 1, 0.36, 1) forwards; opacity: 0; }
+
+@keyframes orbit {
+  from { transform: rotate(0deg) translateX(var(--orbit-r, 30px)) rotate(0deg); }
+  to { transform: rotate(360deg) translateX(var(--orbit-r, 30px)) rotate(-360deg); }
+}
+
+@keyframes breathe {
+  0%, 100% { transform: scale(1); filter: brightness(1); }
+  50% { transform: scale(1.04); filter: brightness(1.15); }
+}
+.animate-breathe { animation: breathe 4s ease-in-out infinite; }
+
+@keyframes aurora-shift {
+  0% { background-position: 0% 50%; }
+  50% { background-position: 100% 50%; }
+  100% { background-position: 0% 50%; }
+}
+.aurora-bg {
+  background: linear-gradient(135deg,
+    rgba(197, 160, 89, 0.03) 0%,
+    rgba(192, 192, 192, 0.02) 25%,
+    rgba(197, 160, 89, 0.05) 50%,
+    rgba(192, 192, 192, 0.02) 75%,
+    rgba(197, 160, 89, 0.03) 100%);
+  background-size: 400% 400%;
+  animation: aurora-shift 16s ease infinite;
+}
+
+@keyframes draw-path {
+  to { stroke-dashoffset: 0; }
+}
+.draw-path {
+  stroke-dasharray: 1000;
+  stroke-dashoffset: 1000;
+  animation: draw-path 2s ease-out forwards;
+}
+
+@keyframes ripple-gold {
+  0% { transform: scale(0.8); opacity: 0.8; }
+  100% { transform: scale(2.2); opacity: 0; }
+}
+.ripple-gold::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+  border: 1px solid rgba(197, 160, 89, 0.5);
+  animation: ripple-gold 2s ease-out infinite;
+  pointer-events: none;
+}
+
 /* ═════ Performance utilities ═════ */
 /* Smooth touch scrolling on iOS */
 html {
