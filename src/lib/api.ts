@@ -192,6 +192,7 @@ export const api = {
       archetype: string;
       message: string;
       question: string;
+      reading: string;
     }>('/tarot/daily', { method: 'GET' }),
 
   // Compatibility (LLM-powered) — supports romantic/family/friend/colleague contexts

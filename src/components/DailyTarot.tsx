@@ -12,6 +12,7 @@ interface TarotCard {
   archetype: string;
   message: string;
   question: string;
+  reading?: string;
 }
 
 const STORAGE_KEY = 'celeste_tarot_drawn';
@@ -46,6 +47,7 @@ export default function DailyTarot() {
   const [phase, setPhase] = useState<DrawPhase>(stored ? 'revealed' : 'idle');
   const [loading, setLoading] = useState(false);
   const [imgError, setImgError] = useState(false);
+  const [flipSide, setFlipSide] = useState<'recto' | 'verso'>('recto');
 
   const draw = async () => {
     setLoading(true);
@@ -231,9 +233,10 @@ export default function DailyTarot() {
     );
   }
 
-  // ─── REVEALED: flip 3D → image + description ────────
+  // ─── REVEALED: flip 3D, click to toggle recto/verso ───
   if (drawn) {
     const cardImage = !imgError ? getTarotImage(drawn.cardId) : null;
+    const toggleFlip = () => setFlipSide(s => s === 'recto' ? 'verso' : 'recto');
 
     return (
       <div className="px-5 mb-6 animate-fade-in">
@@ -241,58 +244,41 @@ export default function DailyTarot() {
           <h2 className="text-gold-400 text-xs uppercase tracking-widest font-semibold">🃏 Tirage du jour</h2>
           <span className="text-night-500 text-xs">Reviens demain</span>
         </div>
+
+        {/* 3D Flip Container */}
         <div
-          className="relative cursor-pointer"
+          className="relative cursor-pointer select-none"
           style={{ perspective: '1500px' }}
+          onClick={toggleFlip}
         >
           <div
-            className="relative w-full transition-transform duration-1000 ease-out"
+            className="relative w-full transition-transform duration-700 ease-out"
             style={{
               transformStyle: 'preserve-3d',
-              transform: phase === 'revealed' ? 'rotateY(180deg)' : 'rotateY(0deg)',
-              minHeight: '320px',
+              transform: flipSide === 'verso' ? 'rotateY(180deg)' : 'rotateY(0deg)',
             }}
           >
-            {/* Card BACK (visible before reveal) */}
+            {/* ═══ RECTO (card image + basic info) ═══ */}
             <div
-              className="absolute inset-0 rounded-2xl"
+              className="rounded-2xl overflow-hidden"
               style={{
                 backfaceVisibility: 'hidden',
-                background: 'linear-gradient(135deg, rgba(197,160,89,0.18) 0%, rgba(60,40,15,0.95) 50%, rgba(197,160,89,0.12) 100%)',
-                border: '3px solid rgba(197,160,89,0.4)',
-                boxShadow: '0 0 48px rgba(197,160,89,0.2)',
-              }}
-            >
-              <div className="flex flex-col items-center justify-center h-full min-h-[320px]">
-                <div className="text-6xl mb-2 opacity-60">✦</div>
-                <p className="text-gold-500/50 text-xs tracking-[0.3em] uppercase">Céleste</p>
-              </div>
-            </div>
-
-            {/* Card FRONT (revealed) */}
-            <div
-              className="absolute inset-0 rounded-2xl overflow-hidden"
-              style={{
-                backfaceVisibility: 'hidden',
-                transform: 'rotateY(180deg)',
+                WebkitBackfaceVisibility: 'hidden',
                 background: 'linear-gradient(135deg, rgba(197,160,89,0.25) 0%, rgba(40,30,15,0.98) 100%)',
                 border: `3px solid rgba(197,160,89,${drawn.isReversed ? '0.25' : '0.55'})`,
                 boxShadow: '0 0 48px rgba(197,160,89,0.3), inset 0 0 32px rgba(197,160,89,0.08)',
               }}
             >
-              {/* Card image or emoji */}
+              {/* Full card image — no crop */}
               {cardImage ? (
                 <div
-                  className="relative w-full overflow-hidden"
-                  style={{
-                    transform: drawn.isReversed ? 'rotate(180deg)' : 'none',
-                    height: '280px',
-                  }}
+                  className="relative w-full"
+                  style={{ transform: drawn.isReversed ? 'rotate(180deg)' : 'none' }}
                 >
                   <img
                     src={cardImage}
                     alt={drawn.cardName}
-                    className="w-full h-full object-cover"
+                    className="w-full h-auto block"
                     onError={() => setImgError(true)}
                   />
                   {/* Roman numeral overlay */}
@@ -302,10 +288,7 @@ export default function DailyTarot() {
                 </div>
               ) : (
                 <div className="flex flex-col items-center pt-6 pb-3">
-                  <div
-                    className="text-6xl mb-2"
-                    style={{ transform: drawn.isReversed ? 'rotate(180deg)' : 'none' }}
-                  >
+                  <div className="text-6xl mb-2" style={{ transform: drawn.isReversed ? 'rotate(180deg)' : 'none' }}>
                     {drawn.emoji}
                   </div>
                   <div className="bg-night-950/50 rounded-lg px-2 py-0.5">
@@ -330,8 +313,55 @@ export default function DailyTarot() {
                 </div>
               </div>
             </div>
+
+            {/* ═══ VERSO (detailed astrological reading) ═══ */}
+            <div
+              className="absolute inset-0 rounded-2xl overflow-hidden"
+              style={{
+                backfaceVisibility: 'hidden',
+                WebkitBackfaceVisibility: 'hidden',
+                transform: 'rotateY(180deg)',
+                background: 'linear-gradient(160deg, rgba(40,30,15,0.98) 0%, rgba(20,15,8,0.99) 50%, rgba(40,30,15,0.98) 100%)',
+                border: '3px solid rgba(197,160,89,0.45)',
+                boxShadow: '0 0 48px rgba(197,160,89,0.25), inset 0 0 40px rgba(197,160,89,0.06)',
+              }}
+            >
+              <div className="flex flex-col h-full min-h-[400px] p-5">
+                {/* Header */}
+                <div className="flex items-center justify-between mb-4 pb-3 border-b border-gold-500/20">
+                  <div className="flex items-center gap-2">
+                    <span className="text-2xl">{drawn.emoji}</span>
+                    <div>
+                      <p className="text-gold-gradient font-bold text-sm leading-tight">{drawn.cardName}</p>
+                      <p className="text-night-400 text-[10px]">{drawn.roman} · {drawn.isReversed ? 'Inversée' : 'Droite'}</p>
+                    </div>
+                  </div>
+                  <span className="text-gold-500/40 text-lg">✦</span>
+                </div>
+
+                {/* Detailed reading */}
+                <div className="flex-1 overflow-y-auto">
+                  <p className="text-gold-400 text-[10px] uppercase tracking-widest mb-2">⚕ Lecture astrale du jour</p>
+                  <p className="text-night-100 text-xs leading-relaxed">
+                    {drawn.reading || drawn.message}
+                  </p>
+                </div>
+
+                {/* Footer */}
+                <div className="mt-4 pt-3 border-t border-gold-500/15">
+                  <p className="text-night-500 text-[10px] text-center italic">
+                    {flipSide === 'recto' ? '👆 Touche pour la lecture détaillée' : '👆 Touche pour revoir la carte'}
+                  </p>
+                </div>
+              </div>
+            </div>
           </div>
         </div>
+
+        {/* Hint below card */}
+        <p className="text-night-400 text-[10px] text-center mt-3 animate-pulse">
+          {flipSide === 'recto' ? '👆 Touche la carte pour ta lecture astrale' : '👆 Touche pour revoir la carte'}
+        </p>
       </div>
     );
   }

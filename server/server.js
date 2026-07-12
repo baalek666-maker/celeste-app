@@ -1349,8 +1349,9 @@ Génère en JSON:
   "emoji": "${card.emoji}",
   "isReversed": ${isReversed},
   "archetype": "${card.archetype}",
-  "message": "3-4 phrases d'interprétation personnalisée pour la journée, en liant le tarot et l'astrologie",
-  "question": "une question de réflexion ouverte pour la journée"
+  "message": "2 phrases courtes et poétiques résumant l'énergie de la carte pour aujourd'hui",
+  "question": "une question de réflexion ouverte pour la journée",
+  "reading": "Un paragraphe détaillé (100-150 mots) reliant cette carte de tarot à la signature astrologique de la personne (signe solaire ${sunSign}), aux transits planétaires du moment, et à ce que cette énergie signifie concrètement pour sa journée. Inclus des conseils pratiques, des éléments à surveiller, et une dimension spirituelle. Écris dans un style mystérieux et hermétique."
 }
 
 Réponds UNIQUEMENT avec le JSON.`;
@@ -1373,6 +1374,7 @@ Réponds UNIQUEMENT avec le JSON.`;
         isReversed, archetype: card.archetype,
         message: isReversed ? card.reversed : card.upright,
         question: 'Que vous dit cette carte aujourd\'hui ?',
+        reading: `${card.archetype}. ${isReversed ? card.reversed : card.upright} En tant que ${sunSign}, cette énergie résonne particulièrement avec votre chemin solaire. Les configurations du moment vous invitent à intégrer pleinement ce message dans votre journée.`,
       };
     }
 
@@ -1382,6 +1384,9 @@ Réponds UNIQUEMENT avec le JSON.`;
     result.emoji ??= card.emoji;
     result.isReversed ??= isReversed;
     result.archetype ??= card.archetype;
+    result.message ??= isReversed ? card.reversed : card.upright;
+    result.question ??= 'Que vous dit cette carte aujourd\'hui ?';
+    result.reading ??= `${card.archetype}. ${isReversed ? card.reversed : card.upright} En tant que ${sunSign}, cette énergie résonne avec votre chemin solaire. Les configurations planétaires du moment amplifient cette influence : laissez-la guider vos choix de la journée.`;
 
     // Cache for the day
     db.prepare('INSERT OR REPLACE INTO horoscope_cache (user_id, date, content) VALUES (?, ?, ?)')
@@ -1390,7 +1395,22 @@ Réponds UNIQUEMENT avec le JSON.`;
     res.json(result);
   } catch (err) {
     console.error('Tarot error:', err.message);
-    res.status(500).json({ error: 'Failed to draw tarot', detail: err.message });
+    // Fallback: return static card data so the app never crashes
+    const fallbackCard = TAROT_DECK[cardId];
+    const fallbackResult = {
+      cardName: fallbackCard.name,
+      cardId: fallbackCard.id,
+      roman: fallbackCard.roman,
+      emoji: fallbackCard.emoji,
+      isReversed,
+      archetype: fallbackCard.archetype,
+      message: isReversed ? fallbackCard.reversed : fallbackCard.upright,
+      question: 'Que vous dit cette carte aujourd\'hui ?',
+      reading: `${fallbackCard.archetype}. ${isReversed ? fallbackCard.reversed : fallbackCard.upright} En tant que ${sunSign}, cette énergie résonne avec votre chemin solaire. Les configurations planétaires du moment amplifient cette influence. Méditez sur les symboles de cette carte et laissez sa sagesse imprégner votre journée.`,
+    };
+    db.prepare('INSERT OR REPLACE INTO horoscope_cache (user_id, date, content) VALUES (?, ?, ?)')
+      .run(req.user.id, `tarot:${today}`, JSON.stringify(fallbackResult));
+    res.json(fallbackResult);
   }
 });
 
