@@ -75,21 +75,33 @@ function NavIcon({ item, active }: { item: string; active: boolean }) {
 }
 
 export function BottomNav({ items, labels, active, onNavigate }: NavProps) {
+  const handleNav = (item: string) => {
+    // Haptic feedback (mobile only, silent on desktop)
+    if ('vibrate' in navigator) {
+      navigator.vibrate(item === active ? 8 : 12);
+    }
+    onNavigate(item);
+  };
+
   return (
-    <div className="glass-dark border-t border-gold-500/10 px-2 py-2 safe-area-bottom">
+    <div className="glass-dark border-t border-gold-500/10 px-2 py-2 safe-area-bottom relative">
       <div className="flex justify-around items-center">
         {items.map(item => {
           const isActive = active === item;
           return (
             <button
               key={item}
-              onClick={() => onNavigate(item)}
+              onClick={() => handleNav(item)}
               className="flex flex-col items-center gap-1 px-3 py-1.5 transition-all duration-300 active:scale-90"
             >
               <div className={`relative transition-all duration-300 ${isActive ? 'scale-110' : 'scale-100'}`}>
                 {/* Gold glow background on active */}
                 {isActive && (
-                  <div className="absolute inset-0 -m-2 rounded-full bg-gold-500/15 blur-md" />
+                  <div className="absolute inset-0 -m-2 rounded-full bg-gold-500/15 animate-glow" />
+                )}
+                {/* Active dot indicator above icon */}
+                {isActive && (
+                  <div className="absolute -top-2.5 left-1/2 -translate-x-1/2 w-1 h-1 rounded-full bg-gold-400 animate-fade-in" />
                 )}
                 <div className={`relative transition-all duration-300 ${isActive ? 'drop-shadow-[0_0_7px_rgba(197,160,89,0.55)]' : ''}`}>
                   <NavIcon item={item} active={isActive} />

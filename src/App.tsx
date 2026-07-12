@@ -353,7 +353,7 @@ export function App() {
       <div className="max-w-md mx-auto min-h-screen relative">
         {/* Contenu principal (main landmark déjà dans index.html pour SPA) */}
         <div className="pb-24">
-          <div key={screen} className="page-transition">
+          <div key={screen} className="page-enter">
             {screen === 'home' && <Home user={user} onNavigate={handleNavigate} />}
             {screen === 'chart' && <ChartView user={user} />}
             {screen === 'horoscope' && <Horoscope user={user} />}
