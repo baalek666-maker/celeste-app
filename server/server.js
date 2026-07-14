@@ -24,6 +24,12 @@ const LLM_API_KEY = process.env.LLM_API_KEY || '';
 const LLM_MODEL = process.env.LLM_MODEL || 'gpt-4o-mini';
 const PORT = process.env.PORT || 3001;
 
+// CORS: en production, restreindre aux origines autorisées via CORS_ORIGIN (CSV).
+// En dev (pas de CORS_ORIGIN), on permet tout pour le HMR Vite.
+const allowedOrigins = process.env.CORS_ORIGIN
+  ? process.env.CORS_ORIGIN.split(',').map(s => s.trim())
+  : null;
+
 // ─── Web Push (VAPID) setup ────────────────────────────────
 import webpush from 'web-push';
 const VAPID_PUBLIC_KEY = process.env.VAPID_PUBLIC_KEY;
@@ -248,10 +254,16 @@ if (!db.prepare("SELECT name FROM sqlite_master WHERE type='table' AND name='wee
 }
 
 // ─── Streak helpers ────────────────────────────────────────
+/** Local date as YYYY-MM-DD (avoids UTC offset bugs for streaks/cache keys). */
+function localISODate() {
+  const d = new Date();
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+}
+
 function yesterdayISODate() {
   const d = new Date();
   d.setDate(d.getDate() - 1);
-  return d.toISOString().split('T')[0];
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
 }
 
 // Update streak for user after they viewed today's horoscope.
@@ -687,7 +699,15 @@ const llmLimiter = rateLimit({
 // ─── Server ────────────────────────────────────────────────
 const app = express();
 app.set('trust proxy', 1);
-app.use(cors({ origin: true, credentials: true }));
+app.use(cors({
+  origin(origin, cb) {
+    // Pas d'origin = requête same-origin ou curl ; on permet.
+    if (!origin || !allowedOrigins) return cb(null, true);
+    if (allowedOrigins.includes(origin)) return cb(null, true);
+    return cb(new Error('CORS blocked: ' + origin));
+  },
+  credentials: true,
+}));
 
 // P0 #22 — Headers de sécurité (Helmet). CSP laisse passer le CSS inline / Vite assets.
 app.use(helmet({
@@ -905,7 +925,7 @@ async function generatePlanetInterpretation(planet, natal) {
       ...metadata,
       general: tmpl.general,
       inSign: tmpl.in_sign,
-      degree: tmpl.degree_symbolic,
+      degreeSymbolic: tmpl.degree_symbolic,
       keywords: JSON.parse(tmpl.keywords),
       source: 'template-cache',
       cacheHit: true,
@@ -980,7 +1000,7 @@ Réponds UNIQUEMENT en JSON valide:
     ...metadata,
     general: parsed.general,
     inSign: parsed.inSign,
-    degree: parsed.degree,
+    degreeSymbolic: parsed.degree,
     keywords: parsed.keywords,
     source: parsed.isFallback ? 'fallback' : 'llm',
     cacheHit: false,
@@ -998,7 +1018,7 @@ app.get('/api/natal-chart/planet/:name', auth, async (req, res) => {
     // Check cache
     const cached = db.prepare('SELECT data FROM planet_interpretations WHERE user_id = ? AND planet = ?').get(req.user.id, planet);
     if (cached) {
-      return res.json(JSON.parse(cached.data));
+      return res.json(safeJsonParse(cached.data, null, 'planet_interp_cache'));
     }
 
     // Get natal data
@@ -1006,7 +1026,7 @@ app.get('/api/natal-chart/planet/:name', auth, async (req, res) => {
     if (!row || !row.birth_data) {
       return res.status(400).json({ error: 'No birth data found' });
     }
-    const birthData = safeJsonParse(row.birth_data, null, 'compatibility partner birth_data');
+    const birthData = safeJsonParse(row.birth_data, null, 'planet_interp birth_data');
     if (!birthData) return res.status(400).json({ error: 'Corrupted partner birth data' });
     const natal = getNatalPositions(birthData, true);
 
@@ -1069,17 +1089,24 @@ app.get('/api/astro/moon-phase', (req, res) => {
 
 // ─── Auth: Register ────────────────────────────────────────
 app.post('/api/auth/register', authLimiter, async (req, res) => {
-  const { email, password } = req.body;
-  if (!email || !password) return res.status(400).json({ error: 'Email et mot de passe requis' });
+  const { email, password } = req.body || {};
+  if (typeof email !== 'string' || typeof password !== 'string') {
+    return res.status(400).json({ error: 'Email et mot de passe requis' });
+  }
   if (password.length < 6) return res.status(400).json({ error: 'Mot de passe trop court (6 min)' });
 
-  const existing = db.prepare('SELECT id FROM users WHERE email = ?').get(email.toLowerCase());
+  const emailLower = email.toLowerCase();
+  if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(emailLower)) {
+    return res.status(400).json({ error: 'Format d\'email invalide' });
+  }
+
+  const existing = db.prepare('SELECT id FROM users WHERE email = ?').get(emailLower);
   if (existing) return res.status(409).json({ error: 'Email déjà utilisé' });
 
   const hash = bcrypt.hashSync(password, 10);
-  const result = db.prepare('INSERT INTO users (email, password_hash) VALUES (?, ?)').run(email.toLowerCase(), hash);
-  const token = jwt.sign({ id: result.lastInsertRowid, email }, JWT_SECRET, { expiresIn: '30d' });
-  res.json({ token, user: { id: result.lastInsertRowid, email, isPremium: false, scansRemaining: 3 } });
+  const result = db.prepare('INSERT INTO users (email, password_hash) VALUES (?, ?)').run(emailLower, hash);
+  const token = jwt.sign({ id: result.lastInsertRowid, email: emailLower }, JWT_SECRET, { expiresIn: '30d' });
+  res.json({ token, user: { id: result.lastInsertRowid, email: emailLower, isPremium: false, scansRemaining: 3 } });
 });
 
 // ─── Auth: Logout ───────────────────────────────────────────
@@ -1099,9 +1126,11 @@ app.post('/api/auth/logout', auth, (req, res) => {
 
 // ─── Auth: Login ───────────────────────────────────────────
 app.post('/api/auth/login', authLimiter, async (req, res) => {
-  const { email, password } = req.body;
-  console.log('[LOGIN]', JSON.stringify({ email, pwLen: password?.length, pwType: typeof password }));
-  const user = db.prepare('SELECT * FROM users WHERE email = ?').get(email?.toLowerCase());
+  const { email, password } = req.body || {};
+  if (typeof email !== 'string' || typeof password !== 'string') {
+    return res.status(400).json({ error: 'Email et mot de passe requis' });
+  }
+  const user = db.prepare('SELECT * FROM users WHERE email = ?').get(email.toLowerCase());
   if (!user || !bcrypt.compareSync(password, user.password_hash)) {
     return res.status(401).json({ error: 'Email ou mot de passe incorrect' });
   }
@@ -1335,6 +1364,7 @@ app.post('/api/profiles', auth, (req, res) => {
 // Update a profile
 app.put('/api/profiles/:id', auth, (req, res) => {
   const profileId = parseInt(req.params.id, 10);
+  if (!Number.isFinite(profileId)) return res.status(400).json({ error: 'Invalid profile id' });
   const existing = db.prepare('SELECT * FROM profiles WHERE id = ? AND user_id = ?').get(profileId, req.user.id);
   if (!existing) return res.status(404).json({ error: 'Profile not found' });
   const { name, relation, birthData, isSelf } = req.body || {};
@@ -1368,6 +1398,7 @@ app.put('/api/profiles/:id', auth, (req, res) => {
 // Delete a profile
 app.delete('/api/profiles/:id', auth, (req, res) => {
   const profileId = parseInt(req.params.id, 10);
+  if (!Number.isFinite(profileId)) return res.status(400).json({ error: 'Invalid profile id' });
   const existing = db.prepare('SELECT * FROM profiles WHERE id = ? AND user_id = ?').get(profileId, req.user.id);
   if (!existing) return res.status(404).json({ error: 'Profile not found' });
   db.prepare('DELETE FROM profiles WHERE id = ?').run(profileId);
@@ -1377,6 +1408,7 @@ app.delete('/api/profiles/:id', auth, (req, res) => {
 // Get a single profile with birth data (for re-use in other endpoints)
 app.get('/api/profiles/:id', auth, (req, res) => {
   const profileId = parseInt(req.params.id, 10);
+  if (!Number.isFinite(profileId)) return res.status(400).json({ error: 'Invalid profile id' });
   const r = db.prepare('SELECT id, name, relation, birth_data, is_self, created_at FROM profiles WHERE id = ? AND user_id = ?').get(profileId, req.user.id);
   if (!r) return res.status(404).json({ error: 'Profile not found' });
   res.json({
@@ -1399,16 +1431,16 @@ app.post('/api/horoscope', auth, async (req, res) => {
     const user = db.prepare('SELECT * FROM users WHERE id = ?').get(req.user.id);
     if (!user?.birth_data) return res.status(400).json({ error: 'Birth data required' });
 
-    const now = Math.floor(Date.now() / 1000);
+    const now = Date.now();
     const isPremium = !!user.is_premium && (!user.premium_until || user.premium_until > now);
 
-    const today = new Date().toISOString().split('T')[0];
+    const today = localISODate();
 
     // Per-user cache hit (legacy horoscope_cache table)
     const userCached = db.prepare('SELECT content FROM horoscope_cache WHERE user_id = ? AND date = ?').get(req.user.id, today);
     if (userCached) {
       const streak = updateStreak(req.user.id, today);
-      return res.json({ ...JSON.parse(userCached.content), streak });
+      return res.json({ ...safeJsonParse(userCached.content, {}, 'horoscope_cache.content'), streak });
     }
 
     const birthData = safeJsonParse(user.birth_data, null, 'horoscope birth_data');
@@ -1495,7 +1527,7 @@ app.get('/api/horoscope/week', auth, async (req, res) => {
     const user = db.prepare('SELECT * FROM users WHERE id = ?').get(req.user.id);
     if (!user?.birth_data) return res.status(400).json({ error: 'Birth data required' });
 
-    const now = Math.floor(Date.now() / 1000);
+    const now = Date.now();
     const isPremium = !!user.is_premium && (!user.premium_until || user.premium_until > now);
 
     const days = isPremium ? 7 : 3; // Free gets J-1..J+1, Premium gets J-3..J+3
@@ -1524,7 +1556,7 @@ app.get('/api/horoscope/week', auth, async (req, res) => {
           date: isoDate,
           offset,
           weekday: day.toLocaleDateString('fr-FR', { weekday: 'short' }),
-          summary: JSON.parse(cached.content),
+          summary: safeJsonParse(cached.content, null, 'horoscope_daily_cache'),
           cached: true,
         });
       }
@@ -1622,13 +1654,14 @@ const TAROT_DECK = [
 ];
 
 app.get('/api/tarot/daily', auth, llmLimiter, async (req, res) => {
+  const today = localISODate(); // Hoisted out of try so catch can use it
+  let sunSign = 'inconnu';      // Hoisted so catch fallback works
   try {
     const user = db.prepare('SELECT * FROM users WHERE id = ?').get(req.user.id);
-    const today = new Date().toISOString().split('T')[0];
 
     // Check cache
     const cached = db.prepare('SELECT content FROM horoscope_cache WHERE user_id = ? AND date = ?').get(req.user.id, `tarot:${today}`);
-    if (cached) return res.json(JSON.parse(cached.content));
+    if (cached) return res.json(safeJsonParse(cached.content, null, 'tarot_cache'));
 
     // Deterministic daily card: hash of userId + date
     const seed = (req.user.id * 9301 + today.split('-').reduce((a, p) => a + parseInt(p), 0) * 49297) % 233280;
@@ -1637,7 +1670,6 @@ app.get('/api/tarot/daily', auth, llmLimiter, async (req, res) => {
     const card = TAROT_DECK[cardId];
 
     // Get user's sun sign for personalization
-    let sunSign = 'inconnu';
     if (user?.birth_data) {
       const bd = safeJsonParse(user.birth_data, null, 'llm sun sign birth_data');
       if (bd) {
@@ -1743,7 +1775,7 @@ app.post('/api/compatibility', auth, llmLimiter, async (req, res) => {
     if (!user?.birth_data) return res.status(400).json({ error: 'Your birth data required' });
 
     // Premium expiry check
-    const now = Math.floor(Date.now() / 1000);
+    const now = Date.now();
     const isPremium = !!user.is_premium && (!user.premium_until || user.premium_until > now);
 
 // P0 #3 + #9 — Décrément APRÈS succès LLM (pas avant) + clamp à 0.
@@ -2092,7 +2124,7 @@ app.get('/api/aspects/today', auth, async (req, res) => {
     // Check cache
     const cached = db.prepare('SELECT aspects_json FROM daily_aspects_cache WHERE date = ?').get(dateKey);
     if (cached) {
-      const aspects = JSON.parse(cached.aspects_json);
+      const aspects = safeJsonParse(cached.aspects_json, [], 'daily_aspects_cache');
       return res.json({ date: dateKey, aspects, cached: true });
     }
     // Compute + interpret + cache
@@ -2147,8 +2179,8 @@ app.get('/api/favorites', auth, (req, res) => {
 
 // Delete a specific favorite by id
 app.delete('/api/favorites/:id', auth, (req, res) => {
-  const id = parseInt(req.params.id);
-  if (!id) return res.status(400).json({ error: 'invalid id' });
+  const id = parseInt(req.params.id, 10);
+  if (!Number.isFinite(id) || id <= 0) return res.status(400).json({ error: 'invalid id' });
   const result = db.prepare(
     'DELETE FROM horoscope_favorites WHERE id = ? AND user_id = ?'
   ).run(id, req.user.id);
@@ -2232,12 +2264,12 @@ app.get('/api/chart/asteroids', auth, async (req, res) => {
     try {
       const ctrl = new AbortController();
       const to = setTimeout(() => ctrl.abort(), 8000);
-      const r = await fetch('https://api.cheapestinference.com/v1/chat/completions', {
+      const r = await fetch(LLM_API_URL, {
         method: 'POST',
         signal: ctrl.signal,
-        headers: { 'Content-Type': 'application/json', Authorization: 'Be' + 'arer ' + process.env.LLM_API_KEY },
+        headers: { 'Content-Type': 'application/json', Authorization: 'Be' + 'arer ' + LLM_API_KEY },
         body: JSON.stringify({
-          model: 'glm-5.2',
+          model: LLM_MODEL,
           messages: [
             { role: 'system', content: 'Tu es Celeste, astrologue bienveillante. Réponds UNIQUEMENT en français, ton chaleureux, court (max 80 mots), tutoyé.' },
             { role: 'user', content: `Voici les placements natals d'astéroïdes d'un utilisateur : ${summary}. Donne une interprétation douce et synthétique reliant ces placements aux thèmes : blessure guérisseuse (Chiron), maternel/ressource (Cérès), stratégie (Pallas), engagement (Junon), foyer intérieur (Vesta). Sois concrète et personnelle.` }
@@ -2294,12 +2326,12 @@ app.get('/api/chart/lunar-nodes', auth, async (req, res) => {
     try {
       const ctrl = new AbortController();
       const to = setTimeout(() => ctrl.abort(), 8000);
-      const r = await fetch('https://api.cheapestinference.com/v1/chat/completions', {
+      const r = await fetch(LLM_API_URL, {
         method: 'POST',
         signal: ctrl.signal,
-        headers: { 'Content-Type': 'application/json', Authorization: 'Be' + 'arer ' + process.env.LLM_API_KEY },
+        headers: { 'Content-Type': 'application/json', Authorization: 'Be' + 'arer ' + LLM_API_KEY },
         body: JSON.stringify({
-          model: 'glm-5.2',
+          model: LLM_MODEL,
           messages: [
             { role: 'system', content: 'Tu es Celeste, astrologue bienveillante. Réponds UNIQUEMENT en français, ton chaleureux, court (max 70 mots), tutoyé.' },
             { role: 'user', content: `Voici les nœuds lunaires natals d'un utilisateur : ${summary}. Le Nœud Sud représente ce qu'il maîtrise déjà (passé, confort), le Nœud Nord représente ce vers quoi son âme veut évoluer (mission, croissance). Donne une interprétation douce reliant ces deux pôles à son chemin d'évolution.` }
@@ -2358,7 +2390,7 @@ app.get('/api/challenge/week', auth, async (req, res) => {
     const user = db.prepare('SELECT birth_data, natal_chart FROM users WHERE id = ?').get(req.user.id);
     let ctx = '';
     try {
-      const chart = user?.natal_chart ? JSON.parse(user.natal_chart) : null;
+      const chart = user?.natal_chart ? safeJsonParse(user.natal_chart, null, 'users.natal_chart') : null;
       if (chart) ctx = `Thème natal : Soleil ${chart.sun || '?'}, Lune ${chart.moon || '?'}, Ascendant ${chart.rising || '?'}.`;
     } catch {}
 
@@ -2366,12 +2398,12 @@ app.get('/api/challenge/week', auth, async (req, res) => {
     try {
       const ctrl = new AbortController();
       const to = setTimeout(() => ctrl.abort(), 8000);
-      const r = await fetch('https://api.cheapestinference.com/v1/chat/completions', {
+      const r = await fetch(LLM_API_URL, {
         method: 'POST',
         signal: ctrl.signal,
-        headers: { 'Content-Type': 'application/json', Authorization: 'Be' + 'arer ' + process.env.LLM_API_KEY },
+        headers: { 'Content-Type': 'application/json', Authorization: 'Be' + 'arer ' + LLM_API_KEY },
         body: JSON.stringify({
-          model: 'glm-5.2',
+          model: LLM_MODEL,
           messages: [
             { role: 'system', content: 'Tu es Celeste. Réponds UNIQUEMENT en JSON valide, sans markdown.' },
             { role: 'user', content: `${ctx}\nPropose un défi d'évolution spirituelle pour cette semaine (semaine ${weekId}). Réponds en JSON strict avec EXACTEMENT 3 clés: "theme" (1 mot thème astrologique: curiosité/vulnérabilité/lâcher-prise/etc), "action" (1 action concrète courte, <20 mots, et faisable en 1 jour), "explanation" (50 mots max: pourquoi ce défi).` }
@@ -2483,14 +2515,14 @@ async function interpretHouses(asc, sunSign) {
   const prompt = `Tu es Celeste, astrologue chaleureuse. L'Ascendant natal d'un utilisateur est en ${asc.sign} (${asc.degree.toFixed(1)}°), son Soleil en ${sunSign}.
 En 2 phrases max (40 mots), explique ce que l'Ascendant ${asc.sign} révèle sur sa manière d'aborder la vie, et quel est le conseil du jour lié à la maison 1 (${theme}).`;
   try {
-    const r = await fetch('https://api.cheapestinference.com/v1/chat/completions', {
+    const r = await fetch(LLM_API_URL, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
-        'Authorization': 'Be' + 'arer ' + process.env.LLM_API_KEY
+        'Authorization': 'Be' + 'arer ' + LLM_API_KEY
       },
       body: JSON.stringify({
-        model: 'glm-5.2',
+        model: LLM_MODEL,
         messages: [
           { role: 'system', content: 'Tu es Celeste, astrologue bienveillante. Réponds UNIQUEMENT en français, ton chaleureux, court, jamais plus de 40 mots.' },
           { role: 'user', content: prompt }
@@ -2619,25 +2651,23 @@ app.get('/api/rituals/today', auth, async (req, res) => {
   }
 });
 
-app.post('/api/rituals/today/complete', auth, (req, res) => {
+app.post('/api/rituals/today/complete', auth, async (req, res) => {
   const { period } = req.body || {};
   if (!['morning', 'evening'].includes(period)) {
     return res.status(400).json({ error: 'period must be morning or evening' });
   }
-  const today = new Date().toISOString().split('T')[0];
-  const col = period === 'morning' ? 'completed_morning' : 'completed_evening';
+  const today = localISODate();
   try {
-    const result = db.prepare(
-      `UPDATE daily_rituals SET ${col} = 1 WHERE user_id = ? AND date = ?`
-    ).run(req.user.id, today);
-    if (result.changes === 0) {
-      // No row for today yet — create stub with completion
-      const morning = period === 'morning' ? 1 : 0;
-      const evening = period === 'evening' ? 1 : 0;
+    // Ensure a real row exists (generate content if missing) before marking complete
+    let row = db.prepare('SELECT * FROM daily_rituals WHERE user_id = ? AND date = ?').get(req.user.id, today);
+    if (!row) {
+      const content = await generateRitualContent(req.user.id, new Date());
       db.prepare(
-        'INSERT INTO daily_rituals (user_id, date, morning_card, evening_intention, completed_morning, completed_evening) VALUES (?, ?, ?, ?, ?, ?)'
-      ).run(req.user.id, today, 'À générer demain', 'À générer demain', morning, evening);
+        'INSERT INTO daily_rituals (user_id, date, morning_card, evening_intention) VALUES (?, ?, ?, ?)'
+      ).run(req.user.id, today, content.morningCard, content.eveningIntention);
     }
+    const col = period === 'morning' ? 'completed_morning' : 'completed_evening';
+    db.prepare(`UPDATE daily_rituals SET ${col} = 1 WHERE user_id = ? AND date = ?`).run(req.user.id, today);
     res.json({ ok: true, period, date: today });
   } catch (err) {
     console.error('ritual complete error:', err.message);
@@ -2734,16 +2764,16 @@ app.get('/api/premium/status', auth, (req, res) => {
       'SELECT is_premium, premium_until FROM users WHERE id = ?'
     ).get(req.user.id);
     if (!user) return res.status(404).json({ error: 'User not found' });
-    const now = Math.floor(Date.now() / 1000);
+    const now = Date.now();
     const isPremium = user.is_premium === 1 || (user.premium_until && user.premium_until > now);
     let plan = 'free';
     if (user.is_premium === 1) plan = 'lifetime';
     else if (user.premium_until && user.premium_until > now) {
-      const days = (user.premium_until - now) / 86400;
+      const days = (user.premium_until - now) / 86400000;
       plan = days > 365 ? 'yearly' : 'monthly';
     }
     const daysRemaining = (user.premium_until && user.premium_until > now)
-      ? Math.ceil((user.premium_until - now) / 86400) : null;
+      ? Math.ceil((user.premium_until - now) / 86400000) : null;
     res.json({
       isPremium,
       plan,

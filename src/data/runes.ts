@@ -95,7 +95,7 @@ export const ELDER_FUTHARK: RuneData[] = [
   },
   {
     id: 6,
-    symbol: "\u16B3",
+    symbol: "\u16B2",
     name: "Kenaz",
     transliteration: "K",
     meaning: "Torche, savoir",
@@ -140,7 +140,7 @@ export const ELDER_FUTHARK: RuneData[] = [
   },
   {
     id: 9,
-    symbol: "\u16BE",
+    symbol: "\u16BA",
     name: "Hagalaz",
     transliteration: "H",
     meaning: "Grele, destruction",
@@ -155,7 +155,7 @@ export const ELDER_FUTHARK: RuneData[] = [
   },
   {
     id: 10,
-    symbol: "\u16C1",
+    symbol: "\u16BE",
     name: "Nauthiz",
     transliteration: "N",
     meaning: "Besoin, contrainte",
@@ -170,7 +170,7 @@ export const ELDER_FUTHARK: RuneData[] = [
   },
   {
     id: 11,
-    symbol: "\u16C5",
+    symbol: "\u16C1",
     name: "Isa",
     transliteration: "I",
     meaning: "Glace, stase",
@@ -185,7 +185,7 @@ export const ELDER_FUTHARK: RuneData[] = [
   },
   {
     id: 12,
-    symbol: "\u16C7",
+    symbol: "\u16C3",
     name: "Jera",
     transliteration: "J",
     meaning: "Annee, recolte",
@@ -200,7 +200,7 @@ export const ELDER_FUTHARK: RuneData[] = [
   },
   {
     id: 13,
-    symbol: "\u16CB",
+    symbol: "\u16C7",
     name: "Eihwaz",
     transliteration: "Ei",
     meaning: "If, axe du monde",
@@ -215,7 +215,7 @@ export const ELDER_FUTHARK: RuneData[] = [
   },
   {
     id: 14,
-    symbol: "\u16CF",
+    symbol: "\u16C8",
     name: "Perthro",
     transliteration: "P",
     meaning: "Sort, coupe runique",
@@ -230,7 +230,7 @@ export const ELDER_FUTHARK: RuneData[] = [
   },
   {
     id: 15,
-    symbol: "\u16D2",
+    symbol: "\u16C9",
     name: "Algiz",
     transliteration: "Z",
     meaning: "Elan, protection",
@@ -245,7 +245,7 @@ export const ELDER_FUTHARK: RuneData[] = [
   },
   {
     id: 16,
-    symbol: "\u16D6",
+    symbol: "\u16CA",
     name: "Sowilo",
     transliteration: "S",
     meaning: "Soleil, victoire",
@@ -260,7 +260,7 @@ export const ELDER_FUTHARK: RuneData[] = [
   },
   {
     id: 17,
-    symbol: "\u16D7",
+    symbol: "\u16CF",
     name: "Tiwaz",
     transliteration: "T",
     meaning: "Tyr, justice, guerrier",
@@ -275,7 +275,7 @@ export const ELDER_FUTHARK: RuneData[] = [
   },
   {
     id: 18,
-    symbol: "\u16D9",
+    symbol: "\u16D2",
     name: "Berkano",
     transliteration: "B",
     meaning: "Bouleau, deesse-mere",
@@ -290,7 +290,7 @@ export const ELDER_FUTHARK: RuneData[] = [
   },
   {
     id: 19,
-    symbol: "\u16DE",
+    symbol: "\u16D6",
     name: "Ehwaz",
     transliteration: "E",
     meaning: "Cheval, partenariat",
@@ -305,7 +305,7 @@ export const ELDER_FUTHARK: RuneData[] = [
   },
   {
     id: 20,
-    symbol: "\u16DF",
+    symbol: "\u16D7",
     name: "Mannaz",
     transliteration: "M",
     meaning: "Homme, humanite",
@@ -320,7 +320,7 @@ export const ELDER_FUTHARK: RuneData[] = [
   },
   {
     id: 21,
-    symbol: "\u16D8",
+    symbol: "\u16DA",
     name: "Laguz",
     transliteration: "L",
     meaning: "Eau, intuition",
@@ -335,7 +335,7 @@ export const ELDER_FUTHARK: RuneData[] = [
   },
   {
     id: 22,
-    symbol: "\u16C9",
+    symbol: "\u16DC",
     name: "Ingwaz",
     transliteration: "Ng",
     meaning: "Ing, dieu de la fertilite",
@@ -350,7 +350,7 @@ export const ELDER_FUTHARK: RuneData[] = [
   },
   {
     id: 23,
-    symbol: "\u16CA",
+    symbol: "\u16DE",
     name: "Dagaz",
     transliteration: "D",
     meaning: "Aube, jour",
@@ -365,7 +365,7 @@ export const ELDER_FUTHARK: RuneData[] = [
   },
   {
     id: 24,
-    symbol: "\u16CE",
+    symbol: "\u16DF",
     name: "Othala",
     transliteration: "O",
     meaning: "Heritage, patrie",

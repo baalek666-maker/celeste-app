@@ -137,8 +137,15 @@ export function calculateTransits(date: Date): Record<Planet, { longitude: numbe
  * MAIN: Calculate full natal chart from birth data.
  */
 export function calculateNatalChart(birth: BirthData): NatalChart {
-  const birthDate = new Date(`${birth.date}T${birth.time}:00`);
-  const utcDate = new Date(birthDate.getTime() - birth.timezone * 3600000);
+  // Construire la date directement en UTC pour éviter la double correction timezone.
+  // birth.date = "YYYY-MM-DD", birth.time = "HH:MM"
+  const [yStr, mStr, dStr] = birth.date.split('-');
+  const [hhStr, mmStr] = birth.time.split(':');
+  const y = Number(yStr), m = Number(mStr), d = Number(dStr);
+  const hh = Number(hhStr), mm = Number(mmStr);
+  // Date UTC représentant l'heure locale de naissance, puis on retire l'offset timezone
+  const utcMs = Date.UTC(y, m - 1, d, hh, mm, 0) - birth.timezone * 3600000;
+  const utcDate = new Date(utcMs);
   const time = new AstroTime(utcDate);
 
   const planets: Planet[] = ['sun', 'moon', 'mercury', 'venus', 'mars', 'jupiter', 'saturn', 'uranus', 'neptune', 'pluto'];
@@ -207,7 +214,9 @@ export function elementDescription(elements: {
 }
 
 /**
- * Compatibility score between two signs (based on elemental harmony + aspect theory)
+ * Compatibility score between two signs (aspect-theory based).
+ * NOTE: horoscope.ts imports its own element-based signCompatibility from data/zodiac.ts.
+ * This version uses astrological aspects (conjunction, sextile, square, trine, opposition).
  */
 export function signCompatibility(sign1: ZodiacSign, sign2: ZodiacSign): number {
   const idx1 = ZODIAC_ORDER.indexOf(sign1);
@@ -215,6 +224,8 @@ export function signCompatibility(sign1: ZodiacSign, sign2: ZodiacSign): number 
   const diff = Math.abs(idx1 - idx2);
   const distance = diff <= 6 ? diff : 12 - diff;
 
-  const scores = [75, 55, 80, 35, 90, 50, 65];
-  return scores[distance] || 60;
+  // distance 0=conjunction, 1=semi-sextile, 2=sextile, 3=square,
+  //          4=trine, 5=quincunx, 6=opposition
+  const scores = [85, 50, 65, 35, 80, 45, 38];
+  return scores[distance] ?? 55;
 }

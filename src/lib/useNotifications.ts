@@ -1,13 +1,14 @@
 import { useEffect, useState, useCallback } from 'react';
 import { api } from './api';
 
-function urlBase64ToUint8Array(base64String: string): Uint8Array {
+function urlBase64ToUint8Array(base64String: string): ArrayBuffer {
   const padding = '='.repeat((4 - (base64String.length % 4)) % 4);
   const base64 = (base64String + padding).replace(/-/g, '+').replace(/_/g, '/');
   const rawData = atob(base64);
-  const outputArray = new Uint8Array(rawData.length);
-  for (let i = 0; i < rawData.length; ++i) outputArray[i] = rawData.charCodeAt(i);
-  return outputArray;
+  const buffer = new ArrayBuffer(rawData.length);
+  const view = new Uint8Array(buffer);
+  for (let i = 0; i < rawData.length; ++i) view[i] = rawData.charCodeAt(i);
+  return buffer;
 }
 
 export type NotificationStatus = {
@@ -49,8 +50,8 @@ export function useNotifications(): {
     try {
       const s = await api.getNotificationStatus();
       setStatus({ ...s, supported: true, permission: Notification.permission });
-    } catch (err: any) {
-      setError(err?.message || 'Erreur chargement statut');
+    } catch (err: unknown) {
+      setError(err instanceof Error ? err.message : 'Erreur chargement statut');
     }
   }, [supported]);
 
@@ -68,7 +69,7 @@ export function useNotifications(): {
         const { publicKey } = await api.getVAPIDKey();
         sub = await reg.pushManager.subscribe({
           userVisibleOnly: true,
-          applicationServerKey: urlBase64ToUint8Array(publicKey) as any,
+          applicationServerKey: urlBase64ToUint8Array(publicKey),
         });
       }
       const json = sub.toJSON();
@@ -85,8 +86,8 @@ export function useNotifications(): {
       });
       await refresh();
       return true;
-    } catch (err: any) {
-      setError(err?.message || 'Erreur abonnement');
+    } catch (err: unknown) {
+      setError(err instanceof Error ? err.message : 'Erreur abonnement');
       return false;
     } finally { setLoading(false); }
   }, [supported, refresh]);
@@ -105,8 +106,8 @@ export function useNotifications(): {
       }
       await refresh();
       return true;
-    } catch (err: any) {
-      setError(err?.message || 'Erreur désabonnement');
+    } catch (err: unknown) {
+      setError(err instanceof Error ? err.message : 'Erreur désabonnement');
       return false;
     } finally { setLoading(false); }
   }, [supported, refresh]);
@@ -116,15 +117,15 @@ export function useNotifications(): {
       await api.updateNotificationHour(hour);
       await refresh();
       return true;
-    } catch (err: any) {
-      setError(err?.message || 'Erreur mise à jour heure');
+    } catch (err: unknown) {
+      setError(err instanceof Error ? err.message : 'Erreur mise à jour heure');
       return false;
     }
   }, [refresh]);
 
   const test = useCallback(async () => {
     try { return await api.testNotification(); }
-    catch (err: any) { setError(err?.message || 'Erreur test'); return null; }
+    catch (err: unknown) { setError(err instanceof Error ? err.message : 'Erreur test'); return null; }
   }, []);
 
   return { status, loading, error, subscribe, unsubscribe, updateHour, test, refresh };
