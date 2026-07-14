@@ -26,3 +26,4 @@ dist-ssr
 *.db
 *.db-shm
 *.db-wal
+.env.local.bak
