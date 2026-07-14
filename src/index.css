@@ -54,6 +54,13 @@
   /* ─── Leaf / viridian (used for "strengths" — desaturated verdigris) ─── */
   --color-leaf-400: #8fa68a;
   --color-leaf-500: #6f8a6a;
+
+  /* ─── Celeste component aliases — MUST be in @theme for opacity modifiers ─── */
+  --color-celeste-primary: #c5a059;
+  --color-celeste-text: #f0f0f0;
+  --color-celeste-success: #6f8a6a;
+  --color-celeste-bg: #050505;
+  --color-celeste-accent: #e2c47c;
 }
 
 @layer base {

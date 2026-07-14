@@ -1,0 +1,161 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Céleste — Debug Horoscope</title>
+<style>
+* { margin: 0; padding: 0; box-sizing: border-box; }
+body {
+  min-height: 100vh;
+  background: #0a0a1a;
+  color: #e8d5b7;
+  font-family: -apple-system, system-ui, sans-serif;
+  padding: 1rem;
+  font-size: 13px;
+}
+.card {
+  background: rgba(255,255,255,0.04);
+  border: 1px solid rgba(255,215,0,0.15);
+  border-radius: 1rem;
+  padding: 1rem;
+  margin-bottom: 1rem;
+}
+h1 { color: #d4af37; font-size: 1.1rem; margin-bottom: 0.5rem; }
+h2 { color: #d4af37; font-size: 0.9rem; margin-bottom: 0.5rem; }
+pre {
+  background: rgba(0,0,0,0.5);
+  padding: 0.75rem;
+  border-radius: 0.5rem;
+  overflow-x: auto;
+  font-size: 11px;
+  line-height: 1.5;
+  white-space: pre-wrap;
+  word-break: break-all;
+  color: #b0b0b0;
+}
+.status-ok { color: #6f8a6a; }
+.status-err { color: #c45a5a; }
+input {
+  width: 100%;
+  padding: 0.6rem;
+  border-radius: 0.5rem;
+  border: 1px solid rgba(255,215,0,0.2);
+  background: rgba(0,0,0,0.4);
+  color: #e8d5b7;
+  font-size: 13px;
+  margin-bottom: 0.5rem;
+}
+button {
+  padding: 0.6rem 1rem;
+  background: #d4af37;
+  color: #0a0a1a;
+  border: none;
+  border-radius: 0.5rem;
+  font-weight: 600;
+  width: 100%;
+  font-size: 14px;
+}
+label { display: block; font-size: 11px; color: #888; margin-bottom: 0.25rem; }
+.row { display: flex; gap: 0.5rem; margin-bottom: 0.5rem; }
+.row > div { flex: 1; }
+</style>
+</head>
+<body>
+<h1>✦ Céleste — Debug Horoscope</h1>
+
+<div class="card">
+  <h2>1. Login</h2>
+  <div class="row">
+    <div><label>Email</label><input id="email" value="killuminatibybohm@gmail.com" /></div>
+    <div><label>Password</label><input id="pass" type="password" value="Bohmkillumina2024!" /></div>
+  </div>
+  <button onclick="doLogin()">Se connecter</button>
+  <div id="login-result" style="margin-top:0.5rem;font-size:11px;"></div>
+</div>
+
+<div class="card">
+  <h2>2. Token localStorage</h2>
+  <pre id="token-display">Pas de token</pre>
+</div>
+
+<div class="card">
+  <h2>3. Fetch horoscope</h2>
+  <button onclick="doFetch()">Récupérer l'horoscope</button>
+  <pre id="horo-result" style="margin-top:0.5rem;">En attente...</pre>
+</div>
+
+<div class="card">
+  <h2>4. localStorage celeste_horo_cache</h2>
+  <pre id="cache-display">Pas de cache</pre>
+</div>
+
+<script>
+function show(id, text, ok) {
+  const el = document.getElementById(id);
+  el.textContent = text;
+  el.className = ok === true ? 'status-ok' : ok === false ? 'status-err' : '';
+}
+
+// Show current localStorage state
+function refreshStorage() {
+  const token = localStorage.getItem('celeste_jwt') || localStorage.getItem('celeste_token');
+  show('token-display', token ? 'Token trouvé (' + token.length + ' chars):\n' + token.substring(0, 50) + '...' : 'AUCUN TOKEN en localStorage');
+  
+  const cache = localStorage.getItem('celeste_horo_cache');
+  show('cache-display', cache ? cache : 'Pas de cache horoscope');
+}
+refreshStorage();
+
+async function doLogin() {
+  const email = document.getElementById('email').value;
+  const pass = document.getElementById('pass').value;
+  show('login-result', 'Connexion...', null);
+  try {
+    const res = await fetch('/api/auth/login', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ email, password: pass })
+    });
+    const data = await res.json();
+    if (data.token) {
+      localStorage.setItem('celeste_jwt', data.token);
+      localStorage.setItem('celeste_token', data.token);
+      if (data.user) localStorage.setItem('celeste_user', JSON.stringify(data.user));
+      show('login-result', '✓ Connecté! Token stocké.', true);
+      refreshStorage();
+    } else {
+      show('login-result', '✗ Erreur: ' + JSON.stringify(data), false);
+    }
+  } catch(e) {
+    show('login-result', '✗ ' + e.message, false);
+  }
+}
+
+async function doFetch() {
+  show('horo-result', 'Fetching...', null);
+  const token = localStorage.getItem('celeste_jwt') || localStorage.getItem('celeste_token');
+  if (!token) {
+    show('horo-result', 'PAS DE TOKEN — connecte-toi d\'abord', false);
+    return;
+  }
+  try {
+    const res = await fetch('/api/horoscope', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': 'Bearer ' + token
+      }
+    });
+    const status = res.status;
+    const text = await res.text();
+    let parsed;
+    try { parsed = JSON.parse(text); } catch { parsed = text; }
+    show('horo-result', 'HTTP ' + status + '\n\n' + JSON.stringify(parsed, null, 2), status === 200);
+  } catch(e) {
+    show('horo-result', '✗ FETCH ERROR: ' + e.message, false);
+  }
+}
+</script>
+</body>
+</html>

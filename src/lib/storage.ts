@@ -2,9 +2,11 @@ import type { User, BirthData, NatalChart, JournalEntry, HoroscopeEntry } from '
 
 const KEYS = {
   USER: 'celeste_user',
+  JWT: 'celeste_jwt',
   JOURNAL: 'celeste_journal',
   HOROSCOPE_CACHE: 'celeste_horo_cache',
   ONBOARDED: 'celeste_onboarded',
+  OFFLINE_QUEUE: 'celeste:offline_queue:v1',
 };
 
 /**
@@ -75,10 +77,16 @@ export function setOnboarded(): void {
 
 export function logout(): User {
   try {
+    // P0 #1 — Le logout ne supprimait PAS le JWT, donc l'utilisateur
+    // restait connecté après reload. Fix : on clear tout maintenant.
+    // P0 #7 — On vide aussi la offline queue pour éviter les actions
+    // cross-user (un autre login rejouerait les mutations).
     localStorage.removeItem(KEYS.USER);
+    localStorage.removeItem(KEYS.JWT);
     localStorage.removeItem(KEYS.JOURNAL);
     localStorage.removeItem(KEYS.HOROSCOPE_CACHE);
     localStorage.removeItem(KEYS.ONBOARDED);
+    localStorage.removeItem(KEYS.OFFLINE_QUEUE);
   } catch {
     // ignore
   }
@@ -96,7 +104,7 @@ export function addJournalEntry(entry: JournalEntry): void {
   const idx = entries.findIndex(e => e.date === entry.date);
   if (idx >= 0) entries[idx] = entry;
   else entries.unshift(entry);
-  saveUser({ ...getUser(), natalChart: getUser().natalChart }); // no-op write to flush any pending state
+  // P0 #13 — Suppression du no-op write (saveUser sans modification réelle).
   try {
     localStorage.setItem(KEYS.JOURNAL, JSON.stringify(entries));
   } catch (err) {

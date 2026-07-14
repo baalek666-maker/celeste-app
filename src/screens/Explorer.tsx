@@ -59,7 +59,7 @@ export function Explorer({ user, onNavigate }: { user: User; onNavigate: (s: Scr
   if (section === 'portrait') {
     return (
       <div className="page-transition">
-        <AstroPortrait />
+        <AstroPortrait onBack={() => setSection('overview')} />
       </div>
     );
   }

@@ -157,16 +157,24 @@ export function Compatibility({ user }: { user: User }) {
           <div className="glass rounded-3xl p-6 mb-6">
             <p className="text-night-400 text-xs uppercase tracking-widest mb-4">Vous</p>
             <div className="flex items-center gap-3">
-              <div className="w-14 h-14 rounded-full flex items-center justify-center"
-                   style={{ background: `${ZODIAC_SIGNS[user.natalChart?.sun!].color}22` }}>
-                <span className="text-2xl" style={{ color: ZODIAC_SIGNS[user.natalChart?.sun!].color }}>
-                  {ZODIAC_SIGNS[user.natalChart?.sun!].symbol}
-                </span>
-              </div>
-              <div>
-                <p className="text-night-100 font-semibold">{ZODIAC_SIGNS[user.natalChart?.sun!].name}</p>
-                <p className="text-night-400 text-xs">Soleil · {ZODIAC_SIGNS[user.natalChart?.moon!].name} Lune</p>
-              </div>
+              {(() => {
+                const sunSign = user.natalChart?.sun ? ZODIAC_SIGNS[user.natalChart.sun] : ZODIAC_SIGNS.aries;
+                const moonSign = user.natalChart?.moon ? ZODIAC_SIGNS[user.natalChart.moon] : ZODIAC_SIGNS.cancer;
+                return (
+                  <>
+                    <div className="w-14 h-14 rounded-full flex items-center justify-center"
+                         style={{ background: `${sunSign.color}22` }}>
+                      <span className="text-2xl" style={{ color: sunSign.color }}>
+                        {sunSign.symbol}
+                      </span>
+                    </div>
+                    <div>
+                      <p className="text-night-100 font-semibold">{sunSign.name}</p>
+                      <p className="text-night-400 text-xs">Soleil · {moonSign.name} Lune</p>
+                    </div>
+                  </>
+                );
+              })()}
             </div>
           </div>
 

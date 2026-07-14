@@ -5,6 +5,7 @@ import bcrypt from 'bcryptjs';
 import jwt from 'jsonwebtoken';
 import Database from 'better-sqlite3';
 import { rateLimit, ipKeyGenerator } from 'express-rate-limit';
+import helmet from 'helmet';
 import * as Astronomy from 'astronomy-engine';
 const { AstroTime, Body, GeoVector, SiderealTime, EclipticGeoMoon, Rotation_EQJ_ECL, RotateVector, Observer, Horizon, Equator, MakeTime, Ecliptic } = Astronomy;
 import { readFileSync } from 'fs';
@@ -299,6 +300,21 @@ function isRetrograde(planet, time) {
   return d < 0;
 }
 
+// ─── Helper JSON.parse safe ───
+// Retourne null si input null/undefined, fallback si fourni, throw une vraie
+// erreur descriptive si le contenu est corrompu. Élimine les crashes silencieux
+// sur birth_data, natal_chart, cache content corrompu.
+function safeJsonParse(input, fallback = null, contextLabel = 'json') {
+  if (input == null) return fallback;
+  if (typeof input !== 'string') return input; // déjà un objet
+  try {
+    return JSON.parse(input);
+  } catch (err) {
+    console.warn(`[safeJsonParse] ${contextLabel} corrupted:`, err.message);
+    return fallback;
+  }
+}
+
 function getTransits(date) {
   const time = new AstroTime(date);
   const planets = ['sun','moon','mercury','venus','mars','jupiter','saturn','uranus','neptune','pluto'];
@@ -316,7 +332,16 @@ function getTransits(date) {
 }
 
 function getNatalPositions(birthData, full = false) {
+  // P1 #H — Validation input : crash silencieux sur dates/timezone manquants.
+  if (!birthData || !birthData.date || !birthData.time ||
+      typeof birthData.timezone !== 'number' || typeof birthData.latitude !== 'number' || typeof birthData.longitude !== 'number') {
+    throw new Error('Invalid birth data: date, time, timezone, latitude, longitude required');
+  }
   const local = new Date(`${birthData.date}T${birthData.time}:00`);
+  // P1 #H — Date invalide → 'Invalid Date' → calculs astronomiques retournent NaN.
+  if (isNaN(local.getTime())) {
+    throw new Error(`Invalid birth date/time: ${birthData.date}T${birthData.time}`);
+  }
   const utc = new Date(local.getTime() - birthData.timezone * 3600000);
   const time = new AstroTime(utc);
   const planets = ['sun','moon','mercury','venus','mars','jupiter','saturn','uranus','neptune','pluto'];
@@ -400,36 +425,55 @@ function getNatalPositions(birthData, full = false) {
 
 // ─── LLM Horoscope Generation ──────────────────────────────
 // Retry with exponential backoff on 429 (rate limit) and 5xx
-async function callLLMWithRetry(messages, maxRetries = 3, maxTokens = 800, extraBody = {}) {
+async function callLLMWithRetry(messages, maxRetries = 3, maxTokens = 4096, extraBody = {}, timeoutMs = 45000) {
   let lastErr;
   for (let attempt = 0; attempt <= maxRetries; attempt++) {
-    const response = await fetch(LLM_API_URL, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'Authorization': `Bearer ${LLM_API_KEY}`,
-      },
-      body: JSON.stringify({
-        model: LLM_MODEL,
-        messages,
-        temperature: 0.85,
-        max_tokens: maxTokens,
-        ...extraBody,
-      }),
-    });
-    if (response.ok) return await response.json();
-    const errText = await response.text().catch(() => '');
-    lastErr = new Error(`LLM ${response.status}`);
-    if (response.status === 429 || response.status >= 500) {
-      if (attempt < maxRetries) {
-        const delayMs = 1000 * Math.pow(2, attempt); // 1s, 2s, 4s
-        console.warn(`[LLM] attempt ${attempt + 1} ${response.status}, retry in ${delayMs}ms`);
-        await new Promise(r => setTimeout(r, delayMs));
-        continue;
+    const controller = new AbortController();
+    const timeout = setTimeout(() => controller.abort(), timeoutMs);
+    try {
+      const response = await fetch(LLM_API_URL, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${LLM_API_KEY}`,
+        },
+        body: JSON.stringify({
+          model: LLM_MODEL,
+          messages,
+          temperature: 0.85,
+          max_tokens: maxTokens,
+          ...extraBody,
+        }),
+        signal: controller.signal,
+      });
+      clearTimeout(timeout);
+      if (response.ok) return await response.json();
+      const errText = await response.text().catch(() => '');
+      lastErr = new Error(`LLM ${response.status}`);
+      if (response.status === 429 || response.status >= 500) {
+        if (attempt < maxRetries) {
+          const delayMs = 1000 * Math.pow(2, attempt); // 1s, 2s, 4s
+          console.warn(`[LLM] attempt ${attempt + 1} ${response.status}, retry in ${delayMs}ms`);
+          await new Promise(r => setTimeout(r, delayMs));
+          continue;
+        }
       }
+      console.error('[LLM] fatal:', response.status, errText.slice(0, 200));
+      throw lastErr;
+    } catch (e) {
+      clearTimeout(timeout);
+      if (e.name === 'AbortError') {
+        // P0 #10 — Log dynamique au lieu de "45s" hardcodé.
+        console.warn(`[LLM] attempt ${attempt + 1} timed out after ${Math.round(timeoutMs / 1000)}s`);
+        lastErr = new Error(`LLM timeout (${Math.round(timeoutMs / 1000)}s)`);
+        if (attempt < maxRetries) {
+          await new Promise(r => setTimeout(r, 1000));
+          continue;
+        }
+        throw lastErr;
+      }
+      throw e;
     }
-    console.error('[LLM] fatal:', response.status, errText.slice(0, 200));
-    throw lastErr;
   }
   throw lastErr;
 }
@@ -500,7 +544,7 @@ Réponds UNIQUEMENT avec le JSON.`;
   const data = await callLLMWithRetry([
     { role: 'system', content: systemPrompt },
     { role: 'user', content: userPrompt },
-  ], 2);
+  ], 2, 4096); // P1 #E — 2048 trop juste pour JSON complet → 4096.
   const msg = data.choices?.[0]?.message || {};
   const content = msg.content || msg.reasoning_content || '';
   let cleaned = content.replace(/```json\s*/g, '').replace(/```\s*/g, '').trim();
@@ -538,15 +582,16 @@ Réponds UNIQUEMENT avec le JSON, aucun texte avant ou après.`;
   const data = await callLLMWithRetry([
     { role: 'system', content: systemPrompt },
     { role: 'user', content: userPrompt },
-  ]);
+  ], 3, 4096);
   const msg = data.choices?.[0]?.message || {};
-  const content = msg.content || msg.reasoning_content || '';
+  // Try content first, then reasoning_content (some reasoning models put JSON there)
+  let content = msg.content || msg.reasoning_content || '';
 
   // Parse JSON from response (handle markdown code blocks)
   let cleaned = content.replace(/```json\s*/g, '').replace(/```\s*/g, '').trim();
   const jsonMatch = cleaned.match(/\{[\s\S]*\}/);
   if (!jsonMatch) {
-    throw new Error('No JSON in LLM response');
+    throw new Error('No JSON in LLM response (content len=' + (content?.length || 0) + ')');
   }
   return JSON.parse(jsonMatch[0]);
 }
@@ -644,6 +689,57 @@ const app = express();
 app.set('trust proxy', 1);
 app.use(cors({ origin: true, credentials: true }));
 
+// P0 #22 — Headers de sécurité (Helmet). CSP laisse passer le CSS inline / Vite assets.
+app.use(helmet({
+  contentSecurityPolicy: {
+    directives: {
+      defaultSrc: ["'self'"],
+      scriptSrc: ["'self'", "'unsafe-inline'", 'https://js.stripe.com'],
+      styleSrc: ["'self'", "'unsafe-inline'", 'https://fonts.googleapis.com'],
+      fontSrc: ["'self'", 'https://fonts.gstatic.com', 'data:'],
+      imgSrc: ["'self'", 'data:', 'blob:', 'https:'],
+      connectSrc: ["'self'", 'https://api.cheapestinference.com', 'https://api.stripe.com'],
+      frameSrc: ["'self'", 'https://js.stripe.com', 'https://hooks.stripe.com'],
+      objectSrc: ["'none'"],
+      baseUri: ["'self'"],
+    },
+  },
+  crossOriginEmbedderPolicy: false,
+}));
+
+// P0 #23 — Fail-fast sur les routes hors-scope (scanners / bots).
+// Économise CPU + log propre. Bloque les scans Next.js / MCP / ONVIF / SSH / etc.
+const SCAN_PATTERNS = [
+  /^\/_next(\/|$)/i,
+  /^\/onvif(\/|$)/i,
+  /^\/mcp(\/|$)/i,
+  /^\/\.well-known(\/|$)/i,
+  /^\/wp-(login|admin|content|includes|json)(\/|$)/i,
+  /^\/phpmyadmin(\/|$)/i,
+  /^\/\.env(\/|$|\.)/i,
+  /^\/api\/route(\/|$)/i,
+  /^\/app(\/|$)/i,
+];
+app.use((req, res, next) => {
+  if (SCAN_PATTERNS.some(p => p.test(req.path))) {
+    scanStats.count++;
+    scanStats.lastPath = req.path;
+    scanStats.lastIp = req.ip;
+    return res.status(404).json({ error: 'Not found' });
+  }
+  next();
+});
+
+// P0 #25 — Scan metrics: counter + flush every 5min so it shows in Render/Fly logs
+// without flooding them. Helps you decide if fail2ban / Cloudflare is worth it.
+const scanStats = { count: 0, lastPath: '', lastIp: '' };
+setInterval(() => {
+  if (scanStats.count > 0) {
+    console.log(`[scan-blocked] ${scanStats.count} hits (last: ${scanStats.lastPath} from ${scanStats.lastIp})`);
+    scanStats.count = 0;
+  }
+}, 5 * 60 * 1000);
+
 // ─── Stripe webhook (raw body AVANT express.json) ──────────
 // ⚠️ Doit être monté avant express.json() pour que la signature fonctionne
 app.post(
@@ -659,10 +755,21 @@ app.post(
 app.use(express.json({ limit: '2mb' }));
 
 // ─── DEBUG: logger TOUTES les requêtes POST entrantes ───
+// P0 #4 — Filtre les champs sensibles (password, token) avant de logger.
+// Sans ce filtre, les mots de passe login/register étaient persistés en clair.
+const SENSITIVE_FIELDS = ['password', 'token', 'jwt', 'authorization', 'secret'];
+function sanitizeBody(body) {
+  if (!body || typeof body !== 'object') return body;
+  const out = {};
+  for (const [k, v] of Object.entries(body)) {
+    out[k] = SENSITIVE_FIELDS.includes(k.toLowerCase()) ? '[REDACTED]' : v;
+  }
+  return out;
+}
 app.use((req, res, next) => {
   if (req.method === 'POST') {
     console.log('[POST IN]', req.path, JSON.stringify({
-      body: req.body,
+      body: sanitizeBody(req.body),
       ip: req.ip,
       ua: (req.headers['user-agent'] || '').substring(0, 50),
     }));
@@ -677,11 +784,16 @@ app.get('/api/health', (req, res) => {
 
 // ─── Natal Chart (full data for premium wheel) ────────────
 app.get('/api/natal-chart', auth, (req, res) => {
-  const row = db.prepare('SELECT birth_data FROM profiles WHERE user_id = ? AND is_self = 1').get(req.user.id);
+  let row = db.prepare('SELECT birth_data FROM profiles WHERE user_id = ? AND is_self = 1').get(req.user.id);
+  // Fallback: if no profile row, try users.birth_data
+  if (!row || !row.birth_data) {
+    row = db.prepare('SELECT birth_data FROM users WHERE id = ?').get(req.user.id);
+  }
   if (!row || !row.birth_data) {
     return res.status(400).json({ error: 'No birth data found' });
   }
-  const birthData = JSON.parse(row.birth_data);
+  const birthData = safeJsonParse(row.birth_data, null, 'chart birth_data');
+  if (!birthData) return res.status(500).json({ error: 'Corrupted birth data' });
   const natal = getNatalPositions(birthData, true);
   res.json({ natal });
 });
@@ -894,7 +1006,8 @@ app.get('/api/natal-chart/planet/:name', auth, async (req, res) => {
     if (!row || !row.birth_data) {
       return res.status(400).json({ error: 'No birth data found' });
     }
-    const birthData = JSON.parse(row.birth_data);
+    const birthData = safeJsonParse(row.birth_data, null, 'compatibility partner birth_data');
+    if (!birthData) return res.status(400).json({ error: 'Corrupted partner birth data' });
     const natal = getNatalPositions(birthData, true);
 
     const interpretation = await generatePlanetInterpretation(planet, natal);
@@ -969,6 +1082,21 @@ app.post('/api/auth/register', authLimiter, async (req, res) => {
   res.json({ token, user: { id: result.lastInsertRowid, email, isPremium: false, scansRemaining: 3 } });
 });
 
+// ─── Auth: Logout ───────────────────────────────────────────
+// Endpoint minimal pour traçabilité + invalidation côté serveur (best-effort).
+// Note: le vrai logout reste client-side (clear localStorage JWT) puisque le JWT
+// est stateless. Cet endpoint sert juste à logger l'événement pour analytics/sécurité.
+app.post('/api/auth/logout', auth, (req, res) => {
+  try {
+    const userId = req.user?.id;
+    console.log(`[auth] logout user_id=${userId} at ${new Date().toISOString()}`);
+    res.json({ ok: true });
+  } catch (err) {
+    console.error('[auth] logout error:', err.message);
+    res.status(500).json({ error: 'Logout failed' });
+  }
+});
+
 // ─── Auth: Login ───────────────────────────────────────────
 app.post('/api/auth/login', authLimiter, async (req, res) => {
   const { email, password } = req.body;
@@ -985,7 +1113,7 @@ app.post('/api/auth/login', authLimiter, async (req, res) => {
       email: user.email,
       isPremium: !!user.is_premium,
       scansRemaining: user.scans_remaining,
-      birthData: user.birth_data ? JSON.parse(user.birth_data) : null,
+      birthData: safeJsonParse(user.birth_data, null, 'register auth birth_data'),
       streak: user.streak_count ?? 0,
     },
   });
@@ -1053,6 +1181,14 @@ app.post('/api/profile/birth-data', auth, (req, res) => {
   const check = validateBirthData(req.body?.birthData);
   if (!check.ok) return res.status(400).json({ error: check.error });
   db.prepare('UPDATE users SET birth_data = ? WHERE id = ?').run(JSON.stringify(check.birthData), req.user.id);
+  // Also upsert into profiles (is_self=1) so /api/natal-chart and other routes work
+  const existing = db.prepare('SELECT id FROM profiles WHERE user_id = ? AND is_self = 1').get(req.user.id);
+  if (existing) {
+    db.prepare('UPDATE profiles SET birth_data = ? WHERE id = ?').run(JSON.stringify(check.birthData), existing.id);
+  } else {
+    db.prepare('INSERT INTO profiles (user_id, name, relation, is_self, birth_data) VALUES (?, ?, ?, 1, ?)')
+      .run(req.user.id, 'Moi', 'self', JSON.stringify(check.birthData));
+  }
   res.json({ ok: true, birthData: check.birthData });
 });
 
@@ -1065,7 +1201,7 @@ app.get('/api/profile', auth, (req, res) => {
     email: user.email,
     isPremium: !!user.is_premium,
     scansRemaining: user.scans_remaining,
-    birthData: user.birth_data ? JSON.parse(user.birth_data) : null,
+    birthData: safeJsonParse(user.birth_data, null, 'login auth birth_data'),
     premiumUntil: user.premium_until,
     streak: user.streak_count ?? 0,
   });
@@ -1111,6 +1247,12 @@ app.delete('/api/account', auth, (req, res) => {
         'onboarding_progress',
         'horoscope_favorites',
         'journal_entries',
+        'user_xp',
+        'daily_quests',
+        'user_badges',
+        'xp_log',
+        'astro_portraits',
+        'horoscope_feedback',
       ];
       for (const t of tables) {
         try {
@@ -1156,7 +1298,7 @@ app.get('/api/profiles', auth, (req, res) => {
       name: r.name,
       relation: r.relation,
       isSelf: !!r.is_self,
-      birthData: JSON.parse(r.birth_data),
+      birthData: safeJsonParse(r.birth_data, null, `profile #${r.id} birth_data`),
       createdAt: r.created_at,
     })),
   });
@@ -1242,7 +1384,8 @@ app.get('/api/profiles/:id', auth, (req, res) => {
     name: r.name,
     relation: r.relation,
     isSelf: !!r.is_self,
-    birthData: JSON.parse(r.birth_data),
+    // P0 #5 — Guard contre birth_data NULL (profil créé sans données).
+    birthData: safeJsonParse(r.birth_data, null, `partner profile #${r.id} birth_data`),
     createdAt: r.created_at,
   });
 });
@@ -1268,7 +1411,8 @@ app.post('/api/horoscope', auth, async (req, res) => {
       return res.json({ ...JSON.parse(userCached.content), streak });
     }
 
-    const birthData = JSON.parse(user.birth_data);
+    const birthData = safeJsonParse(user.birth_data, null, 'horoscope birth_data');
+    if (!birthData) return res.status(400).json({ error: 'No valid birth data. Please update your profile.' });
     const natalPositions = getNatalPositions(birthData);
     const transits = getTransits(new Date());
     const sunSign = natalPositions.sun.sign;
@@ -1358,7 +1502,8 @@ app.get('/api/horoscope/week', auth, async (req, res) => {
     const offsetStart = isPremium ? -3 : -1;
     const offsetEnd = isPremium ? 3 : 1;
 
-    const birthData = JSON.parse(user.birth_data);
+    const birthData = safeJsonParse(user.birth_data, null, 'weekly-horoscope birth_data');
+    if (!birthData) return res.status(400).json({ error: 'No valid birth data. Please update your profile.' });
     const natalPositions = getNatalPositions(birthData);
     const sunSign = natalPositions.sun.sign;
 
@@ -1372,13 +1517,14 @@ app.get('/api/horoscope/week', auth, async (req, res) => {
       day.setDate(today.getDate() + offset);
       const isoDate = day.toISOString().split('T')[0];
 
-      const cached = db.prepare('SELECT summary FROM horoscope_cache WHERE user_id = ? AND date = ?').get(req.user.id, isoDate);
-      if (cached?.summary) {
+      // P0 #2 — Schéma corrigé : colonne 'content' (et non 'summary').
+      const cached = db.prepare('SELECT content FROM horoscope_cache WHERE user_id = ? AND date = ?').get(req.user.id, isoDate);
+      if (cached?.content) {
         results.push({
           date: isoDate,
           offset,
           weekday: day.toLocaleDateString('fr-FR', { weekday: 'short' }),
-          summary: JSON.parse(cached.summary),
+          summary: JSON.parse(cached.content),
           cached: true,
         });
       }
@@ -1493,11 +1639,15 @@ app.get('/api/tarot/daily', auth, llmLimiter, async (req, res) => {
     // Get user's sun sign for personalization
     let sunSign = 'inconnu';
     if (user?.birth_data) {
-      try {
-        const bd = JSON.parse(user.birth_data);
-        const natal = getNatalPositions(bd);
-        sunSign = natal.sun?.sign || 'inconnu';
-      } catch {}
+      const bd = safeJsonParse(user.birth_data, null, 'llm sun sign birth_data');
+      if (bd) {
+        try {
+          const natal = getNatalPositions(bd);
+          sunSign = natal.sun?.sign || 'inconnu';
+        } catch (err) {
+          console.warn('[llm] sun sign compute failed:', err.message);
+        }
+      }
     }
 
     // LLM interpretation
@@ -1563,7 +1713,7 @@ Réponds UNIQUEMENT avec le JSON.`;
     // Fallback: return static card data so the app never crashes
     const fbCardId = (() => {
       const u = db.prepare('SELECT birth_data FROM users WHERE id = ?').get(req.user.id);
-      const seed = u?.birth_data ? stringHash(u.birth_data + today) : Math.floor(Math.random() * 22);
+      const seed = u?.birth_data ? Array.from(u.birth_data + today).reduce((h, c) => ((h << 5) - h + c.charCodeAt(0)) | 0, 0) : Math.floor(Math.random() * 22);
       return seed % 22;
     })();
     const fbIsReversed = fbCardId % 3 === 0;
@@ -1596,12 +1746,13 @@ app.post('/api/compatibility', auth, llmLimiter, async (req, res) => {
     const now = Math.floor(Date.now() / 1000);
     const isPremium = !!user.is_premium && (!user.premium_until || user.premium_until > now);
 
-    // Free-tier gate (compatibility = 1 free analysis)
+// P0 #3 + #9 — Décrément APRÈS succès LLM (pas avant) + clamp à 0.
+    let scansRemaining = null;
     if (!isPremium) {
       if ((user.scans_remaining ?? 0) <= 0) {
         return res.status(402).json({ error: 'Free scans exhausted', code: 'paywall_required', scansRemaining: 0 });
       }
-      db.prepare('UPDATE users SET scans_remaining = scans_remaining - 1 WHERE id = ?').run(req.user.id);
+      scansRemaining = Math.max(0, (user.scans_remaining ?? 1) - 1);
     }
 
     const { partnerBirthData, context } = req.body;
@@ -1620,10 +1771,18 @@ app.post('/api/compatibility', auth, llmLimiter, async (req, res) => {
       return res.status(400).json({ error: 'Invalid partner birth data format' });
     }
 
-    const chart1 = getNatalPositions(JSON.parse(user.birth_data));
+    const userBd = safeJsonParse(user.birth_data, null, 'compat route user birth_data');
+    if (!userBd) return res.status(400).json({ error: 'No valid birth data. Please update your profile.' });
+    const chart1 = getNatalPositions(userBd);
     const chart2 = getNatalPositions(partnerBirthData);
 
     const result = await generateCompatibility(chart1, chart2, chart1.sun.sign, chart2.sun.sign, ctx);
+
+    // P0 #3 — Décrément conditionné au succès du LLM.
+    if (!isPremium && scansRemaining !== null) {
+      db.prepare('UPDATE users SET scans_remaining = ? WHERE id = ?').run(scansRemaining, req.user.id);
+    }
+
     res.json({
       ...result,
       context: ctx,
@@ -1631,7 +1790,7 @@ app.post('/api/compatibility', auth, llmLimiter, async (req, res) => {
       theirSun: chart2.sun.sign,
       yourMoon: chart1.moon.sign,
       theirMoon: chart2.moon.sign,
-      scansRemaining: isPremium ? null : (user.scans_remaining - 1),
+      scansRemaining: isPremium ? null : scansRemaining,
     });
   } catch (err) {
     console.error('Compatibility error:', err.message);
@@ -1894,7 +2053,17 @@ ${lines}`;
     const data = await resp.json();
     const text = (data.choices?.[0]?.message?.content || '').trim();
     const cleaned = text.replace(/^```json\n?/i, '').replace(/```$/i, '').trim();
-    const parsed = JSON.parse(cleaned);
+    const parsed = safeJsonParse(cleaned, null, 'aspect-interpretation LLM response');
+    if (!parsed || !Array.isArray(parsed.aspects)) {
+      console.warn('[aspect-llm] Invalid JSON, falling back to generic');
+      return aspects.map(a => ({
+        ...a,
+        p1Name: PLANET_NAMES_FR[a.p1] || a.p1,
+        p2Name: PLANET_NAMES_FR[a.p2] || a.p2,
+        interpretation: `${PLANET_NAMES_FR[a.p1] || a.p1} ${a.aspect.toLowerCase()} ${PLANET_NAMES_FR[a.p2] || a.p2} — énergie à canaliser aujourd'hui.`,
+        advice: 'Prends un moment pour observer cette dynamique intérieure.',
+      }));
+    }
     return aspects.map((a, i) => ({
       ...a,
       p1Name: PLANET_NAMES_FR[a.p1], p2Name: PLANET_NAMES_FR[a.p2],
@@ -2040,7 +2209,8 @@ app.get('/api/chart/asteroids', auth, async (req, res) => {
   try {
     const user = db.prepare('SELECT birth_data FROM users WHERE id = ?').get(req.user.id);
     if (!user?.birth_data) return res.status(400).json({ error: 'birth_data missing' });
-    const birth = JSON.parse(user.birth_data);
+    const birth = safeJsonParse(user.birth_data, null, 'birth_data');
+    if (!birth) return res.status(400).json({ error: 'Corrupted birth data. Please update your profile.' });
     const [y, m, d] = birth.date.split('-').map(Number);
     const [h, min] = (birth.time || '12:00').split(':').map(Number);
     const birthDate = new Date(Date.UTC(y, m - 1, d, h, min, 0));
@@ -2101,7 +2271,8 @@ app.get('/api/chart/lunar-nodes', auth, async (req, res) => {
   try {
     const user = db.prepare('SELECT birth_data FROM users WHERE id = ?').get(req.user.id);
     if (!user?.birth_data) return res.status(400).json({ error: 'birth_data missing' });
-    const birth = JSON.parse(user.birth_data);
+    const birth = safeJsonParse(user.birth_data, null, 'birth_data');
+    if (!birth) return res.status(400).json({ error: 'Corrupted birth data. Please update your profile.' });
     const [y, m, d] = birth.date.split('-').map(Number);
     const [h, min] = (birth.time || '12:00').split(':').map(Number);
     const t = Astronomy.MakeTime(new Date(Date.UTC(y, m - 1, d, h, min, 0)));
@@ -2339,7 +2510,8 @@ app.get('/api/chart/houses', auth, async (req, res) => {
   try {
     const user = db.prepare('SELECT birth_data FROM users WHERE id = ?').get(req.user.id);
     if (!user?.birth_data) return res.status(400).json({ error: 'birth_data missing' });
-    const birth = JSON.parse(user.birth_data);
+    const birth = safeJsonParse(user.birth_data, null, 'birth_data');
+    if (!birth) return res.status(400).json({ error: 'Corrupted birth data. Please update your profile.' });
     const { asc, houses } = computeHouses(birth);
     // Compute sun sign from birth date if not stored
     let sunSign = birth.zodiacSign || 'unknown';
@@ -2381,7 +2553,7 @@ app.get('/api/chart/houses', auth, async (req, res) => {
 async function generateRitualContent(userId, date) {
   const user = db.prepare('SELECT birth_data FROM users WHERE id = ?').get(userId);
   if (!user) return null;
-  const birth = user.birth_data ? JSON.parse(user.birth_data) : null;
+  const birth = safeJsonParse(user.birth_data, null, 'getCachedStreak birth_data');
   const sunSign = birth?.zodiacSign || 'unknown';
   const today = date.toISOString().split('T')[0];
   const prompt = `Tu es Celeste, astrologue francophone bienveillante. Pour une personne de signe solaire ${sunSign}, génère le rituel du ${today} au format JSON strict:
@@ -2595,7 +2767,7 @@ app.get('/api/premium/status', auth, (req, res) => {
 });
 
 // ─── Gamification: XP, Levels, Quests, Badges, Portrait, Cosmic Events ───
-registerGamificationRoutes(app, db, auth, callLLMWithRetry);
+registerGamificationRoutes(app, db, auth, callLLMWithRetry, getNatalPositions);
 
 // ═══════════════════════════════════════════════════════════════════════════
 // P1 + P7: CRON SCHEDULER — Daily push notifications + Re-engagement J+3/J+7
@@ -2783,9 +2955,24 @@ function startCronScheduler() {
 startCronScheduler();
 
 // ─── Serve static frontend in production ───────────────────
-app.use(express.static(join(__dirname, '..', 'dist')));
+// Hashed assets (/assets/index-XXXXXX.js) can be cached forever — content-addressed
+app.use('/assets', express.static(join(__dirname, '..', 'dist', 'assets'), {
+  maxAge: '1y',
+  immutable: true,
+}));
+
+// Non-hashed static files (icons, manifest, sw.js) — short cache + revalidate
+app.use(express.static(join(__dirname, '..', 'dist'), {
+  maxAge: 0,
+  setHeaders: (res) => res.setHeader('Cache-Control', 'no-cache, must-revalidate'),
+}));
+
+// SPA fallback: index.html must NEVER be cached (it references hashed assets)
 app.get('*', (req, res) => {
   if (req.path.startsWith('/api/')) return;
+  res.setHeader('Cache-Control', 'no-store, no-cache, must-revalidate');
+  res.setHeader('Pragma', 'no-cache');
+  res.setHeader('Expires', '0');
   res.sendFile(join(__dirname, '..', 'dist', 'index.html'));
 });
 

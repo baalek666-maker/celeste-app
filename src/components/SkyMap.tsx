@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useState, useRef } from 'react';
 import { api } from '../lib/api';
 import { ZODIAC_ORDER, ZODIAC_SIGNS, PLANET_DATA } from '../data/zodiac';
 
@@ -10,7 +10,7 @@ interface Transit {
 }
 
 interface SkyMapProps {
-  size?: number; // SVG size in px
+  size?: number;
 }
 
 const PLANET_ORDER = ['sun', 'moon', 'mercury', 'venus', 'mars', 'jupiter', 'saturn', 'uranus', 'neptune', 'pluto'];
@@ -22,8 +22,8 @@ ZODIAC_ORDER.forEach(en => { FR_TO_EN[ZODIAC_SIGNS[en].name] = en; });
 function resolveSignKey(raw: string): string | null {
   if (!raw) return null;
   const lower = raw.toLowerCase();
-  if (ZODIAC_SIGNS[lower as keyof typeof ZODIAC_SIGNS]) return lower;   // already english key
-  if (FR_TO_EN[raw]) return FR_TO_EN[raw];                                // french name → english
+  if (ZODIAC_SIGNS[lower as keyof typeof ZODIAC_SIGNS]) return lower;
+  if (FR_TO_EN[raw]) return FR_TO_EN[raw];
   if (FR_TO_EN[raw.charAt(0).toUpperCase() + raw.slice(1).toLowerCase()]) return FR_TO_EN[raw.charAt(0).toUpperCase() + raw.slice(1).toLowerCase()];
   return null;
 }
@@ -35,7 +35,6 @@ function resolveSignKey(raw: string): string | null {
  *   svgAngle = 180 - longitude (in radians)
  */
 function lonToSvgAngle(lon: number): number {
-  // Returns angle in radians for SVG circle position
   return ((180 - lon) * Math.PI) / 180;
 }
 
@@ -44,10 +43,64 @@ function lonToXY(lon: number, radius: number, cx: number, cy: number): [number, 
   return [cx + Math.cos(a) * radius, cy + Math.sin(a) * radius];
 }
 
-export default function SkyMap({ size = 320 }: SkyMapProps) {
+function polarToXY(angleDeg: number, radius: number, cx: number, cy: number): [number, number] {
+  const a = (angleDeg * Math.PI) / 180;
+  return [cx + Math.cos(a) * radius, cy + Math.sin(a) * radius];
+}
+
+function arcPath(cx: number, cy: number, r: number, startDeg: number, endDeg: number): string {
+  const [x1, y1] = polarToXY(startDeg, r, cx, cy);
+  const [x2, y2] = polarToXY(endDeg, r, cx, cy);
+  const largeArc = Math.abs(endDeg - startDeg) > 180 ? 1 : 0;
+  return `M ${x1} ${y1} A ${r} ${r} 0 ${largeArc} 1 ${x2} ${y2}`;
+}
+
+/**
+ * Compute aspects between transiting planets (geometrical).
+ * Same definition as backend computeDailyAspects() to stay consistent.
+ */
+const ASPECT_DEFS = [
+  { type: 'conjunction', angle: 0,   orb: 6, color: '#fbbf24' },
+  { type: 'opposition',  angle: 180, orb: 6, color: '#ef4444' },
+  { type: 'trine',       angle: 120, orb: 5, color: '#22d3ee' },
+  { type: 'square',      angle: 90,  orb: 5, color: '#f97316' },
+  { type: 'sextile',     angle: 60,  orb: 4, color: '#4ade80' },
+];
+
+function computeTransitAspects(transits: Record<string, Transit>) {
+  const planets = PLANET_ORDER.filter(p => transits[p]?.longitude != null);
+  const out: Array<{ p1: string; p2: string; type: string; orb: number; color: string }> = [];
+  for (let i = 0; i < planets.length; i++) {
+    for (let j = i + 1; j < planets.length; j++) {
+      const a = transits[planets[i]].longitude;
+      const b = transits[planets[j]].longitude;
+      let diff = Math.abs(a - b);
+      if (diff > 180) diff = 360 - diff;
+      for (const def of ASPECT_DEFS) {
+        const delta = Math.abs(diff - def.angle);
+        if (delta <= def.orb) {
+          out.push({
+            p1: planets[i],
+            p2: planets[j],
+            type: def.type,
+            orb: delta,
+            color: def.color,
+          });
+          break; // first matching aspect wins
+        }
+      }
+    }
+  }
+  return out;
+}
+
+export default function SkyMap({ size = 340 }: SkyMapProps) {
   const [transits, setTransits] = useState<Record<string, Transit> | null>(null);
   const [loading, setLoading] = useState(true);
   const [err, setErr] = useState<string | null>(null);
+  const [rotating, setRotating] = useState(true);
+  const [containerW, setContainerW] = useState(0);
+  const containerRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
     let mounted = true;
@@ -67,14 +120,23 @@ export default function SkyMap({ size = 320 }: SkyMapProps) {
     return () => { mounted = false; };
   }, []);
 
-  const cx = size / 2;
-  const cy = size / 2;
-  const r = size / 2 - 24;
-  const planetOrbit = r - 28;
+  // Responsive sizing fallback
+  useEffect(() => {
+    if (!containerRef.current) return;
+    const ro = new ResizeObserver(entries => {
+      for (const e of entries) {
+        setContainerW(e.contentRect.width);
+      }
+    });
+    ro.observe(containerRef.current);
+    return () => ro.disconnect();
+  }, []);
+
+  const actualSize = size ?? Math.min(containerW || 340, 340);
 
   if (loading) {
     return (
-      <div className="glass rounded-3xl p-4 mb-4 flex items-center justify-center" style={{ height: size }}>
+      <div ref={containerRef} className="glass rounded-3xl p-4 mb-4 flex items-center justify-center" style={{ minHeight: 200 }}>
         <p className="text-night-400 text-sm">Chargement de la carte du ciel...</p>
       </div>
     );
@@ -88,110 +150,187 @@ export default function SkyMap({ size = 320 }: SkyMapProps) {
     );
   }
 
+  const cx = actualSize / 2;
+  const cy = actualSize / 2;
+  const outerR = actualSize / 2 - 8;
+  const zodiacR = outerR - 18;
+  const tickOuterR = zodiacR;
+  const tickInnerR = zodiacR - 12;
+  const planetR = tickInnerR - 22;
+  const aspectR = planetR - 8;
+  const centerR = 42;
+
+  // Anti-collision: spread planets that are within 5 deg
+  const planetEntries = PLANET_ORDER
+    .filter(p => transits[p]?.longitude != null)
+    .map(p => ({ key: p, lon: transits[p].longitude, meta: PLANET_DATA[p] }))
+    .sort((a, b) => a.lon - b.lon);
+
+  const spread = [...planetEntries];
+  for (let i = 0; i < spread.length; i++) {
+    for (let j = i + 1; j < spread.length; j++) {
+      let d = Math.abs(spread[i].lon - spread[j].lon);
+      if (d > 180) d = 360 - d;
+      if (d < 5 && d > 0) {
+        const offset = (5 - d) / 2;
+        spread[j].lon += offset;
+        spread[i].lon -= offset;
+      }
+    }
+  }
+
+  const transitAspects = computeTransitAspects(transits);
+
   return (
     <div className="glass rounded-3xl p-4 mb-4 animate-fade-in card-glow">
       <div className="flex items-center justify-between mb-2 px-1">
         <p className="text-gold-400 text-xs uppercase tracking-widest">Carte du ciel · aujourd'hui</p>
-        <p className="text-night-500 text-xs">{new Date().toLocaleDateString('fr-FR', { day: 'numeric', month: 'long' })}</p>
+        <div className="flex items-center gap-2">
+          <p className="text-night-500 text-xs">{new Date().toLocaleDateString('fr-FR', { day: 'numeric', month: 'long' })}</p>
+          <button
+            onClick={() => setRotating(r => !r)}
+            className="text-night-500 text-xs hover:text-gold-400 transition-colors"
+          >
+            {rotating ? '⏸ Pause' : '▶ Animer'}
+          </button>
+        </div>
       </div>
 
-      <div className="relative mx-auto" style={{ width: size, height: size }}>
+      <div ref={containerRef} className="relative mx-auto" style={{ width: actualSize, height: actualSize }}>
         <svg
-          width={size}
-          height={size}
-          viewBox={`0 0 ${size} ${size}`}
+          width={actualSize}
+          height={actualSize}
+          viewBox={`0 0 ${actualSize} ${actualSize}`}
           className="overflow-visible"
-          style={{ animation: 'skymap-spin 240s linear infinite' }}
+          style={rotating ? { animation: 'skymap-spin 240s linear infinite' } : undefined}
         >
           <defs>
             <radialGradient id="sky-grad" cx="50%" cy="50%" r="50%">
-              <stop offset="0%" stopColor="#1e1b4b" stopOpacity="0.4" />
-              <stop offset="70%" stopColor="#0f172a" stopOpacity="0.1" />
-              <stop offset="100%" stopColor="transparent" />
+              <stop offset="0%" stopColor="#1e1b4b" stopOpacity="0.5" />
+              <stop offset="60%" stopColor="#0c0a1e" stopOpacity="0.3" />
+              <stop offset="100%" stopColor="#020014" stopOpacity="0.1" />
             </radialGradient>
           </defs>
 
-          {/* Outer zodiac wheel */}
-          <circle cx={cx} cy={cy} r={r} fill="url(#sky-grad)" stroke="#475569" strokeWidth="1" opacity="0.6" />
+          {/* Background */}
+          <circle cx={cx} cy={cy} r={outerR} fill="url(#sky-grad)" />
 
-          {/* 12 sign segments */}
-          {ZODIAC_ORDER.map((sign, i) => {
+          {/* ═══ Zodiac ring ═══ */}
+          {ZODIAC_ORDER.map((signKey, i) => {
+            const sign = ZODIAC_SIGNS[signKey];
             const lonStart = i * 30;
-            const [x1, y1] = lonToXY(lonStart, r, cx, cy);
-            const [x2, y2] = lonToXY(lonStart, r - 14, cx, cy);
+            const svgStart = 180 - lonStart;
+            const svgEnd = 180 - (lonStart + 30);
+            const arcD = arcPath(cx, cy, outerR, svgStart, svgEnd);
+            const arcD2 = arcPath(cx, cy, zodiacR, svgStart, svgEnd);
+            const [sx, sy] = lonToXY(lonStart + 15, (outerR + zodiacR) / 2, cx, cy);
             return (
-              <g key={sign}>
+              <g key={signKey}>
+                <path
+                  d={`${arcD} L ${polarToXY(svgEnd, zodiacR, cx, cy).join(' ')} ${arcD2.replace('M', 'L')} Z`}
+                  fill={sign.color}
+                  opacity="0.06"
+                />
                 <line
-                  x1={cx + Math.cos(lonToSvgAngle(lonStart)) * (r - 14)}
-                  y1={cy + Math.sin(lonToSvgAngle(lonStart)) * (r - 14)}
-                  x2={x1}
-                  y2={y1}
+                  x1={polarToXY(svgStart, zodiacR, cx, cy)[0]}
+                  y1={polarToXY(svgStart, zodiacR, cx, cy)[1]}
+                  x2={polarToXY(svgStart, outerR, cx, cy)[0]}
+                  y2={polarToXY(svgStart, outerR, cx, cy)[1]}
                   stroke="#475569"
-                  strokeWidth="0.5"
+                  strokeWidth="0.4"
                   opacity="0.5"
                 />
                 <text
-                  x={cx + Math.cos(lonToSvgAngle(lonStart + 15)) * (r - 22)}
-                  y={cy + Math.sin(lonToSvgAngle(lonStart + 15)) * (r - 22)}
+                  x={sx}
+                  y={sy}
                   textAnchor="middle"
                   dominantBaseline="middle"
-                  fontSize="14"
-                  fill={ZODIAC_SIGNS[sign].color}
-                  opacity="0.85"
+                  fontSize={actualSize > 320 ? 15 : 12}
+                  fill={sign.color}
+                  opacity="0.9"
+                  style={{ fontWeight: 600 }}
                 >
-                  {ZODIAC_SIGNS[sign].symbol}
+                  {sign.symbol}
                 </text>
               </g>
             );
           })}
 
-          {/* Inner planet orbit */}
-          <circle cx={cx} cy={cy} r={planetOrbit} fill="none" stroke="#334155" strokeWidth="0.5" strokeDasharray="2 3" opacity="0.5" />
+          {/* Outer border circles */}
+          <circle cx={cx} cy={cy} r={outerR} fill="none" stroke="#d4a574" strokeWidth="1.5" opacity="0.5" />
+          <circle cx={cx} cy={cy} r={zodiacR} fill="none" stroke="#475569" strokeWidth="0.8" opacity="0.5" />
 
-          {/* Center point */}
-          <circle cx={cx} cy={cy} r="2" fill="#fbbf24" opacity="0.6" />
-
-          {/* Planets */}
-          {PLANET_ORDER.map((p) => {
-            const t = transits[p];
-            if (!t) return null;
-            const [x, y] = lonToXY(t.longitude, planetOrbit, cx, cy);
-            const planet = PLANET_DATA[p];
-            if (!planet) return null;
+          {/* ═══ Degree ticks ═══ */}
+          {Array.from({ length: 360 }, (_, deg) => {
+            const svgAngle = lonToSvgAngle(deg);
+            const isMajor = deg % 30 === 0;
+            const isMid = deg % 10 === 0;
+            const isSmall = deg % 5 === 0;
+            const tickLen = isMajor ? 10 : isMid ? 6 : isSmall ? 4 : 2;
+            const [x1, y1] = polarToXY(180 - deg, tickOuterR, cx, cy);
+            const [x2, y2] = polarToXY(180 - deg, tickOuterR - tickLen, cx, cy);
+            if (!isSmall) return null;
             return (
-              <g key={p} className="skymap-planet" style={{ animation: 'skymap-pulse 3s ease-in-out infinite' }}>
-                <circle cx={x} cy={y} r="11" fill={planet.color} opacity="0.18" />
-                <circle cx={x} cy={y} r="5" fill={planet.color} opacity="0.9" />
-                <text
-                  x={x}
-                  y={y}
-                  textAnchor="middle"
-                  dominantBaseline="middle"
-                  fontSize="9"
-                  fill="#fff"
-                  fontWeight="bold"
-                >
-                  {planet.symbol}
+              <line key={deg} x1={x1} y1={y1} x2={x2} y2={y2}
+                stroke={isMajor ? '#d4a574' : '#64748b'}
+                strokeWidth={isMajor ? 1 : 0.4}
+                opacity={isMajor ? 0.7 : 0.4}
+              />
+            );
+          })}
+
+          {/* ═══ Inner circle ═══ */}
+          <circle cx={cx} cy={cy} r={planetR + 8} fill="none" stroke="#334155" strokeWidth="0.5" opacity="0.4" />
+          <circle cx={cx} cy={cy} r={centerR} fill="none" stroke="#d4a574" strokeWidth="0.6" opacity="0.4" />
+
+          {/* ═══ Aspect lines ═══ */}
+          {transitAspects.map((asp, i) => {
+            const p1 = spread.find(s => s.key === asp.p1);
+            const p2 = spread.find(s => s.key === asp.p2);
+            if (!p1 || !p2) return null;
+            const [x1, y1] = lonToXY(p1.lon, aspectR, cx, cy);
+            const [x2, y2] = lonToXY(p2.lon, aspectR, cx, cy);
+            return (
+              <line key={`asp-${i}`} x1={x1} y1={y1} x2={x2} y2={y2}
+                stroke={asp.color}
+                strokeWidth={asp.orb < 2 ? 1.5 : 1}
+                opacity={asp.orb < 2 ? 0.55 : 0.3}
+                strokeDasharray={asp.type === 'sextile' ? '4 2' : undefined}
+              />
+            );
+          })}
+
+          {/* ═══ Planets ═══ */}
+          {spread.map(p => {
+            const [x, y] = lonToXY(p.lon, planetR, cx, cy);
+            return (
+              <g key={p.key} style={{ animation: 'skymap-pulse 3s ease-in-out infinite' }}>
+                <circle cx={x} cy={y} r="13" fill={p.meta.color} opacity="0.12" />
+                <circle cx={x} cy={y} r="9" fill={p.meta.color} opacity="0.25" />
+                <circle cx={x} cy={y} r="7.5" fill="#0c0a1e" stroke={p.meta.color} strokeWidth="1.2" />
+                <text x={x} y={y} textAnchor="middle" dominantBaseline="middle"
+                  fontSize="10" fill={p.meta.color} style={{ fontWeight: 700 }}>
+                  {p.meta.symbol}
                 </text>
-                {t.retrograde && (
-                  <text
-                    x={x + 8}
-                    y={y - 8}
-                    fontSize="7"
-                    fill="#ef4444"
-                    fontWeight="bold"
-                  >℞</text>
+                {/* degree label */}
+                <text x={x} y={y + 15} textAnchor="middle" dominantBaseline="middle"
+                  fontSize="6" fill="#94a3b8" opacity="0.7">
+                  {Math.floor(transits[p.key].degree)}°
+                </text>
+                {/* retrograde */}
+                {transits[p.key].retrograde && (
+                  <text x={x + 10} y={y - 9} fontSize="7" fill="#ef4444" style={{ fontWeight: 700 }}>
+                    ℞
+                  </text>
                 )}
               </g>
             );
           })}
-        </svg>
 
-        {/* Static legend overlay (counter-rotates so it stays readable) */}
-        <div
-          className="absolute inset-0 flex items-end justify-center pb-2 pointer-events-none"
-          style={{ animation: 'skymap-spin 240s linear infinite reverse' }}
-        />
+          {/* ═══ Center decoration ═══ */}
+          <circle cx={cx} cy={cy} r="3" fill="#fbbf24" opacity="0.5" />
+          <circle cx={cx} cy={cy} r="1.5" fill="#fef3c7" />
+        </svg>
       </div>
 
       <style>{`
@@ -201,11 +340,29 @@ export default function SkyMap({ size = 320 }: SkyMapProps) {
         }
         @keyframes skymap-pulse {
           0%, 100% { opacity: 1; }
-          50% { opacity: 0.7; }
+          50% { opacity: 0.8; }
         }
       `}</style>
 
-      {/* Compact legend below */}
+      {/* Aspect legend */}
+      {transitAspects.length > 0 && (
+        <div className="mt-3 flex flex-wrap gap-2 justify-center">
+          {[
+            { t: 'conjunction', s: '☌', c: '#fbbf24', fr: 'Conjonction' },
+            { t: 'opposition',  s: '☍', c: '#ef4444', fr: 'Opposition' },
+            { t: 'trine',       s: '△', c: '#22d3ee', fr: 'Trigone' },
+            { t: 'square',      s: '□', c: '#f97316', fr: 'Carré' },
+            { t: 'sextile',     s: '⚹', c: '#4ade80', fr: 'Sextile' },
+          ].filter(l => transitAspects.some(a => a.type === l.t)).map(l => (
+            <div key={l.t} className="flex items-center gap-1 text-[10px]">
+              <span style={{ color: l.c }}>{l.s}</span>
+              <span className="text-night-400">{l.fr}</span>
+            </div>
+          ))}
+        </div>
+      )}
+
+      {/* Compact planet positions below */}
       <div className="mt-3 grid grid-cols-3 gap-x-3 gap-y-1 text-xs">
         {PLANET_ORDER.filter(p => transits[p]).map(p => {
           const t = transits[p];

@@ -36,6 +36,12 @@ function emit() {
 }
 
 function push(kind: ToastKind, message: string) {
+  // P1 #24 — Dedup: si un toast identique (kind+message) est déjà visible,
+  // on ne l'ajoute pas. Évite les doublons quand plusieurs catch convergent
+  // (ex: API erreur réseau → plusieurs toast.error('Erreur réseau')).
+  if (_items.some(t => t.kind === kind && t.message === message && !t.exiting)) {
+    return;
+  }
   const id = _nextId++;
   const item: ToastItem = { id, kind, message };
   _items = [..._items, item].slice(-3); // keep last 3

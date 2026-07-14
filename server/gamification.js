@@ -85,7 +85,7 @@ function grantBadge(db, userId, badgeId) {
 
 // ─── Route Registration ─────────────────────────────────────────
 
-function registerGamificationRoutes(app, db, auth, callLLMWithRetry) {
+function registerGamificationRoutes(app, db, auth, callLLMWithRetry, getNatalPositions) {
 
   // ── GET /api/gamification/status ──
   app.get('/api/gamification/status', auth, (req, res) => {
@@ -268,48 +268,48 @@ function registerGamificationRoutes(app, db, auth, callLLMWithRetry) {
         });
       }
 
-      // Get user's birth data + natal chart
-      const userRow = db.prepare('SELECT birth_data, natal_chart FROM users WHERE id = ?').get(userId);
+      // Get user's birth data and compute natal chart on the fly
+      const userRow = db.prepare('SELECT birth_data FROM users WHERE id = ?').get(userId);
       if (!userRow || !userRow.birth_data) {
         return res.status(400).json({ error: 'Birth data required' });
       }
       const birthData = JSON.parse(userRow.birth_data);
-      const natalChart = userRow.natal_chart ? JSON.parse(userRow.natal_chart) : null;
+      // Compute natal chart from birth data (was reading users.natal_chart which is always NULL)
+      const natalChart = typeof getNatalPositions === 'function'
+        ? getNatalPositions(birthData, true)
+        : null;
 
       // Build prompt
-      const sunSign = natalChart?.sun || 'unknown';
-      const moonSign = natalChart?.moon || 'unknown';
-      const risingSign = natalChart?.rising || 'unknown';
+      const sunSign = natalChart?.sun?.sign || 'Verseau';
+      const moonSign = natalChart?.moon?.sign || 'unknown';
+      const risingSign = natalChart?.ascendant?.sign || 'unknown';
       const bd = birthData;
 
-      const FR_ZODIAC = {
-        aries:'Bélier', taurus:'Taureau', gemini:'Gémeaux', cancer:'Cancer',
-        leo:'Lion', virgo:'Vierge', libra:'Balance', scorpio:'Scorpion',
-        sagittarius:'Sagittaire', capricorn:'Capricorne', aquarius:'Verseau', pisces:'Poissons',
-      };
-
-      const positionsStr = natalChart?.positions?.map(p =>
-        `${p.planet} en ${FR_ZODIAC[p.sign] || p.sign} (${p.degree?.toFixed(1)}°)${p.retrograde ? ' R' : ''}`
-      ).join(', ') || '';
+      // Use FR zodiac names directly from natal chart (already computed in French)
+      const planetsArr = ['sun','moon','mercury','venus','mars','jupiter','saturn','uranus','neptune','pluto'];
+      const positionsStr = planetsArr
+        .map(p => natalChart?.[p] ? `${p} en ${natalChart[p].sign} (${natalChart[p].degree?.toFixed(1)}°)${natalChart[p].retrograde ? ' R' : ''}` : null)
+        .filter(Boolean)
+        .join(', ');
 
       const prompt = `Tu es un astrologue professionnel de haut niveau, dans le style d'Astrotheme.
 Rédige un PORTRAIT ASTROLOGIQUE COMPLET et APPROFONDI (environ 1200-1500 mots) en français pour cette personne.
 
 DONNÉES NATALES:
-- Soleil: ${FR_ZODIAC[sunSign] || sunSign}
-- Lune: ${FR_ZODIAC[moonSign] || moonSign}
-- Ascendant: ${FR_ZODIAC[risingSign] || risingSign}
+- Soleil: ${sunSign}
+- Lune: ${moonSign}
+- Ascendant: ${risingSign}
 - Naissance: ${bd.date} à ${bd.time} à ${bd.city}
 - Positions: ${positionsStr}
 
 STRUCTURE (utilise des titres avec ##):
-## Votre essence: Soleil en ${FR_ZODIAC[sunSign]}
+## Votre essence: Soleil en ${sunSign}
 Décris le noyau de la personnalité, les motivations profondes, l'ego, la vitalité.
 
-## Votre monde intérieur: Lune en ${FR_ZODIAC[moonSign]}
+## Votre monde intérieur: Lune en ${moonSign}
 Décris les émotions, les besoins, l'inconscient, la mère, le confort émotionnel.
 
-## Votre masque: Ascendant ${FR_ZODIAC[risingSign]}
+## Votre masque: Ascendant ${risingSign}
 Décris comment la personne est perçue, sa façon d'aborder la vie, le premier contact.
 
 ## Votre chemin de vie
@@ -331,22 +331,37 @@ Réponse au format JSON: {"portrait": "le texte complet avec les ##"}`;
       const result = await callLLMWithRetry(
         [{ role: 'user', content: prompt }],
         2,    // maxRetries
-        4000, // maxTokens
-        { response_format: { type: 'json_object' } }
+        8192, // maxTokens (glm-5.2 reasoning model needs more tokens)
+        { response_format: { type: 'json_object' } },
+        120000 // 120s timeout (portrait generation is long)
       );
 
       let portraitText = '';
       try {
         const parsed = typeof result === 'string' ? JSON.parse(result) : result;
-        portraitText = parsed.choices?.[0]?.message?.content
-          ? JSON.parse(parsed.choices[0].message.content).portrait
-          : parsed.portrait || '';
+        // glm-5.2: content may be empty, check reasoning_content fallback
+        let rawContent = parsed.choices?.[0]?.message?.content
+          || parsed.choices?.[0]?.message?.reasoning_content
+          || '';
+        // Strip markdown code fences (glm-5.2 wraps JSON in ```json...```)
+        rawContent = rawContent.replace(/^```(?:json)?\s*/i, '').replace(/\s*```$/,'').trim();
+        portraitText = rawContent ? (JSON.parse(rawContent).portrait || rawContent) : (parsed.portrait || '');
       } catch {
-        portraitText = result?.choices?.[0]?.message?.content || '';
+        let rawFallback = result?.choices?.[0]?.message?.content
+          || result?.choices?.[0]?.message?.reasoning_content
+          || (typeof result === 'string' ? result : '');
+        rawFallback = rawFallback.replace(/^```(?:json)?\s*/i, '').replace(/\s*```$/,'').trim();
+        // Try to extract .portrait from JSON
+        try {
+          const m = JSON.parse(rawFallback);
+          portraitText = m.portrait || rawFallback;
+        } catch {
+          portraitText = rawFallback;
+        }
       }
 
       if (!portraitText || portraitText.length < 200) {
-        portraitText = `## Votre essence: Soleil en ${FR_ZODIAC[sunSign]}\n\nVotre Soleil en ${FR_ZODIAC[sunSign]} illumine votre chemin. Cette position fondamentale définit qui vous êtes au plus profond de votre être.\n\n## Votre monde intérieur: Lune en ${FR_ZODIAC[moonSign]}\n\nVotre Lune en ${FR_ZODIAC[moonSign]} gouverne votre paysage émotionnel et vos besoins les plus intimes.\n\n## Votre masque: Ascendant ${FR_ZODIAC[risingSign]}\n\nVotre Ascendant ${FR_ZODIAC[risingSign]} est la première impression que vous donnez au monde.`;
+        portraitText = `## Votre essence: Soleil en ${sunSign}\n\nVotre Soleil en ${sunSign} illumine votre chemin. Cette position fondamentale définit qui vous êtes au plus profond de votre être.\n\n## Votre monde intérieur: Lune en ${moonSign}\n\nVotre Lune en ${moonSign} gouverne votre paysage émotionnel et vos besoins les plus intimes.\n\n## Votre masque: Ascendant ${risingSign}\n\nVotre Ascendant ${risingSign} est la première impression que vous donnez au monde.`;
       }
 
       const wordCount = portraitText.split(/\s+/).length;

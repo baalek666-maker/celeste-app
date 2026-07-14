@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react';
 import type { User } from '../types';
 import { startCheckout, isStripeConfigured, openBillingPortal } from '../lib/payment';
 import { api } from '../lib/api';
+import { getUser } from '../lib/storage';
 
 export function Paywall({ onClose, onSubscribe }: {
   onClose: () => void;
@@ -52,12 +53,14 @@ export function Paywall({ onClose, onSubscribe }: {
       const res = await api.restorePurchases();
       if (res.restored && res.isPremium) {
         setRestoreMsg('✓ Abonnement restauré — vous êtes Premium.');
-        // Informe le parent qu'on a retrouvé un statut Premium. Le parent rechargera
-        // l'user complet via /api/auth/me ou son équivalent.
+        // P0 #6 — On préserve l'utilisateur existant (email, birthData, natalChart)
+        // au lieu de construire un User vide. Seul isPremium/premiumUntil changent.
+        const existing = getUser();
         onSubscribe({
-          email: '', name: '', birthData: null, natalChart: null,
-          isPremium: true, scansRemaining: 0, trialStartedAt: null,
-          premiumUntil: res.premiumUntil ?? null, createdAt: Date.now(),
+          ...existing,
+          isPremium: true,
+          scansRemaining: 0,
+          premiumUntil: res.premiumUntil ?? existing.premiumUntil ?? null,
         });
       } else if (!res.configured) {
         setRestoreMsg('Restauration indisponible — Stripe non configuré.');

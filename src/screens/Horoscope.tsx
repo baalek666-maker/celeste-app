@@ -30,6 +30,7 @@ export function Horoscope({ user }: { user: User }) {
   const [week, setWeek] = useState<any[] | null>(null);
   const [loadingWeek, setLoadingWeek] = useState(false);
   const [weekError, setWeekError] = useState('');
+  const [activeSection, setActiveSection] = useState<'general' | 'love' | 'career'>('general');
   const today = new Date().toISOString().split('T')[0];
   const todayFr = new Date().toLocaleDateString('fr-FR', { weekday: 'long', day: 'numeric', month: 'long' });
   const msgIdx = useRef(0);
@@ -89,13 +90,16 @@ export function Horoscope({ user }: { user: User }) {
 
     Promise.race([api.getHoroscope(), timeoutPromise])
       .then(h => {
+        console.log('[DEBUG HOROSCOPE] Raw API response:', JSON.stringify(h));
         const entry = buildEntry(h);
+        console.log('[DEBUG HOROSCOPE] Built entry:', JSON.stringify(entry));
         setHoroscope(entry);
         setIsFallback(!!h.isFallback);
         cacheHoroscope(today, entry);
         setLoading(false);
       })
       .catch(err => {
+        console.error('[DEBUG HOROSCOPE] Error:', err?.message, err?.status, JSON.stringify(err));
         const raw = (err?.message || '').toLowerCase();
         let msg = err.message || 'Erreur';
         if (raw.includes('429') || raw.includes('rate limit') || raw.includes('limite')) {
@@ -133,7 +137,7 @@ export function Horoscope({ user }: { user: User }) {
       .catch(err => setWeekError(err?.message || 'Erreur chargement semaine'))
       .finally(() => setLoadingWeek(false));
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [loading, horoscope != null]);
+  }, [loading, horoscope]);
 
   // Cycle loading messages while loading
   useEffect(() => {
@@ -233,7 +237,7 @@ export function Horoscope({ user }: { user: User }) {
   }
 
   if (!horoscope) return null;
-  const safeEnergy = Math.max(0, Math.min(5, horoscope.energy ?? 3));
+  const safeEnergy = Math.max(0, Math.min(5, horoscope.energie ?? horoscope.energy ?? 3));
   const energyBars = '◆'.repeat(safeEnergy) + '◇'.repeat(5 - safeEnergy);
 
   return (
@@ -323,72 +327,101 @@ export function Horoscope({ user }: { user: User }) {
             <p className="text-night-400 text-xs uppercase tracking-widest">Énergie</p>
           </div>
           <p className="text-gold-400 text-lg tracking-wider">{energyBars}</p>
-          <p className="text-night-300 text-sm mt-1">{horoscope.energy}/5</p>
+          <p className="text-night-300 text-sm mt-1">{safeEnergy}/5</p>
         </div>
         <div className="glass rounded-2xl p-4 card-glow animate-fade-in" style={{ animationDelay: '0.1s' }}>
           <div className="flex items-center gap-2 mb-2">
             <span className="text-lg">🌙</span>
             <p className="text-night-400 text-xs uppercase tracking-widest">Humeur</p>
           </div>
-          <p className="text-cosmic-300 text-lg font-medium">{horoscope.mood}</p>
+          <p className="text-cosmic-300 text-lg font-medium">{horoscope.mood || '—'}</p>
         </div>
       </div>
 
       {/* Sky map (Feature 6) */}
       <SkyMap />
 
-      {/* General */}
-      <div className="glass rounded-3xl p-5 mb-4 animate-fade-in card-glow">
-        <div className="flex items-center justify-between mb-3">
-          <div className="flex items-center gap-2">
-            <span className="text-xl">✦</span>
-            <p className="text-gold-400 text-xs uppercase tracking-widest">Général</p>
-          </div>
-          <button
-            onClick={() => handleToggleFav('general', horoscope.general)}
-            className="text-lg px-2 py-1 rounded-lg hover:bg-night-800/50 active:scale-90 transition-all"
-            aria-label={isFavorited('general') ? 'Retirer des favoris' : 'Ajouter aux favoris'}
-          >
-            {isFavorited('general') ? '★' : '☆'}
-          </button>
+      {/* Section Tabs */}
+      <div className="mb-5">
+        {/* Tab bar — iOS segmented control style */}
+        <div className="flex gap-1 glass rounded-2xl p-1.5 mb-4">
+          {([
+            { key: 'general', label: 'Général', icon: '✦' },
+            { key: 'love', label: 'Amour', icon: '♥' },
+            { key: 'career', label: 'Carrière', icon: '★' },
+          ] as const).map((tab) => (
+            <button
+              key={tab.key}
+              onClick={() => setActiveSection(tab.key)}
+              className={`flex-1 py-2.5 px-2 rounded-xl text-sm font-medium transition-all duration-200 ${
+                activeSection === tab.key
+                  ? 'glass-dark text-gold-400 shadow-lg'
+                  : 'text-night-400 hover:text-night-200'
+              }`}
+            >
+              <span className="mr-1.5">{tab.icon}</span>
+              {tab.label}
+            </button>
+          ))}
         </div>
-        <p className="text-night-100 leading-relaxed">{horoscope.general}</p>
-      </div>
 
-      {/* Love */}
-      <div className="glass rounded-3xl p-5 mb-4 animate-fade-in card-glow" style={{ animationDelay: '0.1s' }}>
-        <div className="flex items-center justify-between mb-3">
-          <div className="flex items-center gap-2">
-            <span className="text-xl">♥</span>
-            <p className="text-cosmic-300 text-xs uppercase tracking-widest">Amour</p>
+        {/* Active content */}
+        {activeSection === 'general' && (
+          <div className="glass rounded-3xl p-5 animate-fade-in card-glow" key="general">
+            <div className="flex items-center justify-between mb-3">
+              <div className="flex items-center gap-2">
+                <span className="text-xl">✦</span>
+                <p className="text-gold-400 text-xs uppercase tracking-widest">Général</p>
+              </div>
+              <button
+                onClick={() => handleToggleFav('general', horoscope.general)}
+                className="text-lg px-2 py-1 rounded-lg hover:bg-night-800/50 active:scale-90 transition-all"
+                aria-label={isFavorited('general') ? 'Retirer des favoris' : 'Ajouter aux favoris'}
+              >
+                {isFavorited('general') ? '★' : '☆'}
+              </button>
+            </div>
+            <p className="text-night-100 leading-relaxed">{horoscope.general || '—'}</p>
           </div>
-          <button
-            onClick={() => handleToggleFav('love', horoscope.love)}
-            className="text-lg px-2 py-1 rounded-lg hover:bg-night-800/50 active:scale-90 transition-all"
-            aria-label={isFavorited('love') ? 'Retirer des favoris' : 'Ajouter aux favoris'}
-          >
-            {isFavorited('love') ? '★' : '☆'}
-          </button>
-        </div>
-        <p className="text-night-100 leading-relaxed">{horoscope.love}</p>
-      </div>
+        )}
 
-      {/* Career */}
-      <div className="glass rounded-3xl p-5 mb-4 animate-fade-in card-glow" style={{ animationDelay: '0.2s' }}>
-        <div className="flex items-center justify-between mb-3">
-          <div className="flex items-center gap-2">
-            <span className="text-xl">★</span>
-            <p className="text-gold-400 text-xs uppercase tracking-widest">Carrière</p>
+        {activeSection === 'love' && (
+          <div className="glass rounded-3xl p-5 animate-fade-in card-glow" key="love" style={{ animationDelay: '0.05s' }}>
+            <div className="flex items-center justify-between mb-3">
+              <div className="flex items-center gap-2">
+                <span className="text-xl">♥</span>
+                <p className="text-cosmic-300 text-xs uppercase tracking-widest">Amour</p>
+              </div>
+              <button
+                onClick={() => handleToggleFav('love', horoscope.love)}
+                className="text-lg px-2 py-1 rounded-lg hover:bg-night-800/50 active:scale-90 transition-all"
+                aria-label={isFavorited('love') ? 'Retirer des favoris' : 'Ajouter aux favoris'}
+              >
+                {isFavorited('love') ? '★' : '☆'}
+              </button>
+            </div>
+            <p className="text-night-100 leading-relaxed">{horoscope.love || '—'}</p>
           </div>
-          <button
-            onClick={() => handleToggleFav('career', horoscope.career)}
-            className="text-lg px-2 py-1 rounded-lg hover:bg-night-800/50 active:scale-90 transition-all"
-            aria-label={isFavorited('career') ? 'Retirer des favoris' : 'Ajouter aux favoris'}
-          >
-            {isFavorited('career') ? '★' : '☆'}
-          </button>
-        </div>
-        <p className="text-night-100 leading-relaxed">{horoscope.career}</p>
+        )}
+
+        {activeSection === 'career' && (
+          <div className="glass rounded-3xl p-5 animate-fade-in card-glow" key="career" style={{ animationDelay: '0.05s' }}>
+            <div className="flex items-center justify-between mb-3">
+              <div className="flex items-center gap-2">
+                <span className="text-xl">★</span>
+                <p className="text-gold-400 text-xs uppercase tracking-widest">Carrière</p>
+              </div>
+              <button
+                onClick={() => handleToggleFav('career', horoscope.career)}
+                className="text-lg px-2 py-1 rounded-lg hover:bg-night-800/50 active:scale-90 transition-all"
+                aria-label={isFavorited('career') ? 'Retirer des favoris' : 'Ajouter aux favoris'}
+              >
+                {isFavorited('career') ? '★' : '☆'}
+              </button>
+            </div>
+            <p className="text-night-100 leading-relaxed">{horoscope.career || '—'}</p>
+          </div>
+        )}
       </div>
 
       {/* Lucky */}
@@ -396,12 +429,12 @@ export function Horoscope({ user }: { user: User }) {
         <div className="glass rounded-2xl p-4 text-center animate-fade-in" style={{ animationDelay: '0.3s' }}>
           <div className="text-2xl mb-1">🎲</div>
           <p className="text-night-400 text-xs mb-1">Numéro chance</p>
-          <p className="text-gold-400 text-2xl font-bold">{horoscope.luckyNumber}</p>
+          <p className="text-gold-400 text-2xl font-bold">{horoscope.luckyNumber || '—'}</p>
         </div>
         <div className="glass rounded-2xl p-4 text-center animate-fade-in" style={{ animationDelay: '0.35s' }}>
           <div className="text-2xl mb-1">🎨</div>
           <p className="text-night-400 text-xs mb-1">Couleur du jour</p>
-          <p className="text-cosmic-300 text-lg font-medium">{horoscope.luckyColor}</p>
+          <p className="text-cosmic-300 text-lg font-medium">{horoscope.luckyColor || '—'}</p>
         </div>
       </div>
 

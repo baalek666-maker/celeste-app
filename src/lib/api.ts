@@ -47,6 +47,7 @@ async function apiCall<T = any>(
   path: string,
   options: RequestInit = {},
   timeoutMs: number = DEFAULT_TIMEOUT_MS,
+  opts: { bypassOfflineQueue?: boolean } = {},
 ): Promise<T> {
   const token = getToken();
   const headers: Record<string, string> = {
@@ -60,7 +61,9 @@ async function apiCall<T = any>(
     | 'GET' | 'POST' | 'PUT' | 'PATCH' | 'DELETE';
 
   // Mutation + offline ⇒ enqueue et renvoie un fake ok
-  if (isMutation(method) && typeof navigator !== 'undefined' && !navigator.onLine) {
+  // SAuf pour les opérations critiques (deleteAccount) qui ne doivent JAMAIS
+  // être mises en file — elles doivent échouer bruyamment pour que l'utilisateur sache.
+  if (!opts.bypassOfflineQueue && isMutation(method) && typeof navigator !== 'undefined' && !navigator.onLine) {
     let bodyParsed: unknown = undefined;
     if (options.body && typeof options.body === 'string') {
       try { bodyParsed = JSON.parse(options.body); } catch { bodyParsed = options.body; }
@@ -88,7 +91,8 @@ async function apiCall<T = any>(
   } catch (err) {
     clearTimeout(tid);
     // Mutation + échec réseau en cours ⇒ enqueue aussi (mode offline opportuniste)
-    if (isMutation(method)) {
+    // Sauf bypass (deleteAccount)
+    if (!opts.bypassOfflineQueue && isMutation(method)) {
       let bodyParsed: unknown = undefined;
       if (options.body && typeof options.body === 'string') {
         try { bodyParsed = JSON.parse(options.body); } catch { bodyParsed = options.body; }
@@ -136,18 +140,22 @@ export interface AuthResponse {
 }
 
 export const api = {
-  // Auth
+  // Auth — CRITIQUES : bypassOfflineQueue. Si offline, on échoue bruyamment
+  // (l'utilisateur ne doit pas croire qu'il est loggué alors que la requête attend).
   register: (email: string, password: string) =>
     apiCall<AuthResponse>('/auth/register', {
       method: 'POST',
       body: JSON.stringify({ email, password }),
-    }),
+    }, DEFAULT_TIMEOUT_MS, { bypassOfflineQueue: true }),
 
   login: (email: string, password: string) =>
     apiCall<AuthResponse>('/auth/login', {
       method: 'POST',
       body: JSON.stringify({ email, password }),
-    }),
+    }, DEFAULT_TIMEOUT_MS, { bypassOfflineQueue: true }),
+
+  logout: () =>
+    apiCall<{ ok: boolean }>('/auth/logout', { method: 'POST' }, DEFAULT_TIMEOUT_MS, { bypassOfflineQueue: true }),
 
   // Profile
   saveBirthData: (birthData: BirthData) =>
@@ -483,7 +491,7 @@ export const api = {
   // Fix #1 — RGPD Art. 17 (droit à l'effacement)
   deleteAccount: () => apiCall<{ ok: true; deletedAt: string }>('/account', {
     method: 'DELETE',
-  }, 15_000),
+  }, 15_000, { bypassOfflineQueue: true }),
   verifySession: (sessionId: string) => apiCall<{ ok: true; isPremium: boolean }>(`/billing/verify-session?session_id=${encodeURIComponent(sessionId)}`, {
     method: 'GET',
   }),

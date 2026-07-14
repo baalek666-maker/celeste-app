@@ -7,7 +7,8 @@
     "dev": "vite",
     "build": "tsc -b && vite build",
     "lint": "oxlint",
-    "preview": "vite preview"
+    "preview": "vite preview",
+    "test:helpers": "node server/test-helpers.mjs"
   },
   "dependencies": {
     "@capacitor/android": "^8.4.1",
@@ -15,6 +16,7 @@
     "@capacitor/core": "^8.4.1",
     "@stripe/stripe-js": "^9.9.0",
     "astronomy-engine": "^2.1.19",
+    "helmet": "^8.3.0",
     "playwright": "^1.61.1",
     "react": "^19.2.7",
     "react-dom": "^19.2.7",

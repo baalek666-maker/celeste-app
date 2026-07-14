@@ -207,7 +207,11 @@ export function Settings({ user, onUpdate }: { user: User; onUpdate: (u: User) =
   const [showDeleteAccount, setShowDeleteAccount] = useState(false);
   const [deleting, setDeleting] = useState(false);
 
-  const handleLogout = () => {
+  const handleLogout = async () => {
+    // P0 #12 — On notifie le serveur avant le clear local (traçabilité).
+    // Le JWT est stateless donc le vrai logout = clear local, mais l'event
+    // server-side sert pour analytics + détection d'anomalies.
+    try { await api.logout(); } catch (err) { console.warn('[logout] server notify failed:', err); }
     const u = logout();
     onUpdate(u);
     toast.info('À bientôt ✨');

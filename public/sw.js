@@ -4,7 +4,7 @@
 //   - notificationclick: ouvre l'app sur la bonne route
 //   - fetch: stale-while-revalidate pour les assets statiques (offline-capable)
 
-const CACHE_VERSION = 'celeste-v2';
+const CACHE_VERSION = 'celeste-v5';  // bumped: force purge of all v4 caches
 const STATIC_CACHE = `${CACHE_VERSION}-static`;
 const RUNTIME_CACHE = `${CACHE_VERSION}-runtime`;
 
@@ -140,20 +140,35 @@ self.addEventListener('fetch', (event) => {
     return;
   }
 
-  // Static assets → stale-while-revalidate
-  event.respondWith(
-    caches.match(request).then((cached) => {
-      const fetchPromise = fetch(request)
+  // HTML/manifest — network-first (always serve fresh content)
+  const isHtml = request.headers.get('accept')?.includes('text/html') || url.pathname === '/' || url.pathname.endsWith('.html');
+  if (isHtml || url.pathname === '/manifest.json') {
+    event.respondWith(
+      fetch(request)
         .then((response) => {
-          if (response && response.status === 200 && response.type === 'basic') {
+          if (response.ok) {
             const clone = response.clone();
             caches.open(RUNTIME_CACHE).then((cache) => cache.put(request, clone)).catch(() => undefined);
           }
           return response;
         })
-        .catch(() => cached); // Network failed, return cached or undefined
-      return cached || fetchPromise;
-    })
+        .catch(() => caches.match(request).then((cached) => cached || caches.match('/')))
+    );
+    return;
+  }
+
+  // Static assets → network-first pour les JS/CSS avec hash (on veut le dernier build)
+  // Fallback cache seulement si le réseau échoue
+  event.respondWith(
+    fetch(request)
+      .then((response) => {
+        if (response && response.status === 200 && response.type === 'basic') {
+          const clone = response.clone();
+          caches.open(RUNTIME_CACHE).then((cache) => cache.put(request, clone)).catch(() => undefined);
+        }
+        return response;
+      })
+      .catch(() => caches.match(request).then((cached) => cached || new Response('', { status: 504 })))
   );
 });
 

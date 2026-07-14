@@ -189,9 +189,11 @@ export function App() {
           if (cancelled) return;
           const msg = (err instanceof Error ? err.message : String(err)).toLowerCase();
           const isNet = isNetworkError(err);
-          // Auth failure: invalid/expired token → clearToken ONCE, no retry
+          // Auth failure: invalid/expired token OR deleted account → clearToken ONCE, no retry
           const isAuthFail =
             msg.includes('401') ||
+            msg.includes('404') ||
+            msg.includes('not found') ||
             msg.includes('unauthorized') ||
             msg.includes('token') ||
             msg.includes('forbidden');
@@ -361,8 +363,14 @@ export function App() {
     }
   }
 
+  // P0 #8 — Mémoriser l'écran d'origine avant le paywall pour pouvoir y revenir.
   if (screen === 'paywall') {
-    return <Paywall onClose={() => setScreen('home')} onSubscribe={(u) => { setUser(u); saveUser(u); setScreen('horoscope'); }} />;
+    return (
+      <Paywall
+        onClose={() => setScreen((prev) => prev === 'paywall' ? 'home' : prev)}
+        onSubscribe={(u) => { setUser(u); saveUser(u); setScreen('horoscope'); }}
+      />
+    );
   }
 
   const navItems: Screen[] = ['home', 'horoscope', 'journal', 'explorer', 'settings'];

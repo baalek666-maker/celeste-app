@@ -5,6 +5,8 @@ import NatalChart from '../components/NatalChart';
 import { PlanetDetailCard } from '../components/PlanetDetailCard';
 
 export function ChartView({ user }: { user: User }) {
+  const [shareStatus, setShareStatus] = useState<'idle' | 'sharing' | 'copied' | 'error'>('idle');
+
   if (!user.natalChart) {
     return (
       <div className="px-5 pt-12 pb-4 animate-pulse">
@@ -20,11 +22,9 @@ export function ChartView({ user }: { user: User }) {
     );
   }
   const chart = user.natalChart;
-  const [shareStatus, setShareStatus] = useState<'idle' | 'sharing' | 'copied' | 'error'>('idle');
-
-  const sunSign = ZODIAC_SIGNS[chart.sun];
-  const moonSign = ZODIAC_SIGNS[chart.moon];
-  const risingSign = ZODIAC_SIGNS[chart.rising];
+  const sunSign = ZODIAC_SIGNS[chart.sun] ?? ZODIAC_SIGNS.aries;
+  const moonSign = ZODIAC_SIGNS[chart.moon] ?? ZODIAC_SIGNS.cancer;
+  const risingSign = ZODIAC_SIGNS[chart.rising] ?? ZODIAC_SIGNS.aries;
 
   const shareText = `ciel de naissance ☉ ${sunSign.name} ${sunSign.symbol} | ☽ ${moonSign.name} ${moonSign.symbol} | AC ${risingSign.name} ${risingSign.symbol}`;
 
@@ -68,7 +68,7 @@ export function ChartView({ user }: { user: User }) {
         </button>
       </div>
       <p className="text-night-400 text-sm mb-6">
-        {user.birthData?.city}, {user.birthData?.date}
+        {user.birthData ? `${user.birthData.city || ''}, ${user.birthData.date || ''}`.replace(/^,\s$/, '') : ''}
       </p>
 
       {/* Premium natal chart wheel */}

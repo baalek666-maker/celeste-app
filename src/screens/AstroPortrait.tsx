@@ -73,7 +73,7 @@ function LoadingState() {
   );
 }
 
-export default function AstroPortrait() {
+export default function AstroPortrait({ onBack }: { onBack?: () => void } = {}) {
   const [sections, setSections] = useState<Section[] | null>(null);
   const [wordCount, setWordCount] = useState(0);
   const [cached, setCached] = useState(false);
@@ -99,7 +99,10 @@ export default function AstroPortrait() {
     load();
   }, [load]);
 
-  const back = () => window.history.back();
+  const back = () => {
+    if (onBack) onBack();
+    else window.history.back();
+  };
 
   return (
     <div className="page-transition min-h-screen pb-20">

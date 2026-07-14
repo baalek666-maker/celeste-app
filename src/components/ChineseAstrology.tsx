@@ -20,7 +20,7 @@ export default function ChineseAstrology({ user }: { user: User }) {
       <div className="text-center pt-2 animate-fade-in">
         <div className="text-6xl mb-2">{myAnimal.emoji}</div>
         <p className="text-night-400 text-xs uppercase tracking-widest mb-1">
-          {myYinYang} \u00B7 {myElement.name}
+          {myYinYang} · {myElement.name}
         </p>
         <h2 className="text-2xl font-bold text-gold-gradient">{myAnimal.name}</h2>
         <p className="text-night-500 text-sm mt-1">{myAnimal.chinese}</p>
@@ -35,7 +35,7 @@ export default function ChineseAstrology({ user }: { user: User }) {
           <div className="flex-1">
             <p className="text-gold-300 font-bold text-lg">{myAnimal.name} {myYinYang}</p>
             <p className="text-night-400 text-xs">
-              Element {myElement.name} \u00B7 Planete {myAnimal.planet} \u00B7 ~ {myAnimal.western}
+              Element {myElement.name} · Planete {myAnimal.planet} · ~ {myAnimal.western}
             </p>
           </div>
         </div>
@@ -72,7 +72,7 @@ export default function ChineseAstrology({ user }: { user: User }) {
           <span className="text-3xl">{myElement.emoji}</span>
           <div>
             <p className="text-gold-300 font-bold">Element {myElement.name}</p>
-            <p className="text-night-500 text-xs">{myElement.chinese} \u00B7 Couleur {myElement.color} \u00B7 {myElement.planet}</p>
+            <p className="text-night-500 text-xs">{myElement.chinese} · Couleur {myElement.color} · {myElement.planet}</p>
           </div>
         </div>
         <p className="text-night-200 text-sm">{myElement.qualities}</p>
@@ -133,7 +133,7 @@ export default function ChineseAstrology({ user }: { user: User }) {
               <span className="text-4xl">{animal.emoji}</span>
               <div>
                 <p className="text-gold-300 font-bold text-lg">{animal.name}</p>
-                <p className="text-night-500 text-xs">{animal.chinese} \u00B7 {animal.element}</p>
+                <p className="text-night-500 text-xs">{animal.chinese} · {animal.element}</p>
               </div>
             </div>
             <button onClick={() => setSelectedAnimal(null)} className="text-night-400 text-xs hover:text-gold-400">

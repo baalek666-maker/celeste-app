@@ -1,0 +1,156 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0">
+<title>Céleste — Nettoyage</title>
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body {
+    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+    background: #0a0a1a;
+    color: #e0e0e0;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    min-height: 100vh;
+    padding: 20px;
+  }
+  .card {
+    background: rgba(255,255,255,0.05);
+    border-radius: 20px;
+    padding: 32px 24px;
+    max-width: 400px;
+    width: 100%;
+    text-align: center;
+    border: 1px solid rgba(212,175,55,0.2);
+  }
+  h1 { font-size: 22px; margin-bottom: 12px; color: #d4af37; }
+  p { font-size: 14px; line-height: 1.6; color: #a0a0b0; margin-bottom: 20px; }
+  .btn {
+    display: inline-block;
+    background: linear-gradient(135deg, #d4af37, #b8941f);
+    color: #0a0a1a;
+    border: none;
+    padding: 14px 32px;
+    border-radius: 12px;
+    font-size: 16px;
+    font-weight: 700;
+    cursor: pointer;
+    width: 100%;
+    margin-bottom: 10px;
+  }
+  .btn:hover { opacity: 0.9; }
+  .btn:disabled { opacity: 0.5; cursor: not-allowed; }
+  #status { margin-top: 16px; font-size: 13px; color: #80a0ff; min-height: 20px; }
+  .done { color: #4ade80 !important; }
+  .err { color: #f87171 !important; }
+</style>
+</head>
+<body>
+<div class="card">
+  <h1>🧹 Nettoyage Céleste</h1>
+  <p>Cette page va supprimer <strong>tout</strong> : cache, service worker, session, données locales.
+  Vous repartirez de zéro sur l'app.</p>
+  <button class="btn" id="clean" onclick="doClean()">Tout supprimer</button>
+  <div id="status"></div>
+</div>
+<script>
+async function doClean() {
+  const btn = document.getElementById('clean');
+  const status = document.getElementById('status');
+  btn.disabled = true;
+  let steps = [];
+
+  function log(msg) {
+    steps.push(msg);
+    status.innerHTML = steps.join('<br>');
+  }
+
+  function ok(msg) {
+    steps.push('✅ ' + msg);
+    status.innerHTML = steps.join('<br>');
+  }
+
+  function warn(msg) {
+    steps.push('⚠️ ' + msg);
+    status.innerHTML = steps.join('<br>');
+  }
+
+  try {
+    // 1. Unregister ALL service workers
+    if ('serviceWorker' in navigator) {
+      const regs = await navigator.serviceWorker.getRegistrations();
+      for (const reg of regs) {
+        await reg.unregister();
+        log('Service worker supprimé');
+      }
+      if (regs.length === 0) log('Aucun service worker trouvé');
+    }
+
+    // 2. Clear ALL Cache API caches
+    if ('caches' in window) {
+      const keys = await caches.keys();
+      for (const key of keys) {
+        await caches.delete(key);
+        log('Cache supprimé: ' + key);
+      }
+      if (keys.length === 0) log('Aucun cache trouvé');
+    }
+
+    // 3. Clear localStorage
+    const lsCount = localStorage.length;
+    localStorage.clear();
+    log('localStorage vidé (' + lsCount + ' clés)');
+
+    // 4. Clear sessionStorage
+    sessionStorage.clear();
+    log('sessionStorage vidé');
+
+    // 5. Clear cookies for this domain
+    document.cookie.split(';').forEach(c => {
+      const eq = c.indexOf('=');
+      const name = eq > -1 ? c.substring(0, eq).trim() : c.trim();
+      document.cookie = name + '=;expires=Thu, 01 Jan 1970 00:00:00 GMT;path=/';
+      document.cookie = name + '=;expires=Thu, 01 Jan 1970 00:00:00 GMT;path=/;domain=' + location.hostname;
+      document.cookie = name + '=;expires=Thu, 01 Jan 1970 00:00:00 GMT;path=/;domain=.' + location.hostname;
+    });
+    log('Cookies supprimés');
+
+    // 6. Clear indexedDB (if any Celeste DBs)
+    if ('indexedDB' in window) {
+      const dbs = await indexedDB.databases?.().catch(() => []) || [];
+      for (const db of dbs) {
+        await new Promise(res => {
+          const req = indexedDB.deleteDatabase(db.name);
+          req.onsuccess = res;
+          req.onerror = res;
+        });
+        log('IndexedDB supprimé: ' + db.name);
+      }
+    }
+
+    // 7. Force unregister any remaining SW (belt + suspenders)
+    if ('serviceWorker' in navigator) {
+      const regs2 = await navigator.serviceWorker.getRegistrations();
+      for (const r of regs2) await r.unregister();
+    }
+
+    status.classList.add('done');
+    ok('Nettoyage terminé !');
+
+    // 8. Redirect after short delay
+    setTimeout(() => {
+      // Hard redirect — bypass SW cache by adding cache-buster
+      window.location.href = '/?nocache=' + Date.now();
+    }, 1500);
+
+  } catch (err) {
+    status.classList.add('err');
+    status.innerHTML = '❌ Erreur: ' + err.message + '<br><br>Vous pouvez quand même continuer.';
+    setTimeout(() => { window.location.href = '/?nocache=' + Date.now(); }, 2000);
+  }
+}
+</script>
+</body>
+</html>
