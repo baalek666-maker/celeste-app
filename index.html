@@ -55,7 +55,7 @@
           </p>
         </div>
         <p style="color:#888;font-size:12px;">
-          Tunnel actuel : <code style="color:#c0c0c0;">shapes-showers-prohibited-chemistry.trycloudflare.com</code>
+          Tunnel actuel : <code style="color:#c0c0c0;" id="current-host"></code>
         </p>
       </div>
     </div>
@@ -67,6 +67,7 @@
           document.getElementById('stuck-screen').style.display = 'block';
         }
       }, 6000);
+      (function(){var h=document.getElementById('current-host');if(h)h.textContent=location.host;})();
       (function(){
         function show(msg){var el=document.getElementById('boot-error');el.style.display='block';el.textContent='⚠️ Boot error:\\n\\n'+msg+'\\n\\n— Hard reload (Cmd/Ctrl+Shift+R) ou ouvrir en navigation privée —';}
         window.addEventListener('error',function(e){show(e.message+' @ '+(e.filename||'?')+':'+(e.lineno||'?'));});

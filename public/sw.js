@@ -13,9 +13,9 @@ const PRECACHE_URLS = [
   '/',
   '/index.html',
   '/manifest.json',
-  '/icon-192.png',
-  '/icon-512.png',
-  '/badge-72.png',
+  '/icons/icon-192.png',
+  '/icons/icon-512.png',
+  '/icons/apple-touch-icon.png',
 ];
 
 // ─── INSTALL: pré-cache des assets critiques ─────────────────────────────
@@ -52,8 +52,8 @@ self.addEventListener('push', (event) => {
   const {
     title = '✨ Céleste',
     body = 'Ton horoscope du jour est prêt',
-    icon = '/icon-192.png',
-    badge = '/badge-72.png',
+    icon = '/icons/icon-192.png',
+    badge = '/icons/icon-512.png',
     tag = 'celeste-daily',
     url = '/',
     data = {},
@@ -84,7 +84,11 @@ self.addEventListener('notificationclick', (event) => {
         for (const client of clientList) {
           if (client.url.includes(self.location.origin)) {
             if ('focus' in client) {
-              client.postMessage({ type: 'NAVIGATE', url: targetUrl });
+              client.postMessage({
+                type: 'NAVIGATE',
+                url: targetUrl,
+                screen: event.notification.data?.screen,
+              });
               return client.focus();
             }
           }

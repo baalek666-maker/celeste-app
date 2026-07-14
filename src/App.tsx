@@ -1,21 +1,23 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, lazy, Suspense } from 'react';
 import { Onboarding } from './screens/Onboarding';
 import { Auth } from './screens/Auth';
 import { Landing } from './screens/Landing';
 import CelesteLogo from './components/CelesteLogo';
 import { Home } from './screens/Home';
-import { ChartView } from './screens/ChartView';
-import { Horoscope } from './screens/Horoscope';
-import { Compatibility } from './screens/Compatibility';
-import { Journal } from './screens/Journal';
-import { Paywall } from './screens/Paywall';
-import { Settings } from './screens/Settings';
-import { Explorer } from './screens/Explorer';
 import { BottomNav } from './components/BottomNav';
 import { getToken, clearToken, api } from './lib/api';
 import { getUser, saveUser, getFreeScans, incrementFreeScans, getFreeCompat, incrementFreeCompat } from './lib/storage';
 import { calculateNatalChart } from './lib/astrology';
 import type { User } from './types';
+
+// Code splitting : les screens secondaires sont lazy-loaded pour réduire le bundle initial.
+const ChartView = lazy(() => import('./screens/ChartView').then(m => ({ default: m.ChartView })));
+const Horoscope = lazy(() => import('./screens/Horoscope').then(m => ({ default: m.Horoscope })));
+const Compatibility = lazy(() => import('./screens/Compatibility').then(m => ({ default: m.Compatibility })));
+const Journal = lazy(() => import('./screens/Journal').then(m => ({ default: m.Journal })));
+const Paywall = lazy(() => import('./screens/Paywall').then(m => ({ default: m.Paywall })));
+const Settings = lazy(() => import('./screens/Settings').then(m => ({ default: m.Settings })));
+const Explorer = lazy(() => import('./screens/Explorer').then(m => ({ default: m.Explorer })));
 
 export type Screen = 'landing' | 'auth' | 'onboarding' | 'home' | 'chart' | 'horoscope' | 'compatibility' | 'journal' | 'explorer' | 'paywall' | 'settings';
 
@@ -366,10 +368,12 @@ export function App() {
   // P0 #8 — Mémoriser l'écran d'origine avant le paywall pour pouvoir y revenir.
   if (screen === 'paywall') {
     return (
-      <Paywall
-        onClose={() => setScreen((prev) => prev === 'paywall' ? 'home' : prev)}
-        onSubscribe={(u) => { setUser(u); saveUser(u); setScreen('horoscope'); }}
-      />
+      <Suspense fallback={<Splash />}>
+        <Paywall
+          onClose={() => setScreen((prev) => prev === 'paywall' ? 'home' : prev)}
+          onSubscribe={(u) => { setUser(u); saveUser(u); setScreen('horoscope'); }}
+        />
+      </Suspense>
     );
   }
 
@@ -386,13 +390,15 @@ export function App() {
         {/* Contenu principal (main landmark déjà dans index.html pour SPA) */}
         <div className="pb-24">
           <div key={screen} className="page-enter">
-            {screen === 'home' && <Home user={user} onNavigate={handleNavigate} />}
-            {screen === 'chart' && <ChartView user={user} />}
-            {screen === 'horoscope' && <Horoscope user={user} />}
-            {screen === 'compatibility' && <Compatibility user={user} />}
-            {screen === 'journal' && <Journal user={user} />}
-            {screen === 'explorer' && <Explorer user={user} onNavigate={handleNavigate} />}
-            {screen === 'settings' && <Settings user={user} onUpdate={(u) => { setUser(u); saveUser(u); }} onPaywall={() => setScreen('paywall')} />}
+            <Suspense fallback={<Splash />}>
+              {screen === 'home' && <Home user={user} onNavigate={handleNavigate} />}
+              {screen === 'chart' && <ChartView user={user} />}
+              {screen === 'horoscope' && <Horoscope user={user} />}
+              {screen === 'compatibility' && <Compatibility user={user} />}
+              {screen === 'journal' && <Journal user={user} />}
+              {screen === 'explorer' && <Explorer user={user} onNavigate={handleNavigate} />}
+              {screen === 'settings' && <Settings user={user} onUpdate={(u) => { setUser(u); saveUser(u); }} onPaywall={() => setScreen('paywall')} />}
+            </Suspense>
           </div>
         </div>
         {showNav && (

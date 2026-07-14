@@ -17,7 +17,6 @@
     "@stripe/stripe-js": "^9.9.0",
     "astronomy-engine": "^2.1.19",
     "helmet": "^8.3.0",
-    "playwright": "^1.61.1",
     "react": "^19.2.7",
     "react-dom": "^19.2.7",
     "stripe": "^22.3.1"
@@ -31,6 +30,7 @@
     "lighthouse": "^13.4.0",
     "lucide-react": "^1.23.0",
     "oxlint": "^1.71.0",
+    "playwright": "^1.61.1",
     "react-router-dom": "^7.18.1",
     "tailwindcss": "^4.3.2",
     "typescript": "~6.0.2",
