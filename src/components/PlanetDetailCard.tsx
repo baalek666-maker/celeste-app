@@ -23,6 +23,7 @@ interface Interpretation {
   inSign: string;
   // Backend renvoie un number ; accepté comme string pour rétro-compat
   degree?: string | number;
+  degreeSymbolic?: string;
   temperament: string;
   characterology: string;
   keywords: string[];
@@ -159,12 +160,12 @@ export function PlanetDetailCard({ planet, sign, degree, house, retrograde }: Pr
               </div>
 
               {/* Degree symbolism */}
-              {data.degree && (
+              {data.degreeSymbolic && (
                 <div>
                   <SectionTitle>
                     Degré symbolique <span className="text-night-500">{deg}° {signName}</span>
                   </SectionTitle>
-                  <Paragraph text={data.degree} />
+                  <Paragraph text={data.degreeSymbolic} />
                 </div>
               )}
 

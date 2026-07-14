@@ -1,5 +1,14 @@
 import type { User, BirthData, NatalChart, JournalEntry, HoroscopeEntry } from '../types';
 
+/**
+ * Local date as YYYY-MM-DD. Uses local timezone (not UTC) so that
+ * streaks, calendar entries, and cache keys match the user's actual day.
+ * `new Date().toISOString().split('T')[0]` shifts dates for non-UTC users.
+ */
+export function localISODate(d: Date = new Date()): string {
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+}
+
 const KEYS = {
   USER: 'celeste_user',
   JWT: 'celeste_jwt',

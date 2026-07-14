@@ -2,6 +2,9 @@ import type { NatalChart, HoroscopeEntry, ZodiacSign, CompatibilityResult } from
 import { ZODIAC_SIGNS, ZODIAC_ORDER, PLANET_DATA } from '../data/zodiac';
 import { signCompatibility } from '../data/zodiac';
 
+/** Shape of a ZODIAC_SIGNS entry — used by horoscope builder functions. */
+type SignData = typeof ZODIAC_SIGNS[ZodiacSign];
+
 /**
  * CÉLESTE — Générateur d'horoscope personnalisé
  * 
@@ -57,7 +60,7 @@ export async function generateHoroscope(chart: NatalChart, date: string): Promis
   return { date, energy, mood, general, love, career, luckyNumber, luckyColor };
 }
 
-function buildGeneral(chart: NatalChart, sunData: any, moonData: any, rng: () => number): string {
+function buildGeneral(chart: NatalChart, sunData: SignData, moonData: SignData, rng: () => number): string {
   const el = chart.elements;
   const intro = rng() > 0.5
     ? "Avec votre Soleil en " + sunData.name
@@ -98,7 +101,7 @@ function buildLove(chart: NatalChart, rng: () => number): string {
   return messages[Math.floor(rng() * messages.length)];
 }
 
-function buildCareer(chart: NatalChart, sunData: any, rng: () => number): string {
+function buildCareer(chart: NatalChart, sunData: SignData, rng: () => number): string {
   const mars = chart.positions.find(p => p.planet === 'mars');
   const marsSign = mars ? ZODIAC_SIGNS[mars.sign].name : sunData.name;
 
@@ -118,9 +121,10 @@ function buildCareer(chart: NatalChart, sunData: any, rng: () => number): string
 export async function generateCompatibility(
   chart: NatalChart,
   theirSunSign: ZodiacSign,
-  _theirMoonSign: ZodiacSign
+  theirMoonSign: ZodiacSign
 ): Promise<CompatibilityResult> {
   const yourSun = chart.sun;
+  const yourMoon = chart.moon;
   const yourSunData = ZODIAC_SIGNS[yourSun];
   const theirSunData = ZODIAC_SIGNS[theirSunSign];
 
@@ -152,8 +156,8 @@ export async function generateCompatibility(
   return {
     yourSun,
     theirSun: theirSunSign,
-    yourMoon: yourSun,
-    theirMoon: theirSunSign,
+    yourMoon,
+    theirMoon: theirMoonSign,
     score: compat,
     title,
     description: desc,
@@ -162,7 +166,7 @@ export async function generateCompatibility(
   };
 }
 
-function buildStrengths(your: any, their: any): string[] {
+function buildStrengths(your: SignData, their: SignData): string[] {
   if (your.element === their.element) {
     return [
       "Compréhension instinctive de vos motivations profondes",
@@ -189,7 +193,7 @@ function buildStrengths(your: any, their: any): string[] {
   ];
 }
 
-function buildChallenges(your: any, their: any): string[] {
+function buildChallenges(your: SignData, their: SignData): string[] {
   if (your.element === their.element) {
     return [
       "Risque d'amplifier les mêmes excès ensemble",

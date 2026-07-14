@@ -1,7 +1,7 @@
 import { useState, useEffect, useRef } from 'react';
 import type { User } from '../types';
 import { api } from '../lib/api';
-import { getCachedHoroscope, cacheHoroscope } from '../lib/storage';
+import { getCachedHoroscope, cacheHoroscope, localISODate } from '../lib/storage';
 import { Skeleton, SkeletonCard } from '../components/Skeleton';
 import { useFavorites } from '../lib/useFavorites';
 import ShareCard from '../components/ShareCard';
@@ -31,7 +31,7 @@ export function Horoscope({ user }: { user: User }) {
   const [loadingWeek, setLoadingWeek] = useState(false);
   const [weekError, setWeekError] = useState('');
   const [activeSection, setActiveSection] = useState<'general' | 'love' | 'career'>('general');
-  const today = new Date().toISOString().split('T')[0];
+  const today = localISODate();
   const todayFr = new Date().toLocaleDateString('fr-FR', { weekday: 'long', day: 'numeric', month: 'long' });
   const msgIdx = useRef(0);
 
@@ -90,9 +90,7 @@ export function Horoscope({ user }: { user: User }) {
 
     Promise.race([api.getHoroscope(), timeoutPromise])
       .then(h => {
-        console.log('[DEBUG HOROSCOPE] Raw API response:', JSON.stringify(h));
         const entry = buildEntry(h);
-        console.log('[DEBUG HOROSCOPE] Built entry:', JSON.stringify(entry));
         setHoroscope(entry);
         setIsFallback(!!h.isFallback);
         cacheHoroscope(today, entry);
@@ -123,19 +121,23 @@ export function Horoscope({ user }: { user: User }) {
   };
 
   useEffect(() => {
-    fetchHoroscope(false);
+    let cancelled = false;
+    if (!cancelled) fetchHoroscope(false);
+    return () => { cancelled = true; };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [today]);
 
   // Feature 2: load week strip after main horoscope is shown
   useEffect(() => {
     if (loading || !horoscope) return;
+    let cancelled = false;
     setLoadingWeek(true);
     setWeekError('');
     api.getWeekHoroscope()
-      .then(data => setWeek(data.days))
-      .catch(err => setWeekError(err?.message || 'Erreur chargement semaine'))
-      .finally(() => setLoadingWeek(false));
+      .then(data => { if (!cancelled) setWeek(data.days); })
+      .catch(err => { if (!cancelled) setWeekError(err?.message || 'Erreur chargement semaine'); })
+      .finally(() => { if (!cancelled) setLoadingWeek(false); });
+    return () => { cancelled = true; };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [loading, horoscope]);
 

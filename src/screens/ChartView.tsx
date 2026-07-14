@@ -45,9 +45,9 @@ export function ChartView({ user }: { user: User }) {
       } else {
         throw new Error('no share or clipboard');
       }
-    } catch (e: any) {
+    } catch (e: unknown) {
       // User cancelling the share sheet is not an error
-      if (e?.name === 'AbortError') { setShareStatus('idle'); return; }
+      if (e instanceof Error && e.name === 'AbortError') { setShareStatus('idle'); return; }
       setShareStatus('error');
       setTimeout(() => setShareStatus('idle'), 2000);
     }

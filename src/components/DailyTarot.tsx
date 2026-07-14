@@ -2,6 +2,7 @@ import { useState, useRef, useEffect } from 'react';
 import { api } from '../lib/api';
 import { toast } from './Toast';
 import { getTarotImage } from '../data/tarotImages';
+import { localISODate } from '../lib/storage';
 
 interface TarotCard {
   cardName: string;
@@ -27,7 +28,7 @@ function getStoredDraw(): StoredDraw | null {
     const raw = localStorage.getItem(STORAGE_KEY);
     if (!raw) return null;
     const data: StoredDraw = JSON.parse(raw);
-    const today = new Date().toISOString().split('T')[0];
+    const today = localISODate();
     return data.date === today ? data : null;
   } catch {
     return null;
@@ -35,7 +36,7 @@ function getStoredDraw(): StoredDraw | null {
 }
 
 function setStoredDraw(card: TarotCard) {
-  const today = new Date().toISOString().split('T')[0];
+  const today = localISODate();
   localStorage.setItem(STORAGE_KEY, JSON.stringify({ date: today, card }));
 }
 
@@ -59,7 +60,7 @@ export default function DailyTarot() {
       setImgError(false);
       // After summon animation, show face-down card
       setTimeout(() => setPhase('facedown'), 1400);
-    } catch (e: any) {
+    } catch {
       toast.error('Les cartes sont momentanément indisponibles. Réessaie dans un instant.');
       setPhase('idle');
     } finally {

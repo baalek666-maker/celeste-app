@@ -148,7 +148,7 @@ router.post('/restore', async (req, res) => {
  *            sans dépendre du customer_email (l'utilisateur peut payer avec un
  *            email différent de son compte Céleste).
  */
-router.post('/create-checkout', (req, res) => {
+router.post('/create-checkout', async (req, res) => {
   if (!isStripeConfigured()) {
     return res.status(503).json({
       error: 'Paiements en cours de configuration. Réessaie bientôt.',
@@ -165,7 +165,7 @@ router.post('/create-checkout', (req, res) => {
   if (!priceId) return res.status(400).json({ error: 'Plan invalide.' });
 
   try {
-    const session = stripe.checkout.sessions.create({
+    const session = await stripe.checkout.sessions.create({
       mode: 'subscription',
       payment_method_types: ['card'],
       line_items: [{ price: priceId, quantity: 1 }],

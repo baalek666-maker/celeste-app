@@ -153,8 +153,9 @@ export function Onboarding({ onComplete }: { onComplete: (u: User) => void }) {
     // 1500ms (was 2800ms — felt too long during testing) plus save.
     const minDelay = new Promise(r => setTimeout(r, 1500));
     Promise.all([minDelay, save]).finally(() => {
-      const user = JSON.parse(localStorage.getItem('celeste_user') || '{}');
-      onComplete(user);
+      let user: Partial<User> = {};
+      try { user = JSON.parse(localStorage.getItem('celeste_user') || '{}'); } catch { /* corrupt localStorage */ }
+      onComplete(user as User);
     });
   };
 

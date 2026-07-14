@@ -16,7 +16,7 @@ const PLAN_LABELS: Record<PremiumStatus['plan'], { label: string; icon: string; 
   lifetime: { label: 'À vie', icon: '👑', color: 'bg-amber-100 text-amber-800' }
 };
 
-export default function PremiumBadge() {
+export default function PremiumBadge({ onUpgrade }: { onUpgrade?: () => void }) {
   const [status, setStatus] = useState<PremiumStatus | null>(null);
   const [loading, setLoading] = useState(true);
 
@@ -86,7 +86,7 @@ export default function PremiumBadge() {
       </ul>
 
       {!status.isPremium && (
-        <button className="mt-4 w-full py-2 px-4 rounded-lg bg-gradient-to-r from-amber-400 to-amber-600 text-white text-sm font-medium hover:opacity-90 transition-opacity">
+        <button onClick={onUpgrade} className="mt-4 w-full py-2 px-4 rounded-lg bg-gradient-to-r from-amber-400 to-amber-600 text-white text-sm font-medium hover:opacity-90 transition-opacity">
           Passer Premium ✨
         </button>
       )}

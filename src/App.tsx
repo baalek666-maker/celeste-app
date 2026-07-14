@@ -392,12 +392,12 @@ export function App() {
             {screen === 'compatibility' && <Compatibility user={user} />}
             {screen === 'journal' && <Journal user={user} />}
             {screen === 'explorer' && <Explorer user={user} onNavigate={handleNavigate} />}
-            {screen === 'settings' && <Settings user={user} onUpdate={(u) => { setUser(u); saveUser(u); }} />}
+            {screen === 'settings' && <Settings user={user} onUpdate={(u) => { setUser(u); saveUser(u); }} onPaywall={() => setScreen('paywall')} />}
           </div>
         </div>
         {showNav && (
           <div className="fixed bottom-0 left-1/2 -translate-x-1/2 w-full max-w-md z-50">
-            <BottomNav items={navItems} labels={navLabels} active={screen} onNavigate={handleNavigate} />
+            <BottomNav items={navItems} labels={navLabels} active={screen} onNavigate={(s) => handleNavigate(s as Screen)} />
           </div>
         )}
       </div>

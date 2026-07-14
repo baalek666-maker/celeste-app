@@ -2,7 +2,7 @@ interface NavProps {
   items: string[];
   labels: Record<string, string>;
   active: string;
-  onNavigate: (s: any) => void;
+  onNavigate: (s: string) => void;
 }
 
 // ─── Alchemical / astrological glyph icons ───────────────

@@ -5,7 +5,11 @@ import { CHINESE_ANIMALS, CHINESE_ELEMENTS, getChineseZodiac, getChineseElement,
 export default function ChineseAstrology({ user }: { user: User }) {
   const [selectedAnimal, setSelectedAnimal] = useState<number | null>(null);
 
-  const birthYear = user.birthData?.date ? new Date(user.birthData.date).getFullYear() : 1995;
+  // Parse date-only as local (not UTC) to avoid year shift around New Year.
+  // `new Date('2000-01-15')` is parsed as UTC midnight → becomes 1999 in UTC-N timezones.
+  const birthYear = user.birthData?.date
+    ? (() => { const [y] = user.birthData.date.split('-'); return Number(y); })()
+    : 1995;
   const myAnimal = useMemo(() => getChineseZodiac(birthYear), [birthYear]);
   const myElement = useMemo(() => getChineseElement(birthYear), [birthYear]);
   const myYinYang = useMemo(() => getYinYang(birthYear), [birthYear]);

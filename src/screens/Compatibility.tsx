@@ -85,8 +85,8 @@ export function Compatibility({ user }: { user: User }) {
         yourMoon: res.yourMoon ?? user.natalChart?.moon ?? 'aries',
         theirMoon: res.theirMoon ?? theirSign,
       });
-    } catch (err: any) {
-      setError(err.message || 'Erreur');
+    } catch (err: unknown) {
+      setError(err instanceof Error ? err.message : 'Erreur');
     } finally {
       setLoading(false);
     }

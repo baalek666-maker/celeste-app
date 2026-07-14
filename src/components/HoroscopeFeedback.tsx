@@ -1,5 +1,6 @@
 import { useState } from 'react';
 import { api } from '../lib/api';
+import { localISODate } from '../lib/storage';
 
 /**
  * HoroscopeFeedback — compact widget at the bottom of the horoscope screen.
@@ -9,7 +10,7 @@ import { api } from '../lib/api';
 const KEY = 'celeste_horoscope_feedback';
 
 export default function HoroscopeFeedback({ date }: { date?: string }) {
-  const today = date ?? new Date().toISOString().split('T')[0];
+  const today = date ?? localISODate();
   const [done, setDone] = useState(() => {
     try { return localStorage.getItem(KEY) === today; } catch { return false; }
   });

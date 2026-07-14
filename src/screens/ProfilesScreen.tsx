@@ -58,18 +58,40 @@ export function ProfilesScreen({ user, onClose }: { user: User; onClose: () => v
   };
 
   useEffect(() => {
-    reload();
+    let cancelled = false;
+    (async () => {
+      if (!getToken()) return;
+      if (!cancelled) setLoading(true);
+      try {
+        const { profiles: list } = await api.listProfiles();
+        if (!cancelled) setProfiles(list);
+      } catch (e) {
+        console.error('Failed to load profiles', e);
+      } finally {
+        if (!cancelled) setLoading(false);
+      }
+    })();
+    return () => { cancelled = true; };
   }, [user.email]);
 
   const handleDelete = async (id: number) => {
-    await api.deleteProfile(id);
-    setConfirmDelete(null);
-    await reload();
+    try {
+      await api.deleteProfile(id);
+      setConfirmDelete(null);
+      await reload();
+    } catch (e) {
+      console.error('Failed to delete profile', e);
+      setConfirmDelete(null);
+    }
   };
 
   const handleSetSelf = async (id: number) => {
-    await api.updateProfile(id, { isSelf: true });
-    await reload();
+    try {
+      await api.updateProfile(id, { isSelf: true });
+      await reload();
+    } catch (e) {
+      console.error('Failed to set self profile', e);
+    }
   };
 
   return (
@@ -224,6 +246,7 @@ function ProfileForm({
       const geoRes = await fetch(
         `https://nominatim.openstreetmap.org/search?format=json&limit=1&q=${encodeURIComponent(city)}`
       );
+      if (!geoRes.ok) throw new Error('Géolocalisation indisponible');
       const geo = await geoRes.json();
       if (!Array.isArray(geo) || geo.length === 0) {
         setError(`Ville introuvable : "${city}". Essaie un nom plus précis (ex : Paris, FR).`);
@@ -232,8 +255,17 @@ function ProfileForm({
       }
       const lat = parseFloat(geo[0].lat);
       const lon = parseFloat(geo[0].lon);
-      // Timezone: rough estimate via longitude / 15
-      const tz = Math.round(lon / 15);
+      if (isNaN(lat) || isNaN(lon) || Math.abs(lat) > 90 || Math.abs(lon) > 180) {
+        setError('Coordonnées GPS invalides reçues du géocodeur. Réessaie.');
+        setSaving(false);
+        return;
+      }
+
+      // Déduction du fuseau horaire : on utilise le fuseau du navigateur (correct dans ~90%
+      // des cas — users nés dans le même fuseau où ils vivent). Le fallback par longitude
+      // (Math.round(lon/15)) ignorait les fuseaux politiques et le DST (Paris → UTC+0 au lieu de +1/+2).
+      // TODO long terme : ajouter un sélecteur de fuseau horaire dans le formulaire.
+      const tz = -new Date().getTimezoneOffset() / 60;
 
       const birthData = {
         date, time, city: city.trim(),
@@ -249,8 +281,8 @@ function ProfileForm({
         await api.createProfile({ name, relation, birthData, isSelf });
       }
       await onSaved();
-    } catch (e: any) {
-      setError(e?.message || 'Erreur lors de l\'enregistrement.');
+    } catch (e: unknown) {
+      setError(e instanceof Error ? e.message : 'Erreur lors de l\'enregistrement.');
     } finally {
       setSaving(false);
     }

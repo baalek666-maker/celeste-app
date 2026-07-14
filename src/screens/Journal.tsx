@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import type { User, JournalEntry } from '../types';
-import { getJournal, addJournalEntry } from '../lib/storage';
+import { getJournal, addJournalEntry, localISODate } from '../lib/storage';
 import { api, getToken } from '../lib/api';
 
 function calcStreak(entries: JournalEntry[]): number {
@@ -9,10 +9,10 @@ function calcStreak(entries: JournalEntry[]): number {
   let streak = 0;
   const d = new Date();
   // If today not written yet, start from yesterday
-  if (!dates.has(d.toISOString().split('T')[0])) {
+  if (!dates.has(localISODate(d))) {
     d.setDate(d.getDate() - 1);
   }
-  while (dates.has(d.toISOString().split('T')[0])) {
+  while (dates.has(localISODate(d))) {
     streak++;
     d.setDate(d.getDate() - 1);
   }
@@ -26,7 +26,7 @@ export function Journal({ user }: { user: User }) {
   const [syncing, setSyncing] = useState(false);
   const [syncMsg, setSyncMsg] = useState('');
   const [saveFlash, setSaveFlash] = useState(false);
-  const today = new Date().toISOString().split('T')[0];
+  const today = localISODate();
   const todayFr = new Date().toLocaleDateString('fr-FR', { weekday: 'long', day: 'numeric', month: 'long' });
   const streak = calcStreak(entries);
   const hasToday = entries.some(e => e.date === today);

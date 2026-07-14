@@ -273,7 +273,10 @@ function registerGamificationRoutes(app, db, auth, callLLMWithRetry, getNatalPos
       if (!userRow || !userRow.birth_data) {
         return res.status(400).json({ error: 'Birth data required' });
       }
-      const birthData = JSON.parse(userRow.birth_data);
+      const birthData = safeJsonParse(userRow.birth_data, null, 'users.birth_data');
+      if (!birthData) {
+        return res.status(400).json({ error: 'Birth data corrupted' });
+      }
       // Compute natal chart from birth data (was reading users.natal_chart which is always NULL)
       const natalChart = typeof getNatalPositions === 'function'
         ? getNatalPositions(birthData, true)

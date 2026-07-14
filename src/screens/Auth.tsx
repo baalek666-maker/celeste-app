@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { api, setToken } from '../lib/api';
+import { api, setToken, errMsg } from '../lib/api';
 
 export function Auth({ onSuccess }: { onSuccess: (user: any) => void }) {
   const [mode, setMode] = useState<'login' | 'register'>('register');
@@ -18,9 +18,9 @@ export function Auth({ onSuccess }: { onSuccess: (user: any) => void }) {
         : await api.login(email, password);
       setToken(res.token);
       onSuccess(res.user);
-    } catch (err: any) {
+    } catch (err: unknown) {
       // Friendlier, localized error messages
-      const raw = (err?.message || '').toLowerCase();
+      const raw = errMsg(err, '').toLowerCase();
       let msg = 'Oups, vérifiez vos identifiants ✦';
       if (raw.includes('network') || raw.includes('failed to fetch') || raw.includes('load failed')) {
         msg = 'Impossible de contacter les étoiles. Vérifiez votre connexion.';

@@ -26,8 +26,8 @@ function ManageSubscriptionButton() {
     try {
       const { url } = await api.openPortal();
       window.location.href = url;
-    } catch (err: any) {
-      toast.error(err.message || 'Impossible d\'ouvrir le portail de gestion');
+    } catch (err: unknown) {
+      toast.error(err instanceof Error ? err.message : 'Impossible d\'ouvrir le portail de gestion');
       setLoading(false);
     }
   };
@@ -199,7 +199,7 @@ function EditBirthData({ user, onUpdate, onCancel }: {
   );
 }
 
-export function Settings({ user, onUpdate }: { user: User; onUpdate: (u: User) => void }) {
+export function Settings({ user, onUpdate, onPaywall }: { user: User; onUpdate: (u: User) => void; onPaywall?: () => void }) {
   const [showLegal, setShowLegal] = useState(false);
   const [editing, setEditing] = useState(false);
   const [showFavorites, setShowFavorites] = useState(false);
@@ -227,8 +227,8 @@ export function Settings({ user, onUpdate }: { user: User; onUpdate: (u: User) =
       onUpdate(u);
       toast.success('Compte supprimé. À bientôt ✨');
       window.location.reload();
-    } catch (err: any) {
-      toast.error(err?.message || 'Suppression impossible — réessaie ou contacte le support.');
+    } catch (err: unknown) {
+      toast.error(err instanceof Error ? err.message : 'Suppression impossible — réessaie ou contacte le support.');
       setDeleting(false);
     }
   };
@@ -344,7 +344,7 @@ export function Settings({ user, onUpdate }: { user: User; onUpdate: (u: User) =
 
         {/* Premium badge (Feature A3) — uses /api/premium/status with full benefits list */}
         <div className="mt-4 pt-4 border-t border-night-700">
-          <PremiumBadge />
+          <PremiumBadge onUpgrade={onPaywall} />
         </div>
       </div>
 

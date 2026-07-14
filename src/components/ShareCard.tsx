@@ -166,7 +166,7 @@ export default function ShareCard({ open, onClose, data }: ShareCardProps) {
     setSharing(true);
     try {
       const file = new File([blob], `celeste-${data.date.replace(/\s/g, '-')}.png`, { type: 'image/png' });
-      const shareData: any = {
+      const shareData: ShareData = {
         title: 'Mon horoscope Céleste',
         text: `🔮 ${data.date}\n\n${data.general}`,
         files: [file],

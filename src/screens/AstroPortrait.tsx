@@ -88,15 +88,17 @@ export default function AstroPortrait({ onBack }: { onBack?: () => void } = {}) 
       setSections(parsePortrait(res.portrait));
       setWordCount(res.wordCount);
       setCached(res.cached);
-    } catch (e: any) {
-      setError(e?.message || 'Les étoiles sont voilées pour l’instant.');
+    } catch (e: unknown) {
+      setError(e instanceof Error ? e.message : 'Les étoiles sont voilées pour l’instant.');
     } finally {
       setLoading(false);
     }
   }, []);
 
   useEffect(() => {
-    load();
+    let cancelled = false;
+    if (!cancelled) load();
+    return () => { cancelled = true; };
   }, [load]);
 
   const back = () => {

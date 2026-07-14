@@ -5,11 +5,16 @@
  * Handles JWT auth, horoscope (LLM), compatibility (LLM), journal, and premium.
  */
 
-import type { BirthData, JournalEntry } from '../types';
+import type { BirthData, JournalEntry, CompatibilityResult } from '../types';
 import { enqueue, drain } from './offlineQueue';
 
 const API_URL = import.meta.env.VITE_API_URL || '/api';
 const TOKEN_KEY = 'celeste_jwt';
+
+// Helper: extract message from unknown error
+export function errMsg(e: unknown, fallback = 'Une erreur est survenue'): string {
+  return e instanceof Error ? e.message : fallback;
+}
 
 // ─── Token management ──────────────────────────────
 export function getToken(): string | null {
@@ -206,19 +211,7 @@ export const api = {
 
   // Compatibility (LLM-powered) — supports romantic/family/friend/colleague contexts
   getCompatibility: (partnerBirthData: BirthData, context: 'romantic' | 'family' | 'friend' | 'colleague' = 'romantic') =>
-    apiCall<{
-      score: number;
-      title: string;
-      strengths: string[];
-      challenges: string[];
-      description: string;
-      context?: string;
-      // Champs calculés par le backend avec de vraies chartes (ajoutés à la réponse)
-      yourMoon?: string;
-      theirMoon?: string;
-      yourSun?: string;
-      theirSun?: string;
-    }>('/compatibility', {
+    apiCall<CompatibilityResult>('/compatibility', {
       method: 'POST',
       body: JSON.stringify({ partnerBirthData, context }),
     }),
@@ -464,7 +457,7 @@ export const api = {
   }>('/premium/status'),
 
   // ─── Billing (Stripe) ─────────────────────────────
-  startCheckout: (plan: 'monthly' | 'annual') => apiCall<{ url: string; sessionId: string }>('/billing/create-checkout', {
+  startCheckout: (plan: 'weekly' | 'yearly') => apiCall<{ url: string; sessionId: string }>('/billing/create-checkout', {
     method: 'POST',
     body: JSON.stringify({ plan }),
   }, 30_000),
@@ -492,8 +485,9 @@ export const api = {
   deleteAccount: () => apiCall<{ ok: true; deletedAt: string }>('/account', {
     method: 'DELETE',
   }, 15_000, { bypassOfflineQueue: true }),
-  verifySession: (sessionId: string) => apiCall<{ ok: true; isPremium: boolean }>(`/billing/verify-session?session_id=${encodeURIComponent(sessionId)}`, {
-    method: 'GET',
+  verifySession: (sessionId: string) => apiCall<{ status: string; paymentStatus: string; subscriptionId: string | null }>(`/billing/verify-session`, {
+    method: 'POST',
+    body: JSON.stringify({ sessionId }),
   }),
 
   // ─── Astrological Houses (Feature B1) ─────────────────

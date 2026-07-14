@@ -33,9 +33,22 @@ export interface CheckoutResult {
  *
  * Ne throw jamais — renvoie un objet CheckoutResult.
  */
+let checkoutInProgress = false;
+
 export async function startCheckout(plan: Plan): Promise<CheckoutResult> {
+  // Anti double-soumission : si un checkout est déjà en cours, on bloque
+  if (checkoutInProgress) {
+    return {
+      success: false,
+      recoverable: true,
+      error: 'Redirection vers le paiement en cours…',
+    };
+  }
+  checkoutInProgress = true;
+
   const token = getToken();
   if (!token) {
+    checkoutInProgress = false;
     return {
       success: false,
       recoverable: false,
@@ -53,9 +66,10 @@ export async function startCheckout(plan: Plan): Promise<CheckoutResult> {
       body: JSON.stringify({ plan }),
     });
 
-    const data = await resp.json().catch(() => ({} as any));
+    const data = await resp.json().catch(() => ({} as Record<string, unknown>));
 
     if (resp.status === 503 || data.code === 'stripe_not_configured') {
+      checkoutInProgress = false;
       return {
         success: false,
         recoverable: true,
@@ -65,6 +79,7 @@ export async function startCheckout(plan: Plan): Promise<CheckoutResult> {
     }
 
     if (!resp.ok) {
+      checkoutInProgress = false;
       return {
         success: false,
         recoverable: true,
@@ -73,17 +88,37 @@ export async function startCheckout(plan: Plan): Promise<CheckoutResult> {
     }
 
     if (data.url) {
-      // Redirection vers Stripe Checkout — le navigateur va naviguer.
+      // Valider que l'URL est bien une URL Stripe ou https (anti open redirect)
+      try {
+        const parsed = new URL(data.url);
+        if (parsed.protocol !== 'https:') {
+          checkoutInProgress = false;
+          return { success: false, recoverable: true, error: 'URL de paiement non sécurisée.' };
+        }
+        // Accepte stripe.com, checkout.stripe.com, et le domaine du backend
+        const isStripe = parsed.hostname.endsWith('.stripe.com') || parsed.hostname.endsWith('.stripe.network');
+        const isLocalApi = parsed.origin === API_URL;
+        if (!isStripe && !isLocalApi) {
+          checkoutInProgress = false;
+          return { success: false, recoverable: true, error: 'URL de paiement non reconnue.' };
+        }
+      } catch {
+        checkoutInProgress = false;
+        return { success: false, recoverable: true, error: 'URL de paiement invalide.' };
+      }
+      // Redirection vers Stripe Checkout
       window.location.href = data.url;
       return { success: true, recoverable: false };
     }
 
+    checkoutInProgress = false;
     return {
       success: false,
       recoverable: true,
       error: 'Réponse serveur inattendue (pas d\'URL de paiement).',
     };
   } catch (err) {
+    checkoutInProgress = false;
     return {
       success: false,
       recoverable: true,
@@ -109,7 +144,7 @@ export async function openBillingPortal(): Promise<CheckoutResult> {
         Authorization: `Bearer ${token}`,
       },
     });
-    const data = await resp.json().catch(() => ({} as any));
+    const data = await resp.json().catch(() => ({} as Record<string, unknown>));
     if (resp.status === 503) {
       return { success: false, recoverable: true, configured: false, error: 'Paiements non configurés.' };
     }
@@ -120,6 +155,19 @@ export async function openBillingPortal(): Promise<CheckoutResult> {
       return { success: false, recoverable: true, error: data.error || `Erreur ${resp.status}` };
     }
     if (data.url) {
+      // Valider l'URL (anti open redirect)
+      try {
+        const parsed = new URL(data.url);
+        if (parsed.protocol !== 'https:') {
+          return { success: false, recoverable: true, error: 'URL non sécurisée.' };
+        }
+        const isStripe = parsed.hostname.endsWith('.stripe.com') || parsed.hostname.endsWith('.stripe.network');
+        if (!isStripe && parsed.origin !== API_URL) {
+          return { success: false, recoverable: true, error: 'URL non reconnue.' };
+        }
+      } catch {
+        return { success: false, recoverable: true, error: 'URL invalide.' };
+      }
       window.location.href = data.url;
       return { success: true, recoverable: false };
     }

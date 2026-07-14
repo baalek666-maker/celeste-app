@@ -67,8 +67,8 @@ export function Paywall({ onClose, onSubscribe }: {
       } else {
         setRestoreMsg(res.message || 'Aucun abonnement trouvé pour ce compte.');
       }
-    } catch (err: any) {
-      setRestoreMsg(`Erreur : ${err?.message || 'restauration impossible'}`);
+    } catch (err: unknown) {
+      setRestoreMsg(`Erreur : ${err instanceof Error ? err.message : 'restauration impossible'}`);
     } finally {
       setRestoring(false);
     }

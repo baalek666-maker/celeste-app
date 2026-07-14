@@ -33,8 +33,8 @@ export default function WeeklyChallenge() {
     try {
       await api.completeWeeklyChallenge(note.trim());
       setData({ ...data, completed: true, reflectionNote: note.trim() || null });
-    } catch (e: any) {
-      setErr(e.message || 'Erreur');
+    } catch (e: unknown) {
+      setErr(e instanceof Error ? e.message : 'Erreur');
     } finally {
       setSubmitting(false);
     }
