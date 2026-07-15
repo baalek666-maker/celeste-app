@@ -132,9 +132,9 @@ export function Paywall({ onClose, onSubscribe }: {
               <div>
                 <div className="flex items-center gap-2">
                   <p className="text-night-100 font-bold">Annuel</p>
-                  <span className="px-2 py-0.5 rounded-full bg-gold-500/20 text-gold-300 text-xs font-medium">-58%</span>
+                  <span className="px-2 py-0.5 rounded-full bg-gold-500/20 text-gold-300 text-xs font-medium">Économique</span>
                 </div>
-                <p className="text-night-400 text-xs mt-0.5">3 jours gratuits, puis 39,99€/an</p>
+                <p className="text-night-400 text-xs mt-0.5">7 jours gratuits, puis 39,99€/an</p>
               </div>
               <div className="text-right">
                 <p className="text-night-100 text-lg font-bold">3,33€</p>
@@ -174,7 +174,7 @@ export function Paywall({ onClose, onSubscribe }: {
 
         <p className="text-night-500 text-xs text-center mt-4">
           {plan === 'yearly'
-            ? '3 jours gratuits puis 39,99€/an. Annule à tout moment. Rappel avant prélèvement.'
+            ? '7 jours gratuits puis 39,99€/an. Annule à tout moment. Rappel avant prélèvement.'
             : '6,99€/semaine. Annule à tout moment.'}
         </p>
 

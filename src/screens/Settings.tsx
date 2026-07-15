@@ -301,7 +301,7 @@ export function Settings({ user, onUpdate, onPaywall }: { user: User; onUpdate: 
         <div className="glass rounded-2xl p-5 mb-4">
           <h2 className="text-night-100 font-semibold mb-2">Conditions d'abonnement</h2>
           <p className="text-night-400 text-sm leading-relaxed">
-            • Essai gratuit de 3 jours sur l'offre annuelle, sans engagement.<br/>
+            • Essai gratuit de 7 jours sur l'offre annuelle, sans engagement.<br/>
             • Rappel par notification 24h avant le premier prélèvement.<br/>
             • Annulation possible à tout moment dans les réglages de l'App Store / Google Play.<br/>
             • Droit de rétractation de 14 jours (sauf contenu numérique déjà consommé).<br/>

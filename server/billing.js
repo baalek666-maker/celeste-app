@@ -175,6 +175,8 @@ router.post('/create-checkout', async (req, res) => {
       metadata: { userId: String(userId), plan: String(plan) },
       subscription_data: {
         metadata: { userId: String(userId), plan: String(plan) },
+        // 7-day free trial on annual plan only (matches Paywall + Settings copy)
+        ...(plan === 'yearly' && { trial_period_days: 7 }),
       },
       allow_promotion_codes: true,
       billing_address_collection: 'auto',
