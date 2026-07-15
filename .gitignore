@@ -27,3 +27,18 @@ dist-ssr
 *.db-shm
 *.db-wal
 .env.local.bak
+
+# Caches temporaires scraping / mining (Jina Reader, Exa, etc.)
+docs/*.html
+docs/*.py
+docs/cache/
+docs/tmp/
+docs/*.json
+!docs/VMF-*.md
+!docs/AUDIT-*.md
+!docs/*.json  # exception pour JSON versionnés manuellement (décommenter si besoin)
+
+# Builds / assets générés
+android/app/build/
+ios/build/
+ios/Pods/
