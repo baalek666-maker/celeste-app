@@ -258,7 +258,7 @@ export function Horoscope({ user }: { user: User }) {
                 {streak >= 2 ? `${streak} jours d'affilée` : 'Premier jour de constellation'}
               </p>
               <p className="text-night-400 text-xs">
-                {streak >= 7 ? 'Vous brillez avec constance.' : streak >= 2 ? 'Continuez, l\'univers vous remarque.' : 'Revenez demain pour allonger la série.'}
+                {streak >= 7 ? 'Tu brilles avec constance.' : streak >= 2 ? 'Continue, l\'univers remarque.' : 'Reviens demain pour allonger la série.'}
               </p>
             </div>
           </div>
@@ -288,7 +288,7 @@ export function Horoscope({ user }: { user: User }) {
       <div className="flex items-start justify-between mb-6">
         <div>
           <p className="text-night-400 text-sm capitalize mb-1">{todayFr}</p>
-          <h1 className="text-2xl font-bold text-gold-gradient">Votre horoscope</h1>
+          <h1 className="text-2xl font-bold text-gold-gradient">Ton horoscope</h1>
         </div>
         {/* Action buttons */}
         <div className="flex gap-2">

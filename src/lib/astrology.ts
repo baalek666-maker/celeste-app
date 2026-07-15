@@ -205,12 +205,12 @@ export function elementDescription(elements: {
 }): string {
   const max = Math.max(elements.fire, elements.earth, elements.air, elements.water);
   if (elements.fire === max)
-    return 'Une énergie passionnée et créatrice. Vous êtes moteur, vous initiez et inspirez.';
+    return 'Une énergie passionnée et créatrice. Tu es moteur, tu initiez et inspirez.';
   if (elements.earth === max)
-    return 'Une nature pragmatique et ancrée. Vous construisez solidement et cultivez la patience.';
+    return 'Une nature pragmatique et ancrée. Tu construis solidement et cultives la patience.';
   if (elements.air === max)
-    return 'Un esprit libre et communicant. Vous pensez, reliez et faites circuler les idées.';
-  return 'Une sensibilité profonde et intuitive. Vous ressentez, imaginez et fusionnez avec votre environnement.';
+    return 'Un esprit libre et communicant. Tu penses, relies et fais circuler les idées.';
+  return 'Une sensibilité profonde et intuitive. Tu ressens, imagines et fusionnes avec ton environnement.';
 }
 
 /**

@@ -4,12 +4,12 @@ const MILESTONES = [7, 14, 30, 60, 90, 180, 365];
 
 const MILESTONE_DATA: Record<number, { emoji: string; title: string; subtitle: string }> = {
   7:   { emoji: '🔥', title: '7 jours !',   subtitle: 'Une semaine complète à écouter les étoiles.' },
-  14:  { emoji: '✨', title: '14 jours !',  subtitle: 'Vous êtes sur une belle lancée cosmique.' },
-  30:  { emoji: '🌙', title: '30 jours !',  subtitle: 'Un cycle lunaire complet. Votre persévérance inspire.' },
-  60:  { emoji: '⭐', title: '60 jours !',  subtitle: 'Deux cycles lunaires — votre connexion s’approfondit.' },
-  90:  { emoji: '🌟', title: '90 jours !',  subtitle: 'Un trimestre céleste. Vous faites partie des plus dévoué·e·s.' },
-  180: { emoji: '💫', title: '180 jours !', subtitle: 'Un demi-cycle solaire. Votre constance est remarquable.' },
-  365: { emoji: '👑', title: 'Un an !',     subtitle: 'Un tour complet du soleil. Vous êtes une âme céleste.' },
+  14:  { emoji: '✨', title: '14 jours !',  subtitle: 'Tu es sur une belle lancée.' },
+  30:  { emoji: '🌙', title: '30 jours !',  subtitle: 'Un cycle lunaire complet. Ton persévérance inspire.' },
+  60:  { emoji: '⭐', title: '60 jours !',  subtitle: 'Deux cycles lunaires — ta connexion s’approfondit.' },
+  90:  { emoji: '🌟', title: '90 jours !',  subtitle: 'Un trimestre céleste. Tu fais partie des plus dévoué·e·s.' },
+  180: { emoji: '💫', title: '180 jours !', subtitle: 'Un demi-cycle solaire. Ton constance est remarquable.' },
+  365: { emoji: '👑', title: 'Un an !',     subtitle: 'Un tour complet du soleil. Tu es une âme céleste.' },
 };
 
 /**

@@ -205,7 +205,7 @@ export default function RuneOracle() {
           type="text"
           value={question}
           onChange={(e) => setQuestion(e.target.value)}
-          placeholder="Posez votre question (optionnel)..."
+          placeholder="Pose ta question (optionnel)..."
           className="w-full glass rounded-xl px-4 py-2 text-sm text-night-100 placeholder-night-500 outline-none border-gold-500/20"
         />
 

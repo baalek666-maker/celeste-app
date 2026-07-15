@@ -37,7 +37,7 @@ export class ErrorBoundary extends Component<Props, State> {
           <div className="text-5xl mb-4">🌙</div>
           <h1 className="text-xl font-bold mb-2 text-gold-gradient">Une étincelle s'est éteinte</h1>
           <p className="text-night-300 text-sm mb-6">
-            L'application a rencontré un imprévu. Vous pouvez réessayer sans perdre vos données.
+            L'application a rencontré un imprévu. Tu peux réessayer sans perdre tes données.
           </p>
           {import.meta.env.DEV && (
             <pre className="text-left text-xs text-red-300 bg-night-900/60 rounded-xl p-3 mb-4 overflow-auto max-h-40">

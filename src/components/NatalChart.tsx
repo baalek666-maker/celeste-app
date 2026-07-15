@@ -109,7 +109,7 @@ export default function NatalChart({ size }: { size?: number }) {
   if (loading) {
     return (
       <div ref={ref} className="w-full flex items-center justify-center mb-4" style={{ minHeight: 200 }}>
-        <p className="text-night-400 text-sm">Calcul de votre thème natal…</p>
+        <p className="text-night-400 text-sm">Calcul de ton thème natal…</p>
       </div>
     );
   }

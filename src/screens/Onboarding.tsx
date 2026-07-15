@@ -205,10 +205,10 @@ export function Onboarding({ onComplete }: { onComplete: (u: User) => void }) {
         </div>
       </div>
       <h1 className="text-4xl font-bold mb-3 text-gold-gradient">Céleste</h1>
-      <p className="text-night-300 text-lg mb-2">Votre carte du ciel,</p>
-      <p className="text-night-300 text-lg mb-12">votre miroir</p>
+      <p className="text-night-300 text-lg mb-2">Ta carte du ciel,</p>
+      <p className="text-night-300 text-lg mb-12">ton miroir</p>
       <p className="text-night-400 text-sm mb-8 max-w-xs">
-        Une astrologie qui vous parle à vous. Pas de texte recyclé — chaque mot est calculé à partir de vos planètes réelles.
+        Une astrologie qui tu parle à toi. Pas de texte recyclé — chaque mot est calculé à partir de tes planètes réelles.
       </p>
       {/* P10 — Explain free tier upfront to set expectations */}
       <div className="glass rounded-2xl px-5 py-4 mb-8 max-w-xs border border-gold-500/20">
@@ -217,7 +217,7 @@ export function Onboarding({ onComplete }: { onComplete: (u: User) => void }) {
           <span className="text-gold-400 text-sm font-semibold">3 scans offerts</span>
         </div>
         <p className="text-night-400 text-xs leading-relaxed text-left">
-          Découvrez votre compatibilité amoureuse, familiale ou amicale — 3 analyses gratuites pour explorer tout le potentiel de Céleste.
+          Découvre ton compatibilité amoureuse, familiale ou amicale — 3 analyses gratuites pour explorer tout le potentiel de Céleste.
         </p>
       </div>
       <button
@@ -233,8 +233,8 @@ export function Onboarding({ onComplete }: { onComplete: (u: User) => void }) {
       <ProgressBar current={1} />
       <BackButton to={0} />
       <p className="text-gold-400 text-sm uppercase tracking-widest mb-3">Étape 1 sur 3</p>
-      <h2 className="text-2xl font-bold mb-2 text-center">Quand êtes-vous né·e ?</h2>
-      <p className="text-night-400 text-sm mb-8 text-center max-w-xs">La position des planètes change chaque jour. Votre date de naissance est le point de départ.</p>
+      <h2 className="text-2xl font-bold mb-2 text-center">Quand êtes-tu né·e ?</h2>
+      <p className="text-night-400 text-sm mb-8 text-center max-w-xs">La position des planètes change chaque jour. Ton date de naissance est le point de départ.</p>
       <input
         type="date" value={date} onChange={e => setDate(e.target.value)}
         className="w-full max-w-xs py-4 px-4 rounded-2xl glass border border-night-700 text-night-100 text-lg text-center focus:outline-none focus:border-cosmic-500 transition-colors"
@@ -256,7 +256,7 @@ export function Onboarding({ onComplete }: { onComplete: (u: User) => void }) {
       <BackButton to={1} />
       <p className="text-gold-400 text-sm uppercase tracking-widest mb-3">Étape 2 sur 3</p>
       <h2 className="text-2xl font-bold mb-2 text-center">À quelle heure exactement ?</h2>
-      <p className="text-night-400 text-sm mb-8 text-center max-w-xs">L'heure exacte détermine votre Ascendant et vos Maisons astrologiques. Sans elle, votre thème sera incomplet.</p>
+      <p className="text-night-400 text-sm mb-8 text-center max-w-xs">L'heure exacte détermine ton Ascendant et tes Maisons astrologiques. Sans elle, ton thème sera incomplet.</p>
       <input
         type="time" value={time} disabled={timeUnknown}
         onChange={e => setTime(e.target.value)}
@@ -289,8 +289,8 @@ export function Onboarding({ onComplete }: { onComplete: (u: User) => void }) {
       <ProgressBar current={3} />
       <BackButton to={2} />
       <p className="text-gold-400 text-sm uppercase tracking-widest mb-3">Étape 3 sur 3</p>
-      <h2 className="text-2xl font-bold mb-2 text-center">Où êtes-vous né·e ?</h2>
-      <p className="text-night-400 text-sm mb-6 text-center max-w-xs">Le lieu de naissance complète votre carte du ciel.</p>
+      <h2 className="text-2xl font-bold mb-2 text-center">Où êtes-tu né·e ?</h2>
+      <p className="text-night-400 text-sm mb-6 text-center max-w-xs">Le lieu de naissance complète ta carte du ciel.</p>
 
       {/* Search bar */}
       <input
@@ -370,7 +370,7 @@ export function Onboarding({ onComplete }: { onComplete: (u: User) => void }) {
               <circle cx="25" cy="60" r="2" fill="#757bc4" />
             </svg>
           </div>
-          <h2 className="text-xl font-bold mb-3 text-gold-gradient">Calcul de votre thème natal</h2>
+          <h2 className="text-xl font-bold mb-3 text-gold-gradient">Calcul de ton thème natal</h2>
           <p className="text-night-400 text-sm">Analyse des positions planétaires...</p>
           <div className="mt-8 space-y-2 text-night-500 text-xs">
             <p className="animate-fade-in" style={{ animationDelay: '0.3s' }}>◆ Position du Soleil</p>

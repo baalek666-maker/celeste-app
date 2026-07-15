@@ -32,7 +32,7 @@ export function ChartView({ user }: { user: User }) {
     setShareStatus('sharing');
     const shareData = {
       title: 'Mon thème astral — Céleste',
-      text: `Voici mon ciel de naissance :\n☉ Soleil en ${sunSign.name}\n☽ Lune en ${moonSign.name}\nASC ${risingSign.name}\n\nDécouvrez le vôtre sur Céleste ✨`,
+      text: `Voici mon ciel de naissance :\n☉ Soleil en ${sunSign.name}\n☽ Lune en ${moonSign.name}\nASC ${risingSign.name}\n\nDécouvre le vôtre sur Céleste ✨`,
       url: window.location.origin,
     };
     try {
@@ -78,7 +78,7 @@ export function ChartView({ user }: { user: User }) {
 
       {/* Planet Details — clickable expandable cards */}
       <div className="space-y-3 mb-6">
-        <p className="text-night-400 text-xs uppercase tracking-widest px-1">Vos planètes en détail</p>
+        <p className="text-night-400 text-xs uppercase tracking-widest px-1">Tes planètes en détail</p>
         {chart.positions.map(pos => (
           <PlanetDetailCard
             key={pos.planet}

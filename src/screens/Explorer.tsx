@@ -20,15 +20,15 @@ import AstroPortrait from '../screens/AstroPortrait';
 type ExplorerSection = 'overview' | 'chart' | 'compatibility' | 'insights' | 'portrait' | 'cosmic' | 'yijing' | 'runes' | 'chinese';
 
 const SECTIONS: { key: ExplorerSection; label: string; emoji: string; desc: string }[] = [
-  { key: 'overview', label: 'Vue d\u2019ensemble', emoji: '✦', desc: 'Tout pour approfondir votre ciel' },
-  { key: 'portrait', label: 'Portrait astral', emoji: '📜', desc: 'Votre portrait profond de 1500 mots' },
-  { key: 'chart', label: 'Thème natal', emoji: '☀', desc: 'Toutes vos planètes et maisons' },
+  { key: 'overview', label: 'Vue d\u2019ensemble', emoji: '✦', desc: 'Tout pour approfondir ton ciel' },
+  { key: 'portrait', label: 'Portrait astral', emoji: '📜', desc: 'Ton portrait profond de 1500 mots' },
+  { key: 'chart', label: 'Thème natal', emoji: '☀', desc: 'Toutes tes planètes et maisons' },
   { key: 'compatibility', label: 'Compatibilité', emoji: '☽', desc: 'Affinités avec un proche' },
   { key: 'cosmic', label: 'Calendrier cosmique', emoji: '🗓', desc: 'Les prochaines étapes célestes' },
   { key: 'insights', label: 'Explorations', emoji: '◈', desc: 'Aspects, nœuds, astéroïdes, rituels' },
   { key: 'yijing', label: 'Yi Jing', emoji: '☰', desc: 'L\u2019oracle chinois croisé avec l\u2019astro' },
   { key: 'runes', label: 'Runomancie', emoji: 'ᚱ', desc: 'Les 24 runes du Futhark ancien' },
-  { key: 'chinese', label: 'Astrologie chinoise', emoji: '🐉', desc: 'Votre signe chinois, element et affinites' },
+  { key: 'chinese', label: 'Astrologie chinoise', emoji: '🐉', desc: 'Ton signe chinois, element et affinites' },
 ];
 
 export function Explorer({ user, onNavigate }: { user: User; onNavigate: (s: Screen) => void }) {
@@ -136,7 +136,7 @@ export function Explorer({ user, onNavigate }: { user: User; onNavigate: (s: Scr
         <p className="text-night-400 text-xs uppercase tracking-widest mb-1">Approfondir</p>
         <h1 className="text-2xl font-bold text-gold-gradient mb-2">Explorer</h1>
         <p className="text-night-300 text-sm">
-          Explorez chaque planète de votre thème, en détail.
+          Explorez chaque planète de ton thème, en détail.
         </p>
       </div>
 

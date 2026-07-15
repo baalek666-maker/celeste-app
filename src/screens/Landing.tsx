@@ -35,27 +35,27 @@ const FEATURES = [
   {
     glyph: '☉',
     title: 'Horoscope vraiment personnel',
-    desc: "Calculé depuis votre date, heure et lieu de naissance. Pas de texte recyclé — chaque lecture parle de vos planètes, pas de votre seul signe.",
+    desc: "Calculé depuis ton date, heure et lieu de naissance. Pas de texte recyclé — chaque lecture parle de tes planètes, pas de ton seul signe.",
     accent: 'gold',
   },
   {
     glyph: '☥',
     title: 'Compatibilité amoureuse',
-    desc: "Découvrez pourquoi certains vous attirent et d'autres pas. Vénus, Mars, Lune — la chimie entre deux personnes, expliquée simplement.",
+    desc: "Découvre pourquoi certains tu attirent et d'autres pas. Vénus, Mars, Lune — la chimie entre deux personnes, expliquée simplement.",
     accent: 'silver',
   },
   {
     glyph: '✦',
     title: 'Journal de bord',
-    desc: "Notez vos ressentis au fil des jours. Céleste repère vos cycles émotionnels et les résonances planétaires qui les accompagnent.",
+    desc: "Note tes ressentis au fil des jours. Céleste repère tes cycles émotionnels et les résonances planétaires qui les accompagnent.",
     accent: 'gold',
   },
 ];
 
 const STEPS = [
-  { num: '01', title: 'Votre naissance', desc: 'Date, heure et lieu. Trois infos pour calculer votre ciel à la minute près.' },
-  { num: '02', title: 'Votre carte du ciel', desc: 'Soleil, Lune, Ascendant — votre thème natal, astronomiquement exact.' },
-  { num: '03', title: 'Votre quotidien', desc: "Chaque jour, lisez ce que les planètes activent vraiment en vous." },
+  { num: '01', title: 'Ta naissance', desc: 'Date, heure et lieu. Trois infos pour calculer ton ciel à la minute près.' },
+  { num: '02', title: 'Ta carte du ciel', desc: 'Soleil, Lune, Ascendant — ton thème natal, astronomiquement exact.' },
+  { num: '03', title: 'Ton quotidien', desc: "Chaque jour, lisez ce que les planètes activent vraiment en toi." },
 ];
 
 const TESTIMONIALS = [
@@ -99,10 +99,10 @@ export function Landing({ onStart, onLogin }: LandingProps) {
         </div>
 
         <h1 className="text-4xl md:text-5xl font-bold font-display text-gold-gradient mb-4 leading-tight animate-fade-in-up" style={{ animationDelay: '0.2s' }}>
-          Votre ciel,<br />votre miroir
+          Ton ciel,<br />ton miroir
         </h1>
         <p className="text-night-300 text-base max-w-md mx-auto mb-10 font-body leading-relaxed animate-fade-in-up" style={{ animationDelay: '0.35s' }}>
-          Une carte du ciel calculée aux données astronomiques NASA. Des lectures qui parlent de vous, pas d'un signe générique. L'astrologie comme elle aurait dû être.
+          Une carte du ciel calculée aux données astronomiques NASA. Des lectures qui parlent de toi, pas d'un signe générique. L'astrologie comme elle aurait dû être.
         </p>
         <button
           onClick={onStart}
@@ -245,7 +245,7 @@ export function Landing({ onStart, onLogin }: LandingProps) {
           </button>
         </p>
         <p className="text-night-600 text-[10px] mt-4 font-body">
-          Céleste · Votre ciel, votre miroir
+          Céleste · Ton ciel, ton miroir
         </p>
       </section>
     </div>

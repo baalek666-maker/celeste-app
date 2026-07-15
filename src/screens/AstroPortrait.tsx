@@ -61,7 +61,7 @@ function LoadingState() {
         </div>
       </div>
       <p className="font-display text-night-100 tracking-wide text-center px-8">
-        Les étoiles rédigent votre portrait…
+        Les étoiles rédigent ton portrait…
       </p>
       <div className="flex gap-1.5 mt-4">
         <span className="splash-dot" style={{ animationDelay: '0s' }} />

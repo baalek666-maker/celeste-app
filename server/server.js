@@ -1261,7 +1261,7 @@ app.delete('/api/account', auth, (req, res) => {
   // supprimé via une autre session, ou token volé d'un compte effacé).
   try {
     const exists = db.prepare('SELECT 1 FROM users WHERE id = ?').get(userId);
-    if (!exists) return res.status(401).json({ error: 'Compte introuvable. Veuillez vous reconnecter.' });
+    if (!exists) return res.status(401).json({ error: 'Compte introuvable. Reconnecte-toi.' });
   } catch (err) {
     return res.status(500).json({ error: 'Erreur vérification compte.' });
   }
@@ -1629,27 +1629,27 @@ app.get('/api/horoscope/week', auth, async (req, res) => {
 
 // ─── Tarot — Daily Draw (LLM-powered, cached per day) ─────
 const TAROT_DECK = [
-  { id: 0, name: 'Le Fou', roman: '0', emoji: '🃏', archetype: 'Liberté, commencement, spontanéité', upright: 'Un nouveau départ vous appelle. Osez le saut.', reversed: 'L\'impulsivité risque de vous égarer.' },
-  { id: 1, name: 'Le Bateleur', roman: 'I', emoji: '🎩', archetype: 'Créativité, habileté, initiative', upright: 'Vous avez tous les outils en main.', reversed: 'Attention aux illusions.' },
-  { id: 2, name: 'La Papesse', roman: 'II', emoji: '🌙', archetype: 'Intuition, savoir caché, mystère', upright: 'Écoutez votre voix intérieure.', reversed: 'Vous ignorez votre sagesse.' },
+  { id: 0, name: 'Le Fou', roman: '0', emoji: '🃏', archetype: 'Liberté, commencement, spontanéité', upright: 'Un nouveau départ t\'appelle. Ose le saut.', reversed: 'L\'impulsivité risque de t\'égarer.' },
+  { id: 1, name: 'Le Bateleur', roman: 'I', emoji: '🎩', archetype: 'Créativité, habileté, initiative', upright: 'Tu as tous les outils en main.', reversed: 'Attention aux illusions.' },
+  { id: 2, name: 'La Papesse', roman: 'II', emoji: '🌙', archetype: 'Intuition, savoir caché, mystère', upright: 'Écoute ta voix intérieure.', reversed: 'Tu ignores ta sagesse.' },
   { id: 3, name: 'L\'Impératrice', roman: 'III', emoji: '👑', archetype: 'Fécondité, abondance, création', upright: 'La créativité coule.', reversed: 'Un blocage créatif.' },
-  { id: 4, name: 'L\'Empereur', roman: 'IV', emoji: '🏛️', archetype: 'Autorité, structure, maîtrise', upright: 'Prenez les rennes.', reversed: 'La rigidité vous limite.' },
-  { id: 5, name: 'Le Pape', roman: 'V', emoji: '🔑', archetype: 'Sagesse, enseignement, spiritualité', upright: 'Un guide croise votre chemin.', reversed: 'Remettez en question les croyances.' },
+  { id: 4, name: 'L\'Empereur', roman: 'IV', emoji: '🏛️', archetype: 'Autorité, structure, maîtrise', upright: 'Prends les rennes.', reversed: 'La rigidité te limite.' },
+  { id: 5, name: 'Le Pape', roman: 'V', emoji: '🔑', archetype: 'Sagesse, enseignement, spiritualité', upright: 'Un guide croise ton chemin.', reversed: 'Remets en question les croyances.' },
   { id: 6, name: 'L\'Amoureux', roman: 'VI', emoji: '💕', archetype: 'Choix du cœur, union, dualité', upright: 'Un choix de cœur se présente.', reversed: 'Une indécision sentimentale.' },
-  { id: 7, name: 'Le Chariot', roman: 'VII', emoji: '⚔️', archetype: 'Victoire, volonté, maîtrise', upright: 'Votre détermination mène à la victoire.', reversed: 'L\'agitation vous disperse.' },
+  { id: 7, name: 'Le Chariot', roman: 'VII', emoji: '⚔️', archetype: 'Victoire, volonté, maîtrise', upright: 'Ta détermination mène à la victoire.', reversed: 'L\'agitation te disperse.' },
   { id: 8, name: 'La Justice', roman: 'VIII', emoji: '⚖️', archetype: 'Équilibre, vérité, justesse', upright: 'L\'équité prévaut.', reversed: 'Un déséquilibre à corriger.' },
-  { id: 9, name: 'L\'Ermite', roman: 'IX', emoji: '🏮', archetype: 'Introspection, retraite, lumière intérieure', upright: 'Votre lumière intérieure guide.', reversed: 'L\'isolement devient repli.' },
-  { id: 10, name: 'La Roue de Fortune', roman: 'X', emoji: '🎡', archetype: 'Cycles, destin, changement', upright: 'La roue tourne en votre faveur.', reversed: 'Un cycle se ferme.' },
-  { id: 11, name: 'La Force', roman: 'XI', emoji: '🦁', archetype: 'Courage, douceur, maîtrise de soi', upright: 'Votre force intérieure dompte les obstacles.', reversed: 'Le doute affaiblit.' },
-  { id: 12, name: 'Le Pendu', roman: 'XII', emoji: '🙃', archetype: 'Lâcher prise, vision nouvelle', upright: 'Voyez les choses autrement.', reversed: 'La stagnation vous frustre.' },
-  { id: 13, name: 'L\'Arcane sans nom', roman: 'XIII', emoji: '🦋', archetype: 'Transformation, fin, renaissance', upright: 'Une transformation profonde est en cours.', reversed: 'Vous résistez à une fin nécessaire.' },
+  { id: 9, name: 'L\'Ermite', roman: 'IX', emoji: '🏮', archetype: 'Introspection, retraite, lumière intérieure', upright: 'Ta lumière intérieure guide.', reversed: 'L\'isolement devient repli.' },
+  { id: 10, name: 'La Roue de Fortune', roman: 'X', emoji: '🎡', archetype: 'Cycles, destin, changement', upright: 'La roue tourne en ta faveur.', reversed: 'Un cycle se ferme.' },
+  { id: 11, name: 'La Force', roman: 'XI', emoji: '🦁', archetype: 'Courage, douceur, maîtrise de soi', upright: 'Ta force intérieure dompte les obstacles.', reversed: 'Le doute affaiblit.' },
+  { id: 12, name: 'Le Pendu', roman: 'XII', emoji: '🙃', archetype: 'Lâcher prise, vision nouvelle', upright: 'Vois les choses autrement.', reversed: 'La stagnation te frustre.' },
+  { id: 13, name: 'L\'Arcane sans nom', roman: 'XIII', emoji: '🦋', archetype: 'Transformation, fin, renaissance', upright: 'Une transformation profonde est en cours.', reversed: 'Tu résistes à une fin nécessaire.' },
   { id: 14, name: 'Tempérance', roman: 'XIV', emoji: '🕊️', archetype: 'Harmonie, patience, alchimie', upright: 'Trouvez le juste milieu.', reversed: 'L\'excès déséquilibre.' },
-  { id: 15, name: 'Le Diable', roman: 'XV', emoji: '🔥', archetype: 'Désir, attachement, ombre', upright: 'Confrontez vos peurs.', reversed: 'Vous vous libérez d\'une chaîne.' },
-  { id: 16, name: 'La Maison Dieu', roman: 'XVI', emoji: '⚡', archetype: 'Changement soudain, révélation', upright: 'Un éclair de vérité bouscule.', reversed: 'Vous évitez un changement.' },
+  { id: 15, name: 'Le Diable', roman: 'XV', emoji: '🔥', archetype: 'Désir, attachement, ombre', upright: 'Confronte tes peurs.', reversed: 'Tu te libères d\'une chaîne.' },
+  { id: 16, name: 'La Maison Dieu', roman: 'XVI', emoji: '⚡', archetype: 'Changement soudain, révélation', upright: 'Un éclair de vérité bouscule.', reversed: 'Tu évites un changement.' },
   { id: 17, name: 'L\'Étoile', roman: 'XVII', emoji: '⭐', archetype: 'Espoir, inspiration, guidance', upright: 'L\'espoir revient.', reversed: 'Le découragement voile.' },
-  { id: 18, name: 'La Lune', roman: 'XVIII', emoji: '🌛', archetype: 'Illusion, rêves, inconscient', upright: 'Vos rêves contiennent des messages.', reversed: 'Les peurs se dissipent.' },
+  { id: 18, name: 'La Lune', roman: 'XVIII', emoji: '🌛', archetype: 'Illusion, rêves, inconscient', upright: 'Tes rêves contiennent des messages.', reversed: 'Les peurs se dissipent.' },
   { id: 19, name: 'Le Soleil', roman: 'XIX', emoji: '🌞', archetype: 'Joie, succès, vitalité', upright: 'La joie et le succès rayonnent.', reversed: 'Une ombre voile l\'enthousiasme.' },
-  { id: 20, name: 'Le Jugement', roman: 'XX', emoji: '📯', archetype: 'Renaissance, appel, rédemption', upright: 'Un appel à vous élever.', reversed: 'Un doute persiste.' },
+  { id: 20, name: 'Le Jugement', roman: 'XX', emoji: '📯', archetype: 'Renaissance, appel, rédemption', upright: 'Un appel à t\'élever.', reversed: 'Un doute persiste.' },
   { id: 21, name: 'Le Monde', roman: 'XXI', emoji: '🌍', archetype: 'Achèvement, plénitude, accomplissement', upright: 'Un cycle s\'achève dans la plénitude.', reversed: 'La finalité est proche.' },
 ];
 
@@ -1720,8 +1720,8 @@ Réponds UNIQUEMENT avec le JSON.`;
         cardName: card.name, cardId: card.id, roman: card.roman, emoji: card.emoji,
         isReversed, archetype: card.archetype,
         message: isReversed ? card.reversed : card.upright,
-        question: 'Que vous dit cette carte aujourd\'hui ?',
-        reading: `${card.archetype}. ${isReversed ? card.reversed : card.upright} En tant que ${sunSign}, cette énergie résonne particulièrement avec votre chemin solaire. Les configurations du moment vous invitent à intégrer pleinement ce message dans votre journée.`,
+        question: 'Que te dit cette carte aujourd\'hui ?',
+        reading: `${card.archetype}. ${isReversed ? card.reversed : card.upright} En tant que ${sunSign}, cette énergie résonne particulièrement avec ton chemin solaire. Les configurations du moment t'invitent à intégrer pleinement ce message dans ta journée.`,
       };
     }
 
@@ -1732,8 +1732,8 @@ Réponds UNIQUEMENT avec le JSON.`;
     result.isReversed ??= isReversed;
     result.archetype ??= card.archetype;
     result.message ??= isReversed ? card.reversed : card.upright;
-    result.question ??= 'Que vous dit cette carte aujourd\'hui ?';
-    result.reading ??= `${card.archetype}. ${isReversed ? card.reversed : card.upright} En tant que ${sunSign}, cette énergie résonne avec votre chemin solaire. Les configurations planétaires du moment amplifient cette influence : laissez-la guider vos choix de la journée.`;
+    result.question ??= 'Que te dit cette carte aujourd\'hui ?';
+    result.reading ??= `${card.archetype}. ${isReversed ? card.reversed : card.upright} En tant que ${sunSign}, cette énergie résonne avec ton chemin solaire. Les configurations planétaires du moment amplifient cette influence : laisse-la guider tes choix de la journée.`;
 
     // Cache for the day
     db.prepare('INSERT OR REPLACE INTO horoscope_cache (user_id, date, content) VALUES (?, ?, ?)')
@@ -1759,8 +1759,8 @@ Réponds UNIQUEMENT avec le JSON.`;
       isReversed: fbIsReversed,
       archetype: fallbackCard.archetype,
       message: fbIsReversed ? fallbackCard.reversed : fallbackCard.upright,
-      question: 'Que vous dit cette carte aujourd\'hui ?',
-      reading: `${fallbackCard.archetype}. ${fbIsReversed ? fallbackCard.reversed : fallbackCard.upright} En tant que ${fbSun}, cette énergie résonne avec votre chemin solaire. Les configurations planétaires du moment amplifient cette influence : laissez-la guider vos choix de la journée.`,
+      question: 'Que te dit cette carte aujourd\'hui ?',
+      reading: `${fallbackCard.archetype}. ${fbIsReversed ? fallbackCard.reversed : fallbackCard.upright} En tant que ${fbSun}, cette énergie résonne avec ton chemin solaire. Les configurations planétaires du moment amplifient cette influence : laisse-la guider tes choix de la journée.`,
     };
     db.prepare('INSERT OR REPLACE INTO horoscope_cache (user_id, date, content) VALUES (?, ?, ?)')
       .run(req.user.id, `tarot:${today}`, JSON.stringify(fallbackResult));

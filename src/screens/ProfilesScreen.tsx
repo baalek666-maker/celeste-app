@@ -128,7 +128,7 @@ export function ProfilesScreen({ user, onClose }: { user: User; onClose: () => v
         {!loading && profiles.length === 0 && (
           <div className="text-center text-white/40 py-12 text-sm">
             Aucun profil pour le moment.<br />
-            Commencez par enregistrer votre propre thème astral, puis ajoutez vos proches pour comparer vos compatibilités.
+            Commence par enregistrer ton propre thème astral, puis ajoutez tes proches pour comparer tes compatibilités.
           </div>
         )}
         {!loading && profiles.map(p => (

@@ -45,7 +45,7 @@ export default function LunarNodes() {
         <h3 className="text-sm font-semibold text-celeste-accent flex items-center gap-2">
           <span>☊</span> Nœuds lunaires
         </h3>
-        <span className="text-xs text-celeste-text/50">Axe karmique</span>
+        <span className="text-xs text-celeste-text/50">Axe de croissance</span>
       </div>
 
       <div className="grid grid-cols-2 gap-3 mb-3">

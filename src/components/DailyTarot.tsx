@@ -78,7 +78,7 @@ export default function DailyTarot() {
       <div className="px-5 mb-6 animate-fade-in">
         <div className="flex items-center justify-between mb-3">
           <h2 className="text-gold-400 text-xs uppercase tracking-widest font-semibold">🃏 Tirage du jour</h2>
-          <span className="text-night-500 text-xs">Une carte vous attend</span>
+          <span className="text-night-500 text-xs">Une carte t'attend</span>
         </div>
         <button
           onClick={draw}
@@ -96,7 +96,7 @@ export default function DailyTarot() {
               {loading ? 'Tirage en cours…' : 'Tirer ma carte du jour'}
             </p>
             <p className="text-night-300 text-xs">
-              Une carte, un message. Revenez demain pour la suivante.
+              Une carte, un message. Reviens demain pour la suivante.
             </p>
           </div>
         </button>

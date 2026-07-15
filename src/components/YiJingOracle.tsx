@@ -116,7 +116,7 @@ export function YiJingOracle() {
           <p className="text-night-400 text-xs uppercase tracking-widest mb-1">Oracle de Chine</p>
           <h1 className="text-2xl font-bold text-gold-gradient mb-2">Yi Jing</h1>
           <p className="text-night-300 text-sm">
-            Le Livre des Mutations, croise avec votre ciel natal.
+            Le Livre des Mutations, croise avec ton ciel natal.
           </p>
         </div>
 

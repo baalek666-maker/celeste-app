@@ -63,21 +63,21 @@ export async function generateHoroscope(chart: NatalChart, date: string): Promis
 function buildGeneral(chart: NatalChart, sunData: SignData, moonData: SignData, rng: () => number): string {
   const el = chart.elements;
   const intro = rng() > 0.5
-    ? "Avec votre Soleil en " + sunData.name
-    : "Votre essence solaire " + sunData.name.toLowerCase();
+    ? "Avec ton Soleil en " + sunData.name
+    : "Ta essence solaire " + sunData.name.toLowerCase();
 
   let body: string;
   if (el.fire > 2) {
-    body = " vous donne aujourd'hui un carburant créatif exceptionnel. C'est le moment d'initier, d'oser, de proposer. Votre feu intérieur demande à s'exprimer.";
+    body = " te donne aujourd'hui un carburant créatif exceptionnel. C'est le moment d'initier, d'oser, de proposer. Ton feu intérieur demande à s'exprimer.";
   } else if (el.water > 2) {
-    body = " vous rend particulièrement réceptif aux nuances émotionnelles. Faites confiance à votre intuition, elle capte des informations que la raison n'a pas encore intégrées.";
+    body = " te rend particulièrement réceptif aux nuances émotionnelles. Fais confiance à ton intuition, elle capte des informations que la raison n'a pas encore intégrées.";
   } else if (el.air > 2) {
-    body = " stimulate votre besoin d'échanges et d'idées nouvelles. Connectez-vous, écrivez, partagez votre vision. Votre agilité mentale est un atout aujourd'hui.";
+    body = " stimulate ton besoin d'échanges et d'idées nouvelles. Connecte-toi, écrivez, partage ta vision. Ton agilité mentale est un atout aujourd'hui.";
   } else {
-    body = " vous invite à ancrer vos projets dans le concret. La patience et la méthode portent leurs fruits. Construisez solidement, pierre après pierre.";
+    body = " t'invite à ancrer tes projets dans le concret. La patience et la méthode portent leurs fruits. Construis solidement, pierre après pierre.";
   }
 
-  const moonNote = " Avec votre Lune en " + moonData.name + ", votre monde intérieur " +
+  const moonNote = " Avec ta Lune en " + moonData.name + ", ton monde intérieur " +
     (moonData.element === 'water' ? "est profond et sensible." :
      moonData.element === 'fire' ? "vibre d'une ardeur communicative." :
      moonData.element === 'air' ? "cherche la légèreté et la connexion." :
@@ -92,10 +92,10 @@ function buildLove(chart: NatalChart, rng: () => number): string {
   const venusSign = venus ? ZODIAC_SIGNS[venus.sign].name : sunData.name;
 
   const messages = [
-    "Vénus en " + venusSign + " illumine votre vie amoureuse d'une teinte particulière. Vous cherchez la beauté là où d'autres ne voient que banalité.",
-    "Votre façon d'aimer est teintée par " + venusSign + ". Aujourd'hui, exprimez vos sentiments avec authenticité plutôt qu'avec perfection.",
-    "En amour, votre Vénus " + venusSign + " vous pousse à créer des liens authentiques. Une conversation sincère pourrait transformer une relation.",
-    "Votre cœur " + venusSign + " bat pour l'harmonie. Offrez votre attention à ceux qui comptent, sans rien attendre en retour.",
+    "Vénus en " + venusSign + " illumine ta vie amoureuse d'une teinte particulière. Tu cherches la beauté là où d'autres ne voient que banalité.",
+    "Ta façon d'aimer est teintée par " + venusSign + ". Aujourd'hui, exprime tes sentiments avec authenticité plutôt qu'avec perfection.",
+    "En amour, ton Vénus " + venusSign + " te pousse à créer des liens authentiques. Une conversation sincère pourrait transformer une relation.",
+    "Ton cœur " + venusSign + " bat pour l'harmonie. Offre ta attention à ceux qui comptent, sans rien attendre en retour.",
   ];
 
   return messages[Math.floor(rng() * messages.length)];
@@ -106,10 +106,10 @@ function buildCareer(chart: NatalChart, sunData: SignData, rng: () => number): s
   const marsSign = mars ? ZODIAC_SIGNS[mars.sign].name : sunData.name;
 
   const messages = [
-    "Votre énergie d'action, portée par Mars en " + marsSign + ", vous pousse à avancer. Identifiez UNE priorité et concentrez-vous dessus.",
-    "Mars en " + marsSign + " dynamise vos ambitions professionnelles. Un projet stagnation pourrait enfin débloquer si vous osez frapper à la bonne porte.",
-    "Votre drive professionnel s'exprime à travers Mars " + marsSign + ". Aujourd'hui, l'action directe est plus efficace que la planification.",
-    "L'énergie martiale " + marsSign + " vous donne du culot. Utilisez-le pour défendre une idée ou prendre une initiative qui sort du cadre.",
+    "Ta énergie d'action, portée par Mars en " + marsSign + ", te pousse à avancer. Identifie UNE priorité et concentrez-tu dessus.",
+    "Mars en " + marsSign + " dynamise tes ambitions professionnelles. Un projet stagnation pourrait enfin débloquer si tu ose frapper à la bonne porte.",
+    "Ton drive professionnel s'exprime à travers Mars " + marsSign + ". Aujourd'hui, l'action directe est plus efficace que la planification.",
+    "L'énergie martiale " + marsSign + " te donne du culot. Utilisez-le pour défendre une idée ou prendre une initiative qui sort du cadre.",
   ];
 
   return messages[Math.floor(rng() * messages.length)];
@@ -139,14 +139,14 @@ export async function generateCompatibility(
 
   const descriptions: Record<number, string> = {};
   descriptions[80] = yourSunData.element === theirSunData.element
-    ? "Vous partagez le même élément — " + yourSunData.element + ". Cette résonance crée une compréhension instinctive, comme si vous parliez la même langue intérieure."
-    : "Vos éléments se renforcent mutuellement. Là où l'un apporte la profondeur, l'autre offre la légèreté.";
+    ? "Tu partages le même élément — " + yourSunData.element + ". Cette résonance crée une compréhension instinctive, comme si tu parlais la même langue intérieure."
+    : "Tes éléments se renforcent mutuellement. Là où l'un apporte la profondeur, l'autre offre la légèreté.";
 
-  descriptions[65] = "Il y a entre vous une dynamique naturelle qui demande peu d'efforts pour se mettre en place. Vos énergies se reconnaissent.";
+  descriptions[65] = "Il y a entre tu une dynamique naturelle qui demande peu d'efforts pour se mettre en place. Tes énergies se reconnaissent.";
 
-  descriptions[50] = "Vous êtes suffisamment différents pour vous fasciner, suffisamment proches pour vous comprendre. C'est le duo classique du complémentaire.";
+  descriptions[50] = "Tu es suffisamment différents pour toi fasciner, suffisamment proches pour toi comprendre. C'est le duo classique du complémentaire.";
 
-  descriptions[35] = "Cette relation n'est pas de tout repos, mais elle est formatrice. Vous ferez progresser l'un l'autre si vous acceptez vos différences.";
+  descriptions[35] = "Cette relation n'est pas de tout repos, mais elle est formatrice. Tu feras progresser l'un l'autre si tu acceptes tes différences.";
 
   const desc = descriptions[Math.round(compat / 20) * 20] || descriptions[50]!;
 
@@ -169,7 +169,7 @@ export async function generateCompatibility(
 function buildStrengths(your: SignData, their: SignData): string[] {
   if (your.element === their.element) {
     return [
-      "Compréhension instinctive de vos motivations profondes",
+      "Compréhension instinctive de tes motivations profondes",
       "Même rythme émotionnel et même façon de traiter le monde",
       "Communication fluide, peu de malentendus",
     ];
@@ -181,7 +181,7 @@ function buildStrengths(your: SignData, their: SignData): string[] {
 
   if (complementary) {
     return [
-      "Vos énergies se nourrissent mutuellement",
+      "Tes énergies se nourrissent mutuellement",
       "L'un stimule là où l'autre ancre",
       "Créativité de couple exceptionnelle",
     ];
@@ -197,7 +197,7 @@ function buildChallenges(your: SignData, their: SignData): string[] {
   if (your.element === their.element) {
     return [
       "Risque d'amplifier les mêmes excès ensemble",
-      "Manque de recul sur vos aveuglements communs",
+      "Manque de recul sur tes aveuglements communs",
     ];
   }
   const opposite = (your.element === 'fire' && their.element === 'water') ||
@@ -205,12 +205,12 @@ function buildChallenges(your: SignData, their: SignData): string[] {
 
   if (opposite) {
     return [
-      "Risque de vous éteindre mutuellement si vous ne communiquez pas",
-      "Vos rhythms sont opposés — trouver le juste milieu demande un effort conscient",
+      "Risque de éteindre mutuellement si tu ne communiquez pas",
+      "Tes rhythms sont opposés — trouver le juste milieu demande un effort conscient",
     ];
   }
   return [
-    "Vos priorités ne sont pas les mêmes — clarifiez vos attentes",
+    "Tes priorités ne sont pas les mêmes — clarifie tes attentes",
     "L'un veut avancer pendant que l'autre veut consolider",
   ];
 }

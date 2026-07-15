@@ -162,7 +162,7 @@ function EditBirthData({ user, onUpdate, onCancel }: {
       <button onClick={onCancel} className="text-night-400 text-sm mb-4">← Retour</button>
       <h1 className="text-xl font-bold mb-2 text-gold-gradient">Modifier mes données</h1>
       <p className="text-night-400 text-xs mb-6">
-        Tout changement recalcule votre thème natal et met à jour vos horoscopes.
+        Tout changement recalcule ton thème natal et met à jour tes horoscopes.
       </p>
 
       <label className="block text-night-300 text-xs uppercase tracking-widest mb-2">Date de naissance</label>
@@ -259,19 +259,19 @@ export function Settings({ user, onUpdate, onPaywall }: { user: User; onUpdate: 
         <div className="glass rounded-2xl p-5 mb-4">
           <h2 className="text-night-100 font-semibold mb-2">Confidentialité (RGPD)</h2>
           <p className="text-night-400 text-sm leading-relaxed">
-            Vos données de naissance (date, heure, lieu) sont stockées localement sur votre appareil
-            et synchronisées sur nos serveurs (chiffrés en transit et au repos) pour vous permettre
-            d'y accéder depuis n'importe quel appareil connecté à votre compte. Elles ne sont jamais
+            Tes données de naissance (date, heure, lieu) sont stockées localement sur ton appareil
+            et synchronisées sur nos serveurs (chiffrés en transit et au repos) pour toi permettre
+            d'y accéder depuis n'importe quel appareil connecté à ton compte. Elles ne sont jamais
             transmises à des tiers ni utilisées à des fins publicitaires.
           </p>
           <p className="text-night-400 text-sm leading-relaxed mt-2">
-            Conformément au RGPD (articles 15, 16, 17 et 21), vous pouvez à tout moment :
+            Conformément au RGPD (articles 15, 16, 17 et 21), tu peux à tout moment :
           </p>
           <ul className="text-night-400 text-sm leading-relaxed mt-1 ml-4 list-disc">
-            <li>Accéder à vos données (Profil → Modifier mes données de naissance)</li>
+            <li>Accéder à tes données (Profil → Modifier mes données de naissance)</li>
             <li>Les rectifier (idem)</li>
             <li>Les supprimer définitivement (bouton « Supprimer mon compte » ci-dessous)</li>
-            <li>Retirer votre consentement aux notifications push</li>
+            <li>Retirer ton consentement aux notifications push</li>
           </ul>
         </div>
 
@@ -400,14 +400,14 @@ export function Settings({ user, onUpdate, onPaywall }: { user: User; onUpdate: 
           </button>
         ) : (
           <div className="glass rounded-2xl p-5 border border-red-500/30 mt-2">
-            <p className="text-red-300 text-sm font-semibold mb-2">⚠️ Supprimer définitivement votre compte ?</p>
+            <p className="text-red-300 text-sm font-semibold mb-2">⚠️ Supprimer définitivement ton compte ?</p>
             <p className="text-night-300 text-xs leading-relaxed mb-3">
-              Cette action est <strong>irréversible</strong>. Toutes vos données seront effacées :
+              Cette action est <strong>irréversible</strong>. Toutes tes données seront effacées :
               profil, données de naissance, favoris, scans de compatibilité, abonnements et préférences
-              de notification. Vous devrez recréer un compte pour utiliser à nouveau Céleste.
+              de notification. Tu devras recréer un compte pour utiliser à nouveau Céleste.
             </p>
             <p className="text-night-400 text-xs mb-4">
-              Si vous avez un abonnement actif, pensez à l'annuler au préalable via le bouton
+              Si tu avez un abonnement actif, pensez à l'annuler au préalable via le bouton
               « Gérer mon abonnement » ci-dessus.
             </p>
             <div className="flex gap-2">

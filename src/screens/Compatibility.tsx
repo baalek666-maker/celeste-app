@@ -118,7 +118,7 @@ export function Compatibility({ user }: { user: User }) {
   return (
     <div className="px-5 pt-12 pb-4">
       <h1 className="text-2xl font-bold mb-1 text-gold-gradient">Compatibilité</h1>
-      <p className="text-night-400 text-sm mb-6">La chimie entre vous et cette personne</p>
+      <p className="text-night-400 text-sm mb-6">La chimie entre tu et cette personne</p>
 
       {!result && !loading && (
         <>
@@ -155,7 +155,7 @@ export function Compatibility({ user }: { user: User }) {
 
           {/* You */}
           <div className="glass rounded-3xl p-6 mb-6">
-            <p className="text-night-400 text-xs uppercase tracking-widest mb-4">Vous</p>
+            <p className="text-night-400 text-xs uppercase tracking-widest mb-4">Toi</p>
             <div className="flex items-center gap-3">
               {(() => {
                 const sunSign = user.natalChart?.sun ? ZODIAC_SIGNS[user.natalChart.sun] : ZODIAC_SIGNS.aries;
@@ -248,7 +248,7 @@ export function Compatibility({ user }: { user: User }) {
                 <span className="text-3xl block" style={{ color: ZODIAC_SIGNS[result.yourSun as ZodiacSign]?.color }}>
                   {ZODIAC_SIGNS[result.yourSun as ZodiacSign]?.symbol}
                 </span>
-                <p className="text-night-400 text-xs mt-1">Vous</p>
+                <p className="text-night-400 text-xs mt-1">Toi</p>
               </div>
               <div className="w-20 h-20 rounded-full glass border-2 border-gold-500/30 flex items-center justify-center">
                 <span className="text-3xl font-bold text-gold-gradient">{result.score}%</span>

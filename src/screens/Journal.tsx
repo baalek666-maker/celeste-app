@@ -104,7 +104,7 @@ export function Journal({ user }: { user: User }) {
   return (
     <div className="px-5 pt-12 pb-4">
       <h1 className="text-2xl font-bold mb-1 text-gold-gradient">Journal</h1>
-      <p className="text-night-400 text-sm mb-4">Vos ressentis et votre parcours astral</p>
+      <p className="text-night-400 text-sm mb-4">Tes ressentis et ton parcours astral</p>
 
       {/* Save flash */}
       {saveFlash && (
@@ -144,7 +144,7 @@ export function Journal({ user }: { user: User }) {
       {/* Today's entry */}
       <div className="glass rounded-3xl p-5 mb-6">
         <p className="text-night-300 text-sm font-medium mb-3 capitalize">{todayFr}</p>
-        <p className="text-night-400 text-sm mb-4">Comment vous sentez-vous aujourd'hui ?</p>
+        <p className="text-night-400 text-sm mb-4">Comment tu sentez-tu aujourd'hui ?</p>
 
         {/* Rating */}
         <div className="flex gap-2 mb-4">
@@ -159,7 +159,7 @@ export function Journal({ user }: { user: User }) {
         <textarea
           value={note}
           onChange={e => setNote(e.target.value)}
-          placeholder="Notez vos pensées, ressentis, synchronicités..."
+          placeholder="Note tes pensées, ressentis, synchronicités..."
           rows={3}
           className="w-full p-3 rounded-xl glass border border-night-700 text-night-100 text-sm placeholder:text-night-600 focus:outline-none focus:border-cosmic-500 resize-none"
         />
@@ -194,7 +194,7 @@ export function Journal({ user }: { user: User }) {
       {entries.length === 0 && (
         <div className="text-center py-12">
           <p className="text-night-500 text-sm">Aucune entrée pour le moment.</p>
-          <p className="text-night-600 text-xs mt-1">Commencez votre journal aujourd'hui ☾</p>
+          <p className="text-night-600 text-xs mt-1">Commence ton journal aujourd'hui ☾</p>
         </div>
       )}
     </div>

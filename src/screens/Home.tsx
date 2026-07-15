@@ -15,7 +15,7 @@ export function Home({ user, onNavigate }: { user: User; onNavigate: (s: Screen)
     return (
       <div className="cosmic-bg star-field min-h-screen flex flex-col items-center justify-center text-night-100 px-6">
         <div className="text-4xl mb-4 animate-float-slow">✦</div>
-        <h2 className="text-xl font-semibold text-gold-gradient mb-2">Préparation de votre ciel</h2>
+        <h2 className="text-xl font-semibold text-gold-gradient mb-2">Préparation de ton ciel</h2>
         <p className="text-night-300 text-sm text-center max-w-xs">
           Chargement du thème natal en cours…
         </p>
@@ -35,7 +35,7 @@ export function Home({ user, onNavigate }: { user: User; onNavigate: (s: Screen)
         <div className="text-4xl mb-4 animate-float-slow">✦</div>
         <h2 className="text-xl font-semibold text-gold-gradient mb-2">Ciel en cours de calibration</h2>
         <p className="text-night-300 text-sm text-center max-w-xs mb-6">
-          Une donnée astrale semble incomplète. Revenez dans un instant.
+          Une donnée astrale semble incomplète. Reviens dans un instant.
         </p>
         <button
           onClick={() => location.reload()}
@@ -78,7 +78,7 @@ export function Home({ user, onNavigate }: { user: User; onNavigate: (s: Screen)
 
       {/* ── 3. Big 3 compact ── */}
       <div className="glass rounded-3xl p-5 mb-5 stagger-card card-glow animate-fade-in" style={{ animationDelay: '0.1s' }}>
-        <p className="text-night-400 text-xs uppercase tracking-widest mb-3">Vos trois astres</p>
+        <p className="text-night-400 text-xs uppercase tracking-widest mb-3">Tes trois astres</p>
         <div className="grid grid-cols-3 gap-2">
           {[
             { label: '☉', sub: 'Soleil', sign: sun },
@@ -114,7 +114,7 @@ export function Home({ user, onNavigate }: { user: User; onNavigate: (s: Screen)
           <div>
             <p className="text-gold-400 text-sm font-medium">Horoscope du jour</p>
             <p className="text-night-300 text-xs mt-0.5">
-              {user.isPremium ? 'Votre lecture vous attend →' : 'Découvrez votre journée →'}
+              {user.isPremium ? 'Ta lecture t'attend →' : 'Découvre ta journée →'}
             </p>
           </div>
           <span className="text-2xl group-hover:translate-x-1 transition-transform">→</span>

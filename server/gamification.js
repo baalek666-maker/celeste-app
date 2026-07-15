@@ -8,17 +8,17 @@ import * as Astronomy from 'astronomy-engine';
 // ─── Constants ──────────────────────────────────────────────────
 
 const QUEST_DEFS = [
-  { key: 'horoscope', label: 'Consulter votre horoscope du jour', xp: 15 },
-  { key: 'tarot',     label: 'Tirer votre carte du Tarot',         xp: 15 },
-  { key: 'ritual',    label: 'Compléter votre rituel matinal',     xp: 10 },
-  { key: 'journal',   label: 'Écrire une note dans votre journal', xp: 20 },
+  { key: 'horoscope', label: 'Consulter ton horoscope du jour', xp: 15 },
+  { key: 'tarot',     label: 'Tirer ta carte du Tarot',         xp: 15 },
+  { key: 'ritual',    label: 'Compléter ton rituel matinal',     xp: 10 },
+  { key: 'journal',   label: 'Écrire une note dans ton journal', xp: 20 },
   { key: 'explore',   label: 'Explorer une section approfondie',   xp: 10 },
 ];
 
 const BADGE_DEFS = [
-  { id: 'first_steps',     emoji: '🌟', title: 'Premiers pas',     desc: 'Créer votre compte céleste' },
-  { id: 'first_horoscope', emoji: '🔮', title: 'Première lecture', desc: 'Consulter votre premier horoscope' },
-  { id: 'first_tarot',     emoji: '🃏', title: 'Le Tirage',        desc: 'Tirer votre première carte' },
+  { id: 'first_steps',     emoji: '🌟', title: 'Premiers pas',     desc: 'Créer ton compte céleste' },
+  { id: 'first_horoscope', emoji: '🔮', title: 'Première lecture', desc: 'Consulter ton premier horoscope' },
+  { id: 'first_tarot',     emoji: '🃏', title: 'Le Tirage',        desc: 'Tirer ta première carte' },
   { id: 'streak_7',        emoji: '🔥', title: 'Une semaine',      desc: '7 jours de suite' },
   { id: 'streak_30',       emoji: '🌙', title: 'Cycle lunaire',    desc: '30 jours de suite' },
   { id: 'explorer',        emoji: '◈',  title: 'Explorateur',      desc: 'Découvrir toutes les sections' },
@@ -49,8 +49,14 @@ function levelFromXp(xp) {
 
 // ─── Helpers ────────────────────────────────────────────────────
 
+/** Local date as YYYY-MM-DD — matches server.js localISODate() to avoid UTC streak/quest mismatch. */
+function localISODate() {
+  const d = new Date();
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+}
+
 function ensureDailyQuests(db, userId) {
-  const today = new Date().toISOString().slice(0, 10);
+  const today = localISODate();
   const existing = db.prepare('SELECT quest_key FROM daily_quests WHERE user_id = ? AND date = ?').all(userId, today);
   if (existing.length > 0) return;
   for (const q of QUEST_DEFS) {
@@ -95,7 +101,7 @@ function registerGamificationRoutes(app, db, auth, callLLMWithRetry, getNatalPos
 
       const xpRow = db.prepare('SELECT * FROM user_xp WHERE user_id = ?').get(userId)
         || { xp_total: 0, level: 1 };
-      const today = new Date().toISOString().slice(0, 10);
+      const today = localISODate();
       const quests = db.prepare(
         'SELECT quest_key, quest_label, xp_reward, completed FROM daily_quests WHERE user_id = ? AND date = ?'
       ).all(userId, today);
@@ -137,7 +143,7 @@ function registerGamificationRoutes(app, db, auth, callLLMWithRetry, getNatalPos
       const questDef = QUEST_DEFS.find(q => q.key === questKey);
       if (!questDef) return res.status(400).json({ error: 'Unknown quest' });
 
-      const today = new Date().toISOString().slice(0, 10);
+      const today = localISODate();
       const quest = db.prepare(
         'SELECT * FROM daily_quests WHERE user_id = ? AND date = ? AND quest_key = ?'
       ).get(userId, today, questKey);
@@ -208,13 +214,13 @@ function registerGamificationRoutes(app, db, auth, callLLMWithRetry, getNatalPos
 
         // Phase events
         if (Math.abs(moonAge - 0) < 0.75 || Math.abs(moonAge - 29.53) < 0.75) {
-          events.push({ date: dateStr, type: 'new_moon', title: 'Nouvelle Lune', emoji: '🌑', description: 'Temps des nouveaux départs et intentions. Un moment privilégié pour fixer vos voeux.' });
+          events.push({ date: dateStr, type: 'new_moon', title: 'Nouvelle Lune', emoji: '🌑', description: 'Temps des nouveaux départs et intentions. Un moment privilégié pour fixer tes voeux.' });
         } else if (Math.abs(moonAge - 14.76) < 0.75) {
           events.push({ date: dateStr, type: 'full_moon', title: 'Pleine Lune', emoji: '🌕', description: 'Illumination et révélation. Ce qui était caché se révèle. Moment de plénitude.' });
         } else if (Math.abs(moonAge - 7.38) < 0.5) {
-          events.push({ date: dateStr, type: 'first_quarter', title: 'Premier Quartier', emoji: '🌓', description: 'Action et décision. Les obstacles se précisent, à vous de les surmonter.' });
+          events.push({ date: dateStr, type: 'first_quarter', title: 'Premier Quartier', emoji: '🌓', description: 'Action et décision. Les obstacles se précisent, à toi de les surmonter.' });
         } else if (Math.abs(moonAge - 22.15) < 0.5) {
-          events.push({ date: dateStr, type: 'last_quarter', title: 'Dernier Quartier', emoji: '🌗', description: 'Lâcher prise et réflexion. Libérez ce qui ne sert plus.' });
+          events.push({ date: dateStr, type: 'last_quarter', title: 'Dernier Quartier', emoji: '🌗', description: 'Lâcher prise et réflexion. Libère ce qui ne sert plus.' });
         }
 
         // Planet sign changes (Venus)
@@ -365,7 +371,7 @@ Réponse au format JSON: {"portrait": "le texte complet avec les ##"}`;
       }
 
       if (!portraitText || portraitText.length < 200) {
-        portraitText = `## Votre essence: Soleil en ${sunSign}\n\nVotre Soleil en ${sunSign} illumine votre chemin. Cette position fondamentale définit qui vous êtes au plus profond de votre être.\n\n## Votre monde intérieur: Lune en ${moonSign}\n\nVotre Lune en ${moonSign} gouverne votre paysage émotionnel et vos besoins les plus intimes.\n\n## Votre masque: Ascendant ${risingSign}\n\nVotre Ascendant ${risingSign} est la première impression que vous donnez au monde.`;
+        portraitText = `## Ton essence: Soleil en ${sunSign}\n\nTon Soleil en ${sunSign} illumine ton chemin. Cette position fondamentale définit qui tu es au plus profond de ton être.\n\n## Ton monde intérieur: Lune en ${moonSign}\n\nTa Lune en ${moonSign} gouverne ton paysage émotionnel et tes besoins les plus intimes.\n\n## Ton masque: Ascendant ${risingSign}\n\nTon Ascendant ${risingSign} est la première impression que tu donnes au monde.`;
       }
 
       const wordCount = portraitText.split(/\s+/).length;
@@ -393,7 +399,7 @@ Réponse au format JSON: {"portrait": "le texte complet avec les ##"}`;
       if (typeof rating !== 'number' || rating < 1 || rating > 5) {
         return res.status(400).json({ error: 'Rating must be 1-5' });
       }
-      const today = new Date().toISOString().slice(0, 10);
+      const today = localISODate();
       db.prepare(`INSERT OR REPLACE INTO horoscope_feedback (user_id, date, rating, note) VALUES (?, ?, ?, ?)`)
         .run(userId, today, rating, note || null);
       res.json({ ok: true });

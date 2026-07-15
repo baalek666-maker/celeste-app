@@ -54,7 +54,7 @@ export function Paywall({ onClose, onSubscribe }: {
     try {
       const res = await api.restorePurchases();
       if (res.restored && res.isPremium) {
-        setRestoreMsg('✓ Abonnement restauré — vous êtes Premium.');
+        setRestoreMsg('✓ Abonnement restauré — tu es Premium.');
         // P0 #6 — On préserve l'utilisateur existant (email, birthData, natalChart)
         // au lieu de construire un User vide. Seul isPremium/premiumUntil changent.
         const existing = getUser();
@@ -91,7 +91,7 @@ export function Paywall({ onClose, onSubscribe }: {
           </div>
           <h1 className="text-2xl font-bold mb-2 text-gold-gradient">Céleste Premium</h1>
           <p className="text-night-300 text-sm max-w-xs mx-auto">
-            Votre carte du ciel complète, sans limites — chaque jour
+            Ta carte du ciel complète, sans limites — chaque jour
           </p>
         </div>
 
@@ -109,10 +109,10 @@ export function Paywall({ onClose, onSubscribe }: {
         {/* Features */}
         <div className="space-y-3 mb-8">
           {[
-            { icon: '🌅', title: 'Horoscope vraiment quotidien', desc: "Vos planètes, pas seulement votre signe. Une lecture qui vous ressemble." },
-            { icon: '💞', title: 'Compatibilité illimitée', desc: 'La chimie astrale avec les personnes qui comptent pour vous' },
-            { icon: '📖', title: 'Journal de bord', desc: 'Notez vos ressentis et repérez les cycles qui reviennent' },
-            { icon: '🔮', title: 'Transits du moment', desc: "Ce qui se joue en vous maintenant, décrypté simplement" },
+            { icon: '🌅', title: 'Horoscope vraiment quotidien', desc: "Tes planètes, pas seulement ton signe. Une lecture qui tu ressemble." },
+            { icon: '💞', title: 'Compatibilité illimitée', desc: 'La chimie astrale avec les personnes qui comptent pour toi' },
+            { icon: '📖', title: 'Journal de bord', desc: 'Note tes ressentis et repérez les cycles qui reviennent' },
+            { icon: '🔮', title: 'Transits du moment', desc: "Ce qui se joue en toi maintenant, décrypté simplement" },
           ].map((f, i) => (
             <div key={f.title} className="glass rounded-2xl p-4 flex items-start gap-3 animate-fade-in card-glow" style={{ animationDelay: `${0.1 + i * 0.08}s` }}>
               <div className="text-2xl mt-0.5">{f.icon}</div>

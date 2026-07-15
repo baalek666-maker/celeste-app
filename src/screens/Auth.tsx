@@ -21,11 +21,11 @@ export function Auth({ onSuccess }: { onSuccess: (user: any) => void }) {
     } catch (err: unknown) {
       // Friendlier, localized error messages
       const raw = errMsg(err, '').toLowerCase();
-      let msg = 'Oups, vérifiez vos identifiants ✦';
+      let msg = 'Oups, vérifie tes identifiants ✦';
       if (raw.includes('network') || raw.includes('failed to fetch') || raw.includes('load failed')) {
-        msg = 'Impossible de contacter les étoiles. Vérifiez votre connexion.';
+        msg = 'Impossible de contacter les étoiles. Vérifie ta connexion.';
       } else if (raw.includes('already') || raw.includes('exists')) {
-        msg = 'Un compte existe déjà avec cet email. Essayez de vous connecter.';
+        msg = 'Un compte existe déjà avec cet email. Essayez de tu connecter.';
       }
       setError(msg);
     } finally {
@@ -48,7 +48,7 @@ export function Auth({ onSuccess }: { onSuccess: (user: any) => void }) {
             </svg>
           </div>
           <h1 className="text-3xl font-bold text-gold-gradient">Céleste</h1>
-          <p className="text-night-400 text-sm mt-2">Votre carte du ciel, votre destin</p>
+          <p className="text-night-400 text-sm mt-2">Ta carte du ciel, ton destin</p>
         </div>
 
         {/* Mode toggle */}
@@ -75,7 +75,7 @@ export function Auth({ onSuccess }: { onSuccess: (user: any) => void }) {
               type="email"
               value={email}
               onChange={(e) => setEmail(e.target.value)}
-              placeholder="vous@exemple.com"
+              placeholder="toi@exemple.com"
               required
               className="w-full px-4 py-3.5 rounded-2xl glass border border-night-700 text-night-100 placeholder:text-night-500 focus:border-gold-500/50 focus:outline-none transition-colors"
             />

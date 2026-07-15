@@ -45,7 +45,7 @@ function Splash({ stuckHint }: { stuckHint?: string }) {
           <CelesteLogo size={96} animated />
         </div>
         <h1 className="text-3xl font-bold text-gold-gradient font-display tracking-[0.2em] mb-2">Céleste</h1>
-        <p className="text-night-500 text-[10px] uppercase tracking-[0.3em] mb-6 font-body">Astrologie Hermétique</p>
+        <p className="text-night-500 text-[10px] uppercase tracking-[0.3em] mb-6 font-body">Astrologie Intuitive</p>
         {stuckHint ? (
           <p className="text-night-400 text-xs leading-relaxed max-w-xs text-center font-body mb-4 px-4">
             {stuckHint}
@@ -74,7 +74,7 @@ function ApiDown({ onRetry }: { onRetry: () => void }) {
         </div>
         <h2 className="text-xl font-bold text-gold-gradient font-display mb-3">Les étoiles sont hors de portée</h2>
         <p className="text-night-400 text-sm leading-relaxed mb-8 font-body">
-          Céleste n'arrive pas à joindre son serveur. Vérifiez votre connexion internet puis réessayez.
+          Céleste n'arrive pas à joindre son serveur. Vérifie ta connexion internet puis réessayez.
         </p>
         <button
           onClick={onRetry}
@@ -310,7 +310,7 @@ export function App() {
 
   // ─── Splash while verifying token ───
   if (booting) {
-    return <Splash stuckHint={bootStuck ? "Connexion lente… on affiche quand même votre profil (mis en cache local)." : undefined} />;
+    return <Splash stuckHint={bootStuck ? "Connexion lente… on affiche quand même ton profil (mis en cache local)." : undefined} />;
   }
 
   // ─── API unreachable: clear message instead of blank page ───

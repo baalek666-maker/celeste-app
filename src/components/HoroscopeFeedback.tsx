@@ -49,7 +49,7 @@ export default function HoroscopeFeedback({ date }: { date?: string }) {
       <div className="glass-gold rounded-2xl px-5 py-5 mt-4 mb-6 mx-5 animate-fade-in-scale text-center">
         <div className="text-2xl mb-1 text-gold-400 animate-gold-glow">✦</div>
         <p className="text-gold-gradient font-display text-sm tracking-wide">
-          {done ? 'Merci pour votre retour ✦' : 'Merci ✦'}
+          {done ? 'Merci pour ton retour ✦' : 'Merci ✦'}
         </p>
       </div>
     );
