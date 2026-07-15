@@ -91,7 +91,7 @@ export function Paywall({ onClose, onSubscribe }: {
           </div>
           <h1 className="text-2xl font-bold mb-2 text-gold-gradient">Céleste Premium</h1>
           <p className="text-night-300 text-sm max-w-xs mx-auto">
-            Débloquez l'astrologie profondément personnelle, chaque jour
+            Votre carte du ciel complète, sans limites — chaque jour
           </p>
         </div>
 
@@ -109,10 +109,10 @@ export function Paywall({ onClose, onSubscribe }: {
         {/* Features */}
         <div className="space-y-3 mb-8">
           {[
-            { icon: '🌅', title: 'Horoscope quotidien personnalisé', desc: "Calculé à partir de VOS planètes, pas de votre seul signe solaire" },
-            { icon: '💞', title: 'Compatibilité illimitée', desc: 'Analysez vos relations avec tous les signes' },
-            { icon: '📖', title: 'Journal de bord', desc: 'Suivez vos ressentis et observez les cycles' },
-            { icon: '🔮', title: 'Transits planétaires', desc: "Comprenez ce que les planètes activent en vous" },
+            { icon: '🌅', title: 'Horoscope vraiment quotidien', desc: "Vos planètes, pas seulement votre signe. Une lecture qui vous ressemble." },
+            { icon: '💞', title: 'Compatibilité illimitée', desc: 'La chimie astrale avec les personnes qui comptent pour vous' },
+            { icon: '📖', title: 'Journal de bord', desc: 'Notez vos ressentis et repérez les cycles qui reviennent' },
+            { icon: '🔮', title: 'Transits du moment', desc: "Ce qui se joue en vous maintenant, décrypté simplement" },
           ].map((f, i) => (
             <div key={f.title} className="glass rounded-2xl p-4 flex items-start gap-3 animate-fade-in card-glow" style={{ animationDelay: `${0.1 + i * 0.08}s` }}>
               <div className="text-2xl mt-0.5">{f.icon}</div>

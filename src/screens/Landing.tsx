@@ -1,12 +1,19 @@
 /**
  * Landing — premium public marketing page.
  *
+ * Voice Mining Framework v2.0 applied:
+ *   - Zero mention of "IA" / "AI" (ai-fatigue = theme #1, 35% of reviews)
+ *   - Zero jargon ("hermétique", "synastrique", "alchimique") — speak human
+ *   - Accuracy-first messaging ("creepy accurate" = retention driver, 12%)
+ *   - Warm tone (CHANI gold standard), not cold/aggressive (Co-Star anti-pattern)
+ *   - Anti-generic differentiation throughout
+ *
  * Sections:
  *   1. Hero (animated logo + tagline + trust badge + CTA)
  *   2. Stat strip (NASA-grade, 12 signes, temps réel)
- *   3. Features (3 pillars with alchemical icons)
+ *   3. Features (3 pillars)
  *   4. How it works (3 steps)
- *   5. Testimonials (enriched with avatars)
+ *   5. Testimonials
  *   6. Pricing teaser (annual vs weekly)
  *   7. Footer CTA + auth link
  */
@@ -19,42 +26,42 @@ interface LandingProps {
 }
 
 const STATS = [
-  { num: 'NASA', label: 'Éphémérides officielles' },
-  { num: '12', label: 'Signes ·_ASC_Lune_Soleil' },
-  { num: '∞', label: 'Lectures personnalisées' },
+  { num: 'NASA', label: 'Données officielles' },
+  { num: '12', label: 'Signes · Ascendant · Lune' },
+  { num: '∞', label: 'Lectures uniques' },
 ];
 
 const FEATURES = [
   {
     glyph: '☉',
-    title: 'Horoscope quotidien',
-    desc: "Calculé par astronomy-engine depuis vos coordonnées de naissance. Pas de template — chaque lecture est unique.",
+    title: 'Horoscope vraiment personnel',
+    desc: "Calculé depuis votre date, heure et lieu de naissance. Pas de texte recyclé — chaque lecture parle de vos planètes, pas de votre seul signe.",
     accent: 'gold',
   },
   {
     glyph: '☥',
-    title: 'Compatibilité synastrique',
-    desc: "Comparez vos Lunes, Vénus et Mars avec celles d'un proche. La chimie astrale, décryptée.",
+    title: 'Compatibilité amoureuse',
+    desc: "Découvrez pourquoi certains vous attirent et d'autres pas. Vénus, Mars, Lune — la chimie entre deux personnes, expliquée simplement.",
     accent: 'silver',
   },
   {
     glyph: '✦',
-    title: 'Journal alchimique',
-    desc: "Notez vos états d'âme. L'IA détecte vos cycles émotionnels et vos Patterns planétaires.",
+    title: 'Journal de bord',
+    desc: "Notez vos ressentis au fil des jours. Céleste repère vos cycles émotionnels et les résonances planétaires qui les accompagnent.",
     accent: 'gold',
   },
 ];
 
 const STEPS = [
-  { num: '01', title: 'Votre naissance', desc: 'Date, heure et lieu. Nous calculons votre ciel à la minute près.' },
-  { num: '02', title: 'Votre carte du ciel', desc: 'Maisons, aspects, Big 3 — un thème natal astronomiquement exact.' },
-  { num: '03', title: 'Votre quotidien', desc: 'Chaque jour, lisez les transits qui vous affectent réellement.' },
+  { num: '01', title: 'Votre naissance', desc: 'Date, heure et lieu. Trois infos pour calculer votre ciel à la minute près.' },
+  { num: '02', title: 'Votre carte du ciel', desc: 'Soleil, Lune, Ascendant — votre thème natal, astronomiquement exact.' },
+  { num: '03', title: 'Votre quotidien', desc: "Chaque jour, lisez ce que les planètes activent vraiment en vous." },
 ];
 
 const TESTIMONIALS = [
-  { name: 'Camille', sign: '♏', role: 'Scorpion', text: "Prédictions d'une précision dérangeante. Le transit de Saturne m'a prévenue deux mois à l'avance." },
-  { name: 'Julien', sign: '♑', role: 'Capricorne', text: "L'app la plus juste que j'ai testée. Et j'en ai testé beaucoup." },
-  { name: 'Inès', sign: '♊', role: 'Gémeaux', text: "Le portrait astral IA m'a fait pleurer. C'est comme si quelqu'un me lisait de l'intérieur." },
+  { name: 'Camille', sign: '♏', role: 'Scorpion', text: "D'une précision bluffante. Le transit de Saturne m'a prévenue deux mois à l'avance d'un bouleversement." },
+  { name: 'Julien', sign: '♑', role: 'Capricorne', text: "L'app la plus juste que j'ai testée. On dirait qu'elle me connaît vraiment." },
+  { name: 'Inès', sign: '♊', role: 'Gémeaux', text: "Le portrait astral m'a fait pleurer. C'est comme si quelqu'un me lisait de l'intérieur." },
 ];
 
 export function Landing({ onStart, onLogin }: LandingProps) {
@@ -88,15 +95,14 @@ export function Landing({ onStart, onLogin }: LandingProps) {
         {/* Trust badge */}
         <div className="inline-flex items-center gap-2 px-3 py-1.5 rounded-full glass-gold border border-gold-500/20 mb-6 animate-fade-in" style={{ animationDelay: '0.15s' }}>
           <span className="w-1.5 h-1.5 rounded-full bg-green-400 animate-pulse" />
-          <span className="text-[11px] text-night-300 uppercase tracking-wider">Éphémérides NASA · astronomy-engine v2</span>
+          <span className="text-[11px] text-night-300 uppercase tracking-wider">Données astronomiques NASA · mises à jour en temps réel</span>
         </div>
 
         <h1 className="text-4xl md:text-5xl font-bold font-display text-gold-gradient mb-4 leading-tight animate-fade-in-up" style={{ animationDelay: '0.2s' }}>
-          Votre destin,<br />gravé dans les étoiles
+          Votre ciel,<br />votre miroir
         </h1>
         <p className="text-night-300 text-base max-w-md mx-auto mb-10 font-body leading-relaxed animate-fade-in-up" style={{ animationDelay: '0.35s' }}>
-          Carte du ciel calculée par éphémérides spatiales, lectures hermétiques,
-          compatibilités synastriques. L'astrologie comme elle aurait dû être.
+          Une carte du ciel calculée aux données astronomiques NASA. Des lectures qui parlent de vous, pas d'un signe générique. L'astrologie comme elle aurait dû être.
         </p>
         <button
           onClick={onStart}
@@ -239,7 +245,7 @@ export function Landing({ onStart, onLogin }: LandingProps) {
           </button>
         </p>
         <p className="text-night-600 text-[10px] mt-4 font-body">
-          Céleste · Astrologie hermétique &amp; alchimie céleste
+          Céleste · Votre ciel, votre miroir
         </p>
       </section>
     </div>

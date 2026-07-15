@@ -206,9 +206,9 @@ export function Onboarding({ onComplete }: { onComplete: (u: User) => void }) {
       </div>
       <h1 className="text-4xl font-bold mb-3 text-gold-gradient">Céleste</h1>
       <p className="text-night-300 text-lg mb-2">Votre carte du ciel,</p>
-      <p className="text-night-300 text-lg mb-12">votre miroir intérieur</p>
+      <p className="text-night-300 text-lg mb-12">votre miroir</p>
       <p className="text-night-400 text-sm mb-8 max-w-xs">
-        Une astrologie profondément personnelle. Pas de texte générique — chaque mot est calculé à partir de vos planètes réelles.
+        Une astrologie qui vous parle à vous. Pas de texte recyclé — chaque mot est calculé à partir de vos planètes réelles.
       </p>
       {/* P10 — Explain free tier upfront to set expectations */}
       <div className="glass rounded-2xl px-5 py-4 mb-8 max-w-xs border border-gold-500/20">
