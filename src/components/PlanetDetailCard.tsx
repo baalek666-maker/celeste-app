@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import type { ZodiacSign, Planet } from '../types';
 import { api } from '../lib/api';
 import { PLANET_DATA, ZODIAC_SIGNS } from '../data/zodiac';
@@ -29,7 +29,7 @@ interface Interpretation {
   keywords: string[];
 }
 
-export function PlanetDetailCard({ planet, sign, degree, house, retrograde }: Props) {
+export const PlanetDetailCard = React.memo(function PlanetDetailCard({ planet, sign, degree, house, retrograde }: Props) {
   const [expanded, setExpanded] = useState(false);
   const [loading, setLoading] = useState(false);
   const [data, setData] = useState<Interpretation | null>(null);
@@ -190,7 +190,7 @@ export function PlanetDetailCard({ planet, sign, degree, house, retrograde }: Pr
       </div>
     </div>
   );
-}
+});
 
 function Badge({ label }: { label: string }) {
   return (

@@ -1,9 +1,8 @@
 import { useState, useEffect, lazy, Suspense } from 'react';
-import { Onboarding } from './screens/Onboarding';
 import { Auth } from './screens/Auth';
 import { Landing } from './screens/Landing';
-import CelesteLogo from './components/CelesteLogo';
 import { Home } from './screens/Home';
+import CelesteLogo from './components/CelesteLogo';
 import { BottomNav } from './components/BottomNav';
 import { getToken, clearToken, api } from './lib/api';
 import { getUser, saveUser, getFreeScans, incrementFreeScans, getFreeCompat, incrementFreeCompat } from './lib/storage';
@@ -11,6 +10,7 @@ import { calculateNatalChart } from './lib/astrology';
 import type { User } from './types';
 
 // Code splitting : les screens secondaires sont lazy-loaded pour réduire le bundle initial.
+// Onboarding charge lib/astrology.ts (~500KB astronomy-engine) — on ne le bundle que si besoin.
 const ChartView = lazy(() => import('./screens/ChartView').then(m => ({ default: m.ChartView })));
 const Horoscope = lazy(() => import('./screens/Horoscope').then(m => ({ default: m.Horoscope })));
 const Compatibility = lazy(() => import('./screens/Compatibility').then(m => ({ default: m.Compatibility })));
@@ -18,6 +18,7 @@ const Journal = lazy(() => import('./screens/Journal').then(m => ({ default: m.J
 const Paywall = lazy(() => import('./screens/Paywall').then(m => ({ default: m.Paywall })));
 const Settings = lazy(() => import('./screens/Settings').then(m => ({ default: m.Settings })));
 const Explorer = lazy(() => import('./screens/Explorer').then(m => ({ default: m.Explorer })));
+const Onboarding = lazy(() => import('./screens/Onboarding').then(m => ({ default: m.Onboarding })));
 
 export type Screen = 'landing' | 'auth' | 'onboarding' | 'home' | 'chart' | 'horoscope' | 'compatibility' | 'journal' | 'explorer' | 'paywall' | 'settings';
 
@@ -361,7 +362,11 @@ export function App() {
   // ─── AUTHED but no birth data: Onboarding ───
   if (screen === 'onboarding' || (!user.birthData && screen !== 'home')) {
     if (!user.birthData) {
-      return <Onboarding onComplete={(u) => { setUser(u); saveUser(u); setScreen('home'); }} />;
+      return (
+        <Suspense fallback={<Splash />}>
+          <Onboarding onComplete={(u) => { setUser(u); saveUser(u); setScreen('home'); }} />
+        </Suspense>
+      );
     }
   }
 

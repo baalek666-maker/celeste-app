@@ -11,14 +11,14 @@ interface SkeletonProps {
 }
 
 /** Skeleton block — text lines, circles, or generic blocks. */
-export function Skeleton({ className = '', variant = 'text', lines = 1 }: SkeletonProps) {
+export const Skeleton = React.memo(function Skeleton({ className = '', variant = 'text', lines = 1 }: SkeletonProps) {
   if (variant === 'circle') {
-    return <div className={`skeleton rounded-full ${className}`} />;
+    return <div className={`skeleton rounded-full ${className}`} aria-hidden="true" />;
   }
 
   // text variant with multiple lines
   return (
-    <div className={className}>
+    <div className={className} aria-hidden="true">
       {Array.from({ length: lines }).map((_, i) => (
         <div
           key={i}
@@ -28,12 +28,12 @@ export function Skeleton({ className = '', variant = 'text', lines = 1 }: Skelet
       ))}
     </div>
   );
-}
+});
 
 /** Skeleton card — full card placeholder with avatar + lines. */
-export function SkeletonCard({ lines = 3, className = '' }: { lines?: number; className?: string }) {
+export const SkeletonCard = React.memo(function SkeletonCard({ lines = 3, className = '' }: { lines?: number; className?: string }) {
   return (
-    <div className={`glass rounded-2xl p-5 ${className}`}>
+    <div className={`glass rounded-2xl p-5 ${className}`} aria-hidden="true">
       <div className="flex items-center gap-3 mb-4">
         <div className="skeleton w-12 h-12 rounded-full" />
         <div className="flex-1 space-y-2">
@@ -48,16 +48,16 @@ export function SkeletonCard({ lines = 3, className = '' }: { lines?: number; cl
       </div>
     </div>
   );
-}
+});
 
 /** Skeleton chart — circular chart placeholder. */
-export function SkeletonChart({ className = '' }: { className?: string }) {
+export const SkeletonChart = React.memo(function SkeletonChart({ className = '' }: { className?: string }) {
   return (
-    <div className={`glass rounded-2xl p-5 ${className}`}>
+    <div className={`glass rounded-2xl p-5 ${className}`} aria-hidden="true">
       <div className="skeleton h-4 w-1/4 mb-4" />
       <div className="aspect-square skeleton rounded-full mx-auto" style={{ maxWidth: '280px' }} />
     </div>
   );
-}
+});
 
 export default Skeleton;
