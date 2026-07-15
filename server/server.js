@@ -13,6 +13,7 @@ import { fileURLToPath } from 'url';
 import { dirname, join } from 'path';
 import billingRouter, { stripeWebhookHandler, isStripeConfigured } from './billing.js';
 import { registerGamificationRoutes } from './gamification.js';
+import { CELESTE_VOICE, celesteSystemPrompt } from './celest-voice.js';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const JWT_SECRET = process.env.JWT_SECRET;
@@ -537,7 +538,7 @@ function getAscendantHouseKeyword(risingSign) {
   return map[risingSign] || 'maison angulaire';
 }
 async function generateHoroscopeSummary(natalPositions, transits, sign, dateLabel) {
-  const systemPrompt = `Tu es Céleste. Tu écris à une amie qui consulte son ciel du jour. Tes résumés sont courts (2-3 phrases), poétiques mais terre-à-terre, jamais génériques. Tu tutoies. Tu écris en français.`;
+  const systemPrompt = celesteSystemPrompt("Tu écris à une amie qui consulte son ciel du jour. Tes résumés sont courts (2-3 phrases), poétiques mais terre-à-terre, jamais génériques. Tu écris en français.");
 
   const userPrompt = `Thème natal: ${Object.entries(natalPositions).map(([k,v]) => `${k} ${v.sign} ${v.degree}°`).join(', ')}.
 Transits du ${dateLabel}: ${Object.entries(transits).map(([k,v]) => `${k} ${v.sign} ${v.degree}°`).join(', ')}.
@@ -568,7 +569,7 @@ Réponds UNIQUEMENT avec le JSON.`;
 async function generateHoroscope(natalPositions, transits, sign) {
   const today = new Date().toLocaleDateString('fr-FR', { weekday: 'long', day: 'numeric', month: 'long' });
 
-  const systemPrompt = `Tu es Céleste. Tu écris l'horoscope de quelqu'un qui te fait confiance. Tu te bases sur les vraies positions planétaires, pas sur du blabla générique. Tu tutoies. Ton ton est psychologique et humain — jamais prédictif, jamais moralisateur, jamais robotique. Tu écris en français.`;
+  const systemPrompt = celesteSystemPrompt("Tu écris l'horoscope de quelqu'un qui te fait confiance. Tu te bases sur les vraies positions planétaires, pas sur du blabla générique. Ton ton est psychologique et humain — jamais prédictif, jamais moralisateur. Tu écris en français.");
 
   const userPrompt = `Voici le thème natal de la personne:
 ${Object.entries(natalPositions).map(([k,v]) => `${k}: ${v.sign} ${v.degree}°${v.retrograde ? ' ℞' : ''}`).join('\n')}
@@ -610,7 +611,7 @@ Réponds UNIQUEMENT avec le JSON, aucun texte avant ou après.`;
 
 // ─── LLM Compatibility Generation ──────────────────────────
 async function generateCompatibility(chart1, chart2, sign1, sign2, context = 'romantic') {
-  const systemPrompt = `Tu es Céleste. Tu analyses la compatibilité entre deux personnes avec nuance et chaleur — tu soulignes les forces ET les tensions, sans jamais être cruelle. Tu tutoies. Tu écris en français, ton vivant et humain.`;
+  const systemPrompt = celesteSystemPrompt("Tu analyses la compatibilité entre deux personnes avec nuance et chaleur — tu soulignes les forces ET les tensions, sans jamais être cruelle. Tu écris en français, ton vivant et humain.");
 
   const ctxConfig = {
     romantic: {
@@ -934,7 +935,7 @@ async function generatePlanetInterpretation(planet, natal) {
 
   // ── Tier 2: LLM generation (lazy: fills the template cache too) ──
   console.log(`[planet-interp] LLM fallback (planet=${planet}, sign=${signName}, decan=${degBucket})`);
-  const systemPrompt = `Tu es Céleste. Tu expliques l'astrologie comme une amie qui s'y connaît vraiment — claire, vivante, jamais pédante. Tu tutoies. Tu évites le jargon technique, et quand tu l'utilises tu l'expliques simplement. Tu écris en français.`;
+  const systemPrompt = celesteSystemPrompt("Tu expliques l'astrologie comme une amie qui s'y connaît vraiment — claire, vivante, jamais pédante. Tu évites le jargon technique, et quand tu l'utilises tu l'expliques simplement. Tu écris en français.");
 
   const userPrompt = `Génère une interprétation pour ${planetName} (${symbol}) dans le thème natal de cette personne. Tu lui parles directement (tu tutoies).
 
@@ -1683,7 +1684,7 @@ app.get('/api/tarot/daily', auth, llmLimiter, async (req, res) => {
     }
 
     // LLM interpretation
-    const systemPrompt = `Tu es Céleste. Tu tires les cartes avec tendresse et justesse. Tes interprétations sont courtes, poétiques, humaines — jamais hermétiques. Tu tutoies. Tu écris en français.`;
+    const systemPrompt = celesteSystemPrompt("Tu tires les cartes avec tendresse et justesse. Tes interprétations sont courtes, poétiques, humaines — jamais hermétiques. Tu écris en français.");
     const userPrompt = `Carte tirée: ${card.name} (${card.roman})${isReversed ? ' — position inversée' : ' — position droite'}.
 Signe solaire de la personne: ${sunSign}.
 Mots-clés: ${card.archetype}.
@@ -2074,7 +2075,7 @@ ${lines}`;
       body: JSON.stringify({
         model: LLM_MODEL,
         messages: [
-          { role: 'system', content: 'Tu es Celeste. Réponds uniquement en JSON valide.' },
+          { role: 'system', content: celesteSystemPrompt("Tu interprètes les aspects astrologiques. Ton: chaleureux, moderne, terre-à-terre, jamais culpabilisant. Réponds uniquement en JSON valide.") },
           { role: 'user', content: prompt }
         ],
         temperature: 0.7,
@@ -2271,7 +2272,7 @@ app.get('/api/chart/asteroids', auth, async (req, res) => {
         body: JSON.stringify({
           model: LLM_MODEL,
           messages: [
-            { role: 'system', content: 'Tu es Celeste, astrologue bienveillante. Réponds UNIQUEMENT en français, ton chaleureux, court (max 80 mots), tutoyé.' },
+            { role: 'system', content: celesteSystemPrompt("Astrologue bienveillante. Réponds UNIQUEMENT en français, court (max 80 mots).") },
             { role: 'user', content: `Voici les placements natals d'astéroïdes d'un utilisateur : ${summary}. Donne une interprétation douce et synthétique reliant ces placements aux thèmes : blessure guérisseuse (Chiron), maternel/ressource (Cérès), stratégie (Pallas), engagement (Junon), foyer intérieur (Vesta). Sois concrète et personnelle.` }
           ],
           temperature: 0.7,
@@ -2333,7 +2334,7 @@ app.get('/api/chart/lunar-nodes', auth, async (req, res) => {
         body: JSON.stringify({
           model: LLM_MODEL,
           messages: [
-            { role: 'system', content: 'Tu es Celeste, astrologue bienveillante. Réponds UNIQUEMENT en français, ton chaleureux, court (max 70 mots), tutoyé.' },
+            { role: 'system', content: celesteSystemPrompt("Astrologue bienveillante. Réponds UNIQUEMENT en français, court (max 70 mots).") },
             { role: 'user', content: `Voici les nœuds lunaires natals d'un utilisateur : ${summary}. Le Nœud Sud représente ce qu'il maîtrise déjà (passé, confort), le Nœud Nord représente ce vers quoi son âme veut évoluer (mission, croissance). Donne une interprétation douce reliant ces deux pôles à son chemin d'évolution.` }
           ],
           temperature: 0.7,
@@ -2405,7 +2406,7 @@ app.get('/api/challenge/week', auth, async (req, res) => {
         body: JSON.stringify({
           model: LLM_MODEL,
           messages: [
-            { role: 'system', content: 'Tu es Celeste. Réponds UNIQUEMENT en JSON valide, sans markdown.' },
+            { role: 'system', content: celesteSystemPrompt("Réponds UNIQUEMENT en JSON valide, sans markdown.") },
             { role: 'user', content: `${ctx}\nPropose un défi d'évolution spirituelle pour cette semaine (semaine ${weekId}). Réponds en JSON strict avec EXACTEMENT 3 clés: "theme" (1 mot thème astrologique: curiosité/vulnérabilité/lâcher-prise/etc), "action" (1 action concrète courte, <20 mots, et faisable en 1 jour), "explanation" (50 mots max: pourquoi ce défi).` }
           ],
           temperature: 0.85,
@@ -2524,7 +2525,7 @@ En 2 phrases max (40 mots), explique ce que l'Ascendant ${asc.sign} révèle sur
       body: JSON.stringify({
         model: LLM_MODEL,
         messages: [
-          { role: 'system', content: 'Tu es Celeste, astrologue bienveillante. Réponds UNIQUEMENT en français, ton chaleureux, court, jamais plus de 40 mots.' },
+          { role: 'system', content: celesteSystemPrompt("Astrologue bienveillante. Réponds UNIQUEMENT en français, court, jamais plus de 40 mots.") },
           { role: 'user', content: prompt }
         ],
         temperature: 0.7,
@@ -2598,7 +2599,7 @@ Retourne UNIQUEMENT le JSON, rien d'autre. Pas de markdown.`;
       body: JSON.stringify({
         model: LLM_MODEL,
         messages: [
-          { role: 'system', content: 'Tu es Celeste. Réponds uniquement en JSON valide.' },
+          { role: 'system', content: celesteSystemPrompt("Réponds uniquement en JSON valide.") },
           { role: 'user', content: prompt }
         ],
         temperature: 0.8,

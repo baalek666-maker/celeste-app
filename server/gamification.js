@@ -4,6 +4,7 @@
  */
 
 import * as Astronomy from 'astronomy-engine';
+import { CELESTE_VOICE, celesteSystemPrompt } from './celest-voice.js';
 
 // ─── Constants ──────────────────────────────────────────────────
 
@@ -301,9 +302,7 @@ function registerGamificationRoutes(app, db, auth, callLLMWithRetry, getNatalPos
         .filter(Boolean)
         .join(', ');
 
-      const prompt = `Tu es Céleste. Tu parles à une personne qui veut se comprendre. Tu as la chaleur d'une amie qui connaît le ciel par cœur — précise mais jamais froide, profonde mais jamais compliquée.
-
-Rédige un portrait astral complet (1200-1500 mots) en français. Tu tutoies cette personne du début à la fin.
+      const prompt = `${celesteSystemPrompt('Tu rédiges un portrait astral complet (1200-1500 mots) pour une personne qui veut se comprendre.')}
 
 DONNÉES NATALES:
 - Soleil: ${sunSign}
@@ -334,7 +333,7 @@ Comment ces trois forces dialoguent en toi et créent ta dynamique unique.
 ## Ton cœur en amour
 Comment tu aimes, ce que tu cherches chez l'autre, tes affinités.
 
-STYLE: Écris comme tu parlerais à une amie — fluide, vivant, jamais générique. Explique le jargon astrologique simplement si tu en utilises. Pas de listes à puces, fais des paragraphes. Sois précise et spécifique aux signes de cette personne. Évite absolument les tournures qui sonnent robotiques ("Il est important de...", "N'oublie pas que...", "Garde à l'esprit que..."). Écris comme un humain, pas comme ChatGPT.
+Sois précise et spécifique aux signes de cette personne. Pas de listes à puces, fais des paragraphes.
 
 Réponse au format JSON: {"portrait": "le texte complet avec les ##"}`;
 
