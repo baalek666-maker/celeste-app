@@ -65,10 +65,11 @@ export function Horoscope({ user }: { user: User }) {
     isFallback: !!h.isFallback,
   });
 
-  const fetchHoroscope = (force: boolean) => {
+  const fetchHoroscope = (force: boolean, cancelledRef: { value: boolean } = { value: false }) => {
     if (!force) {
       const cached = getCachedHoroscope(today);
       if (cached) {
+        if (cancelledRef.value) return;
         setHoroscope(cached);
         setIsFallback(false);
         setIsOfflineCache(false);
@@ -76,6 +77,7 @@ export function Horoscope({ user }: { user: User }) {
         return;
       }
     }
+    if (cancelledRef.value) return;
     setLoading(true);
     setError('');
     setIsOfflineCache(false);
@@ -90,6 +92,7 @@ export function Horoscope({ user }: { user: User }) {
 
     Promise.race([api.getHoroscope(), timeoutPromise])
       .then(h => {
+        if (cancelledRef.value) return;
         const entry = buildEntry(h);
         setHoroscope(entry);
         setIsFallback(!!h.isFallback);
@@ -97,6 +100,7 @@ export function Horoscope({ user }: { user: User }) {
         setLoading(false);
       })
       .catch(err => {
+        if (cancelledRef.value) return;
         console.error('[DEBUG HOROSCOPE] Error:', err?.message, err?.status, JSON.stringify(err));
         const raw = (err?.message || '').toLowerCase();
         let msg = err.message || 'Erreur';
@@ -121,9 +125,9 @@ export function Horoscope({ user }: { user: User }) {
   };
 
   useEffect(() => {
-    let cancelled = false;
-    if (!cancelled) fetchHoroscope(false);
-    return () => { cancelled = true; };
+    const cancelledRef = { value: false };
+    fetchHoroscope(false, cancelledRef);
+    return () => { cancelledRef.value = true; };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [today]);
 

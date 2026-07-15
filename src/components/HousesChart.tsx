@@ -27,10 +27,12 @@ export default function HousesChart() {
   const [err, setErr] = useState<string | null>(null);
 
   useEffect(() => {
+    let alive = true;
     api.getHouses()
-      .then(d => setData(d))
-      .catch(e => setErr(e.message))
-      .finally(() => setLoading(false));
+      .then(d => { if (alive) setData(d); })
+      .catch(e => { if (alive) setErr(e.message); })
+      .finally(() => { if (alive) setLoading(false); });
+    return () => { alive = false; };
   }, []);
 
   if (loading) return (

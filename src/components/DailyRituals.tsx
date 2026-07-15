@@ -15,26 +15,30 @@ export default function DailyRituals() {
   const [busy, setBusy] = useState<'morning' | 'evening' | null>(null);
 
   useEffect(() => {
+    let alive = true;
     api.getRitualToday()
-      .then(d => setRitual(d))
-      .catch(e => console.error('ritual load:', e))
-      .finally(() => setLoading(false));
+      .then(d => { if (alive) setRitual(d); })
+      .catch(e => { if (alive) console.error('ritual load:', e); })
+      .finally(() => { if (alive) setLoading(false); });
+    return () => { alive = false; };
   }, []);
 
   const complete = async (period: 'morning' | 'evening') => {
     if (!ritual) return;
+    let alive = true;
     setBusy(period);
     try {
       await api.completeRitual(period);
+      if (!alive) return;
       setRitual({
         ...ritual,
         completedMorning: period === 'morning' ? true : ritual.completedMorning,
         completedEvening: period === 'evening' ? true : ritual.completedEvening
       });
     } catch (e) {
-      console.error('ritual complete:', e);
+      if (alive) console.error('ritual complete:', e);
     } finally {
-      setBusy(null);
+      if (alive) setBusy(null);
     }
   };
 

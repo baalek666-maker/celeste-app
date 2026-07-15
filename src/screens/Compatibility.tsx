@@ -205,7 +205,7 @@ export function Compatibility({ user }: { user: User }) {
               <p className="text-night-400 text-xs uppercase tracking-widest">Ville</p>
               <select value={pCityIdx} onChange={e => setPCityIdx(Number(e.target.value))}
                 className="w-full py-3.5 px-4 rounded-2xl glass border border-night-700 text-night-100 focus:border-cosmic-500 focus:outline-none">
-                {CITIES.map((c, i) => <option key={i} value={i} className="bg-night-900">{c.city}</option>)}
+                {CITIES.map((c, i) => <option key={c.city + i} value={i} className="bg-night-900">{c.city}</option>)}
               </select>
             </div>
           )}
@@ -285,7 +285,7 @@ export function Compatibility({ user }: { user: User }) {
               <p className="text-leaf-400 text-sm font-medium mb-3">✦ Points forts</p>
               <ul className="space-y-2">
                 {result.strengths.map((s: string, i: number) => (
-                  <li key={i} className="text-night-200 text-sm flex gap-2">
+                  <li key={`s-${i}-${s.slice(0, 12)}`} className="text-night-200 text-sm flex gap-2">
                     <span className="text-leaf-400">+</span>{s}
                   </li>
                 ))}
@@ -298,7 +298,7 @@ export function Compatibility({ user }: { user: User }) {
               <p className="text-gold-400 text-sm font-medium mb-3">⚠ Défis</p>
               <ul className="space-y-2">
                 {result.challenges.map((c: string, i: number) => (
-                  <li key={i} className="text-night-200 text-sm flex gap-2">
+                  <li key={`c-${i}-${c.slice(0, 12)}`} className="text-night-200 text-sm flex gap-2">
                     <span className="text-gold-400">!</span>{c}
                   </li>
                 ))}

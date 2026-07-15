@@ -15,10 +15,12 @@ export default function LunarNodes() {
   const [err, setErr] = useState<string | null>(null);
 
   useEffect(() => {
+    let alive = true;
     api.getLunarNodes()
-      .then(d => setData(d as typeof data))
-      .catch(e => setErr(e.message))
-      .finally(() => setLoading(false));
+      .then(d => { if (alive) setData(d as typeof data); })
+      .catch(e => { if (alive) setErr(e.message); })
+      .finally(() => { if (alive) setLoading(false); });
+    return () => { alive = false; };
   }, []);
 
   if (loading) return (

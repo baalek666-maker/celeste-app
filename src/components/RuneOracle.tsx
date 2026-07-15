@@ -1,4 +1,4 @@
-import { useState, useCallback } from "react";
+import { useState, useCallback, useRef, useEffect } from "react";
 import {
   ELDER_FUTHARK,
   AETTIR,
@@ -18,6 +18,12 @@ export default function RuneOracle() {
   const [mode, setMode] = useState<"intro" | "draw" | "result" | "aettir">(
     "intro"
   );
+  const cleanupTimers = useRef<Set<number>>(new Set());
+
+  useEffect(() => () => {
+    cleanupTimers.current.forEach(clearTimeout);
+    cleanupTimers.current.clear();
+  }, []);
   const [selectedSpread, setSelectedSpread] = useState(0);
   const [drawnRunes, setDrawnRunes] = useState<DrawnRune[]>([]);
   const [revealed, setRevealed] = useState<boolean[]>([]);
@@ -42,7 +48,9 @@ export default function RuneOracle() {
       const next = [...prev];
       next[idx] = true;
       if (next.every(Boolean)) {
-        setTimeout(() => setMode("result"), 800);
+        const t = window.setTimeout(() => setMode("result"), 800);
+        // Cleanup if component unmounts within 800ms
+        cleanupTimers.current.add(t);
       }
       return next;
     });

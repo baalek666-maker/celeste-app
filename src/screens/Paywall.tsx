@@ -15,7 +15,9 @@ export function Paywall({ onClose, onSubscribe }: {
 
   // Vérifier si Stripe est configuré côté serveur à l'ouverture du paywall
   useEffect(() => {
-    isStripeConfigured().then(setConfigured);
+    let alive = true;
+    isStripeConfigured().then(c => { if (alive) setConfigured(c); });
+    return () => { alive = false; };
   }, []);
 
   const handleSubscribe = async () => {

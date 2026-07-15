@@ -21,10 +21,12 @@ export default function PremiumBadge({ onUpgrade }: { onUpgrade?: () => void }) 
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
+    let alive = true;
     api.getPremiumStatus()
-      .then(setStatus)
-      .catch(e => console.error('premium load:', e))
-      .finally(() => setLoading(false));
+      .then(b => { if (alive) setStatus(b); })
+      .catch(e => { if (alive) console.error('premium load:', e); })
+      .finally(() => { if (alive) setLoading(false); });
+    return () => { alive = false; };
   }, []);
 
   if (loading) {

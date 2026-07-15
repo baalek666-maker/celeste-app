@@ -46,11 +46,13 @@ export function PlanetDetailCard({ planet, sign, degree, house, retrograde }: Pr
   useEffect(() => {
     if (expanded && !fetchedRef.current && !data) {
       fetchedRef.current = true;
+      let alive = true;
       setLoading(true);
       api.getPlanetInterpretation(planet)
-        .then(d => { setData(d); setError(null); })
-        .catch(e => { setError(e.message || 'Erreur'); fetchedRef.current = false; })
-        .finally(() => setLoading(false));
+        .then(d => { if (alive) { setData(d); setError(null); } })
+        .catch(e => { if (alive) { setError(e.message || 'Erreur'); fetchedRef.current = false; } })
+        .finally(() => { if (alive) setLoading(false); });
+      return () => { alive = false; };
     }
   }, [expanded]);
 

@@ -312,7 +312,7 @@ export default function NatalChart({ size }: { size?: number }) {
             // Cast: le backend peut renvoyer des clés non-littérales (southNode, etc.)
             const p1 = (natal as any)[asp.p1];
             const p2 = (natal as any)[asp.p2];
-            if (!p1?.longitude || !p2?.longitude) return null;
+            if (p1?.longitude == null || p2?.longitude == null) return null;
             const [x1, y1] = lonToXY(p1.longitude, ascLon, aspectR, cx, cy);
             const [x2, y2] = lonToXY(p2.longitude, ascLon, aspectR, cx, cy);
             return (

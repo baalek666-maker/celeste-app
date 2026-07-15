@@ -1,7 +1,7 @@
 // Indicateur online/offline + badge queue pending.
 // Affiche rien quand tout va bien, sinon petit badge en haut.
 
-import { useEffect, useState } from 'react';
+import { useEffect, useState, useRef } from 'react';
 import { WifiOff, RefreshCw, CheckCircle2 } from 'lucide-react';
 import { getQueueSize, installAutoDrain, drain } from '../lib/offlineQueue';
 
@@ -10,47 +10,77 @@ export default function OfflineIndicator() {
   const [queueSize, setQueueSize] = useState(0);
   const [draining, setDraining] = useState(false);
   const [lastDrainInfo, setLastDrainInfo] = useState<string | null>(null);
+  const aliveRef = useRef(true);
+  const timersRef = useRef<Set<number>>(new Set());
 
   useEffect(() => {
+    aliveRef.current = true;
+    return () => {
+      aliveRef.current = false;
+      timersRef.current.forEach(id => window.clearTimeout(id));
+      timersRef.current.clear();
+    };
+  }, []);
+
+  useEffect(() => {
+    const safeSetLastDrainInfo = (msg: string | null) => {
+      if (!aliveRef.current) return;
+      setLastDrainInfo(msg);
+    };
+    const safeSetQueueSize = (n: number) => {
+      if (!aliveRef.current) return;
+      setQueueSize(n);
+    };
+    const safeSetOnline = (v: boolean) => {
+      if (!aliveRef.current) return;
+      setOnline(v);
+    };
+
     installAutoDrain((r) => {
-      setLastDrainInfo(
+      safeSetLastDrainInfo(
         r.replayed > 0
           ? `${r.replayed} action${r.replayed > 1 ? 's' : ''} synchronisée${r.replayed > 1 ? 's' : ''}`
           : null
       );
-      setTimeout(() => setLastDrainInfo(null), 4000);
+      const t = window.setTimeout(() => safeSetLastDrainInfo(null), 4000);
+      timersRef.current.add(t);
     });
 
-    const goOnline = () => setOnline(true);
-    const goOffline = () => setOnline(false);
+    const goOnline = () => safeSetOnline(true);
+    const goOffline = () => safeSetOnline(false);
     window.addEventListener('online', goOnline);
     window.addEventListener('offline', goOffline);
 
-    const refreshSize = () => setQueueSize(getQueueSize());
+    const refreshSize = () => safeSetQueueSize(getQueueSize());
     window.addEventListener('offline-queue-changed', refreshSize);
     refreshSize();
-    const t = setInterval(refreshSize, 4000);
+    const t = window.setInterval(refreshSize, 4000);
 
     return () => {
       window.removeEventListener('online', goOnline);
       window.removeEventListener('offline', goOffline);
       window.removeEventListener('offline-queue-changed', refreshSize);
-      clearInterval(t);
+      window.clearInterval(t);
     };
   }, []);
 
   const manualDrain = async () => {
+    let alive = true;
     setDraining(true);
     try {
       const r = await drain();
+      if (!alive) return;
       setLastDrainInfo(
         r.replayed > 0
           ? `${r.replayed} action${r.replayed > 1 ? 's' : ''} synchronisée${r.replayed > 1 ? 's' : ''}`
           : 'Rien à synchroniser'
       );
-      setTimeout(() => setLastDrainInfo(null), 4000);
+      const t = window.setTimeout(() => {
+        if (alive) setLastDrainInfo(null);
+      }, 4000);
+      timersRef.current.add(t);
     } finally {
-      setDraining(false);
+      if (alive) setDraining(false);
     }
   };
 

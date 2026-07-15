@@ -18,7 +18,11 @@ function ManageSubscriptionButton() {
   const [loading, setLoading] = useState(false);
 
   useEffect(() => {
-    api.getPremiumStatus().then(s => setStatus({ isPremium: s.isPremium, plan: s.plan })).catch(() => undefined);
+    let alive = true;
+    api.getPremiumStatus().then(s => {
+      if (alive) setStatus({ isPremium: s.isPremium, plan: s.plan });
+    }).catch(() => undefined);
+    return () => { alive = false; };
   }, []);
 
   const handleManage = async () => {
@@ -180,7 +184,7 @@ function EditBirthData({ user, onUpdate, onCancel }: {
         className="w-full py-3 px-4 rounded-xl glass border border-night-700 text-night-100 mb-6 focus:outline-none focus:border-cosmic-500"
       >
         {EDIT_CITIES.map((c, i) => (
-          <option key={i} value={i} className="bg-night-800">
+          <option key={`${c.city}-${c.country}-${i}`} value={i} className="bg-night-800">
             {c.city} — {c.country}
           </option>
         ))}

@@ -33,9 +33,11 @@ export default function CosmicCalendar() {
   const [err, setErr] = useState<string | null>(null);
 
   useEffect(() => {
+    let alive = true;
     api.getCosmicEvents()
-      .then((d) => setEvents(d.events.slice(0, 8)))
-      .catch((e) => setErr(e.message));
+      .then((d) => { if (alive) setEvents(d.events.slice(0, 8)); })
+      .catch((e) => { if (alive) setErr(e.message); });
+    return () => { alive = false; };
   }, []);
 
   // ── Loading skeleton ──

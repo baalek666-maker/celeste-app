@@ -40,22 +40,26 @@ export default function DailyQuests({ onQuestCompleted }: DailyQuestsProps) {
 
   const handleComplete = async (q: Quest) => {
     if (q.completed || busyKey) return;
+    let alive = true;
     setBusyKey(q.quest_key);
     try {
       const res = await api.completeQuest(q.quest_key);
+      if (!alive) return;
       if (res.ok) {
         setQuests((qs) => qs.map((x) => (x.quest_key === q.quest_key ? { ...x, completed: true } : x)));
         showToast(q.quest_key, res.xpAwarded || q.xp_reward);
         if (res.leveledUp) {
           setLevelUp({ active: true, level: res.newLevel });
-          window.setTimeout(() => setLevelUp({ active: false, level: null }), 2800);
+          window.setTimeout(() => {
+            if (alive) setLevelUp({ active: false, level: null });
+          }, 2800);
         }
         onQuestCompleted?.(res.xpAwarded, res.leveledUp);
       }
     } catch (e) {
       console.error('completeQuest:', e);
     } finally {
-      setBusyKey(null);
+      if (alive) setBusyKey(null);
     }
   };
 

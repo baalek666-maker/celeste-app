@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useRef, useEffect } from 'react';
 import { api } from '../lib/api';
 import { localISODate } from '../lib/storage';
 
@@ -17,9 +17,17 @@ export default function HoroscopeFeedback({ date }: { date?: string }) {
   const [hover, setHover] = useState(0);
   const [rating, setRating] = useState(0);
   const [confirming, setConfirming] = useState(false);
+  const confirmTimer = useRef<number | null>(null);
+
+  useEffect(() => () => {
+    if (confirmTimer.current !== null) {
+      window.clearTimeout(confirmTimer.current);
+    }
+  }, []);
 
   const submit = async (n: number) => {
     if (done || confirming) return;
+    let alive = true;
     setRating(n);
     setConfirming(true);
     try {
@@ -29,7 +37,10 @@ export default function HoroscopeFeedback({ date }: { date?: string }) {
     }
     try { localStorage.setItem(KEY, today); } catch { /* ignore */ }
     // Hold the "Merci ✦" confirmation briefly, then settle into the permanent state.
-    setTimeout(() => setDone(true), 1100);
+    if (confirmTimer.current !== null) window.clearTimeout(confirmTimer.current);
+    confirmTimer.current = window.setTimeout(() => {
+      if (alive) setDone(true);
+    }, 1100);
   };
 
   // Submitted (just now or earlier today) → confirmation card.

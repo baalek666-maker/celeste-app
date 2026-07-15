@@ -19,13 +19,15 @@ export default function WeeklyChallenge() {
   const [submitting, setSubmitting] = useState(false);
 
   const load = () => {
+    let alive = true;
     setLoading(true);
     api.getWeeklyChallenge()
-      .then(d => { setData(d); setNote(d.reflectionNote || ''); })
-      .catch(e => setErr(e.message))
-      .finally(() => setLoading(false));
+      .then(d => { if (alive) { setData(d); setNote(d.reflectionNote || ''); } })
+      .catch(e => { if (alive) setErr(e.message); })
+      .finally(() => { if (alive) setLoading(false); });
+    return () => { alive = false; };
   };
-  useEffect(load, []);
+  useEffect(() => load(), []);
 
   const submit = async () => {
     if (!data || submitting) return;

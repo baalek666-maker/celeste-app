@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useState, useRef } from 'react';
 import type { User, JournalEntry } from '../types';
 import { getJournal, addJournalEntry, localISODate } from '../lib/storage';
 import { api, getToken } from '../lib/api';
@@ -26,6 +26,13 @@ export function Journal({ user }: { user: User }) {
   const [syncing, setSyncing] = useState(false);
   const [syncMsg, setSyncMsg] = useState('');
   const [saveFlash, setSaveFlash] = useState(false);
+  const flashTimer = useRef<number | null>(null);
+  const syncMsgTimer = useRef<number | null>(null);
+
+  useEffect(() => () => {
+    if (flashTimer.current !== null) window.clearTimeout(flashTimer.current);
+    if (syncMsgTimer.current !== null) window.clearTimeout(syncMsgTimer.current);
+  }, []);
   const today = localISODate();
   const todayFr = new Date().toLocaleDateString('fr-FR', { weekday: 'long', day: 'numeric', month: 'long' });
   const streak = calcStreak(entries);
@@ -56,7 +63,8 @@ export function Journal({ user }: { user: User }) {
         setSyncMsg('Mode hors-ligne.');
       } finally {
         if (!cancelled) setSyncing(false);
-        setTimeout(() => setSyncMsg(''), 3000);
+        if (syncMsgTimer.current !== null) window.clearTimeout(syncMsgTimer.current);
+        syncMsgTimer.current = window.setTimeout(() => setSyncMsg(''), 3000);
       }
     })();
     return () => { cancelled = true; };
@@ -77,7 +85,8 @@ export function Journal({ user }: { user: User }) {
     setNote('');
     setRating(0);
     setSaveFlash(true);
-    setTimeout(() => setSaveFlash(false), 2500);
+    if (flashTimer.current !== null) window.clearTimeout(flashTimer.current);
+    flashTimer.current = window.setTimeout(() => setSaveFlash(false), 2500);
     // 2. Best-effort sync to backend
     if (getToken()) {
       try {

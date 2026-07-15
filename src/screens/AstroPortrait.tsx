@@ -80,25 +80,29 @@ export default function AstroPortrait({ onBack }: { onBack?: () => void } = {}) 
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
 
-  const load = useCallback(async () => {
+  const load = useCallback(async (cancelledRef: { value: boolean } = { value: false }) => {
+    if (cancelledRef.value) return;
     setLoading(true);
     setError('');
     try {
       const res = await api.getAstroPortrait();
+      if (cancelledRef.value) return;
       setSections(parsePortrait(res.portrait));
       setWordCount(res.wordCount);
       setCached(res.cached);
     } catch (e: unknown) {
+      if (cancelledRef.value) return;
       setError(e instanceof Error ? e.message : 'Les étoiles sont voilées pour l’instant.');
     } finally {
+      if (cancelledRef.value) return;
       setLoading(false);
     }
   }, []);
 
   useEffect(() => {
-    let cancelled = false;
-    if (!cancelled) load();
-    return () => { cancelled = true; };
+    const cancelledRef = { value: false };
+    load(cancelledRef);
+    return () => { cancelledRef.value = true; };
   }, [load]);
 
   const back = () => {
