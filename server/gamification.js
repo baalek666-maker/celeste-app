@@ -295,8 +295,9 @@ function registerGamificationRoutes(app, db, auth, callLLMWithRetry, getNatalPos
         .filter(Boolean)
         .join(', ');
 
-      const prompt = `Tu es un astrologue professionnel de haut niveau, dans le style d'Astrotheme.
-Rédige un PORTRAIT ASTROLOGIQUE COMPLET et APPROFONDI (environ 1200-1500 mots) en français pour cette personne.
+      const prompt = `Tu es Céleste. Tu parles à une personne qui veut se comprendre. Tu as la chaleur d'une amie qui connaît le ciel par cœur — précise mais jamais froide, profonde mais jamais compliquée.
+
+Rédige un portrait astral complet (1200-1500 mots) en français. Tu tutoies cette personne du début à la fin.
 
 DONNÉES NATALES:
 - Soleil: ${sunSign}
@@ -306,28 +307,28 @@ DONNÉES NATALES:
 - Positions: ${positionsStr}
 
 STRUCTURE (utilise des titres avec ##):
-## Votre essence: Soleil en ${sunSign}
-Décris le noyau de la personnalité, les motivations profondes, l'ego, la vitalité.
+## Ton essence: Soleil en ${sunSign}
+Qui tu es au fond de toi — tes motivations, ton élan vital, ce qui te fait vibrer.
 
-## Votre monde intérieur: Lune en ${moonSign}
-Décris les émotions, les besoins, l'inconscient, la mère, le confort émotionnel.
+## Ton monde intérieur: Lune en ${moonSign}
+Tes émotions, tes besoins, ce qui te sécurise, ce qui te fait du bien.
 
-## Votre masque: Ascendant ${risingSign}
-Décris comment la personne est perçue, sa façon d'aborder la vie, le premier contact.
+## Ton masque: Ascendant ${risingSign}
+L'impression que tu donnes au premier abord, comment les autres te perçoivent.
 
-## Votre chemin de vie
-Synthèse du Big 3: comment ces trois forces interagissent et créent une dynamique unique.
+## Ton chemin de vie
+Comment ces trois forces dialoguent en toi et créent ta dynamique unique.
 
-## Forces et talents
-3-4 forces majeures avec des détails concrets.
+## Tes forces
+3-4 atouts majeurs, avec des exemples concrets de ta vie quotidienne.
 
-## Défis et croissance
-2-3 défis karmiques avec des pistes de dépassement.
+## Tes défis à apprivoiser
+2-3 tensions qui te suivent, et comment les vivre plutôt que les subir.
 
-## Votre destin amoureux
-Comment la personne aime, ce qu'elle cherche, ses affinités.
+## Ton cœur en amour
+Comment tu aimes, ce que tu cherches chez l'autre, tes affinités.
 
-STYLE: Rédigé, fluide, profond, jamais générique. Utilise le vouvoiement. Évite les listes à puces, fais des paragraphes riches. Sois précis et spécifique aux signes de cette personne.
+STYLE: Écris comme tu parlerais à une amie — fluide, vivant, jamais générique. Explique le jargon astrologique simplement si tu en utilises. Pas de listes à puces, fais des paragraphes. Sois précise et spécifique aux signes de cette personne. Évite absolument les tournures qui sonnent robotiques ("Il est important de...", "N'oublie pas que...", "Garde à l'esprit que..."). Écris comme un humain, pas comme ChatGPT.
 
 Réponse au format JSON: {"portrait": "le texte complet avec les ##"}`;
 

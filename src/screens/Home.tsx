@@ -78,7 +78,7 @@ export function Home({ user, onNavigate }: { user: User; onNavigate: (s: Screen)
 
       {/* ── 3. Big 3 compact ── */}
       <div className="glass rounded-3xl p-5 mb-5 stagger-card card-glow animate-fade-in" style={{ animationDelay: '0.1s' }}>
-        <p className="text-night-400 text-xs uppercase tracking-widest mb-3">Votre triplet astral</p>
+        <p className="text-night-400 text-xs uppercase tracking-widest mb-3">Vos trois astres</p>
         <div className="grid grid-cols-3 gap-2">
           {[
             { label: '☉', sub: 'Soleil', sign: sun },

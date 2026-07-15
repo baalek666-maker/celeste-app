@@ -136,7 +136,7 @@ export function Explorer({ user, onNavigate }: { user: User; onNavigate: (s: Scr
         <p className="text-night-400 text-xs uppercase tracking-widest mb-1">Approfondir</p>
         <h1 className="text-2xl font-bold text-gold-gradient mb-2">Explorer</h1>
         <p className="text-night-300 text-sm">
-          Plongez dans les couches profondes de votre ciel.
+          Explorez chaque planète de votre thème, en détail.
         </p>
       </div>
 

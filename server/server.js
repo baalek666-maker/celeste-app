@@ -537,7 +537,7 @@ function getAscendantHouseKeyword(risingSign) {
   return map[risingSign] || 'maison angulaire';
 }
 async function generateHoroscopeSummary(natalPositions, transits, sign, dateLabel) {
-  const systemPrompt = `Tu es Céleste, un astrologue français. Tu écris des résumés d'horoscope très courts et poétiques (2-3 phrases maximum) en français. Ton ton est introspectif et moderne.`;
+  const systemPrompt = `Tu es Céleste. Tu écris à une amie qui consulte son ciel du jour. Tes résumés sont courts (2-3 phrases), poétiques mais terre-à-terre, jamais génériques. Tu tutoies. Tu écris en français.`;
 
   const userPrompt = `Thème natal: ${Object.entries(natalPositions).map(([k,v]) => `${k} ${v.sign} ${v.degree}°`).join(', ')}.
 Transits du ${dateLabel}: ${Object.entries(transits).map(([k,v]) => `${k} ${v.sign} ${v.degree}°`).join(', ')}.
@@ -568,7 +568,7 @@ Réponds UNIQUEMENT avec le JSON.`;
 async function generateHoroscope(natalPositions, transits, sign) {
   const today = new Date().toLocaleDateString('fr-FR', { weekday: 'long', day: 'numeric', month: 'long' });
 
-  const systemPrompt = `Tu es Céleste, un astrologue français bienveillant et perspicace. Tu écris des horoscopes personnalisés basés sur les vraies positions planétaires. Ton ton est psychologique, introspectif et moderne — jamais prédictif ni moralisateur. Tu écris en français.`;
+  const systemPrompt = `Tu es Céleste. Tu écris l'horoscope de quelqu'un qui te fait confiance. Tu te bases sur les vraies positions planétaires, pas sur du blabla générique. Tu tutoies. Ton ton est psychologique et humain — jamais prédictif, jamais moralisateur, jamais robotique. Tu écris en français.`;
 
   const userPrompt = `Voici le thème natal de la personne:
 ${Object.entries(natalPositions).map(([k,v]) => `${k}: ${v.sign} ${v.degree}°${v.retrograde ? ' ℞' : ''}`).join('\n')}
@@ -610,7 +610,7 @@ Réponds UNIQUEMENT avec le JSON, aucun texte avant ou après.`;
 
 // ─── LLM Compatibility Generation ──────────────────────────
 async function generateCompatibility(chart1, chart2, sign1, sign2, context = 'romantic') {
-  const systemPrompt = `Tu es Céleste, un astrologue français. Tu analyses la compatibilité entre deux thèmes nataux. Ton analyse est nuancée — tu soulignes les forces ET les défis. Tu écris en français.`;
+  const systemPrompt = `Tu es Céleste. Tu analyses la compatibilité entre deux personnes avec nuance et chaleur — tu soulignes les forces ET les tensions, sans jamais être cruelle. Tu tutoies. Tu écris en français, ton vivant et humain.`;
 
   const ctxConfig = {
     romantic: {
@@ -934,18 +934,18 @@ async function generatePlanetInterpretation(planet, natal) {
 
   // ── Tier 2: LLM generation (lazy: fills the template cache too) ──
   console.log(`[planet-interp] LLM fallback (planet=${planet}, sign=${signName}, decan=${degBucket})`);
-  const systemPrompt = `Tu es un astrologue expert francophone de très haut niveau, dans le style d'Astrotheme et de la tradition astrologique française. Tu écris des interprétations riches, nuancées, profondes, avec un vocabulaire astrologique précis. Tu écris en français.`;
+  const systemPrompt = `Tu es Céleste. Tu expliques l'astrologie comme une amie qui s'y connaît vraiment — claire, vivante, jamais pédante. Tu tutoies. Tu évites le jargon technique, et quand tu l'utilises tu l'expliques simplement. Tu écris en français.`;
 
-  const userPrompt = `Génère une interprétation détaillée pour ${planetName} (${symbol}) dans ce thème natal.
+  const userPrompt = `Génère une interprétation pour ${planetName} (${symbol}) dans le thème natal de cette personne. Tu lui parles directement (tu tutoies).
 
 Position exacte: ${planetName} ${deg}°${String(min).padStart(2,'0')}' ${signName} (élément ${element})${retroStr}, Maison ${houseNum}.
 ${aspects.length > 0 ? `Aspects reçus: ${aspects.map(a => a.text).join('; ')}.` : 'Aucun aspect majeur.'}
 
 Réponds UNIQUEMENT en JSON valide:
 {
-  "general": "Signification générale et mythologique de ${planetName} (250-350 mots). Inclure: son rôle en astrologie, ses thèmes, ses correspondances (élément, qualité, anatomie associée, signes qu'il maîtrise et où il est en exil/chute/exaltation), ce qu'il représente dans la vie (archétypes, figures, âge de vie).",
-  "inSign": "Interprétation de ${planetName} en ${signName} (180-250 mots). Ce que cette position spécifique révèle: forces, défis, nuances psychologiques, tendances. Si c'est une planète lente (Jupiter au-delà), préciser que c'est moins personnel. Mentionner l'effet de ${planetData.retrograde ? 'la rétrogradation' : 'la marche directe'}.",
-  "degree": "Symbolisme du degré ${deg} ${signName} dans la tradition Janduz (80-120 mots). Commence par une image symbolique descriptive entre guillemets (style 'Un vieil homme...'), puis donne l'interprétation du caractère et des potentialités de ce degré.",
+  "general": "Ce que ${planetName} représente pour toi (250-350 mots). Explique son rôle simplement — ce qu'elle dit de toi, comment elle se manifeste dans ta vie. Si ${planetData.retrograde ? 'elle est rétrograde' : 'elle est directe'}, explique ce que ça change concrètement pour toi.",
+  "inSign": "${planetName} en ${signName} — ce que ça dit de toi (180-250 mots). Ce qui te caractérise avec cette combinaison: tes forces, tes nuances, comment ça se joue dans ton quotidien. ${planetData.retrograde ? 'Précise l\'effet concret de la rétrogradation.' : ''}",
+  "degree": "Le degré ${deg} ${signName} et son symbolisme (80-120 mots). Commence par une image évocatrice entre guillemets, puis explique ce qu'elle dit de toi.",
   "temperament": "Tempérament (ex: Nerveux, Bilieux, Sanguin, Lymphatique)",
   "characterology": "Caractérologie en 3-4 mots (ex: Non-Emotif, Actif, Secondaire)",
   "keywords": ["5 mots-clés pertinents"]
@@ -1683,7 +1683,7 @@ app.get('/api/tarot/daily', auth, llmLimiter, async (req, res) => {
     }
 
     // LLM interpretation
-    const systemPrompt = `Tu es Céleste, tarologue et astrologue française. Tu écris des interprétations de tirage de tarot courtes, poétiques et bienveillantes en français.`;
+    const systemPrompt = `Tu es Céleste. Tu tires les cartes avec tendresse et justesse. Tes interprétations sont courtes, poétiques, humaines — jamais hermétiques. Tu tutoies. Tu écris en français.`;
     const userPrompt = `Carte tirée: ${card.name} (${card.roman})${isReversed ? ' — position inversée' : ' — position droite'}.
 Signe solaire de la personne: ${sunSign}.
 Mots-clés: ${card.archetype}.
@@ -1698,7 +1698,7 @@ Génère en JSON:
   "archetype": "${card.archetype}",
   "message": "2 phrases courtes et poétiques résumant l'énergie de la carte pour aujourd'hui",
   "question": "une question de réflexion ouverte pour la journée",
-  "reading": "Un paragraphe détaillé (100-150 mots) reliant cette carte de tarot à la signature astrologique de la personne (signe solaire ${sunSign}), aux transits planétaires du moment, et à ce que cette énergie signifie concrètement pour sa journée. Inclus des conseils pratiques, des éléments à surveiller, et une dimension spirituelle. Écris dans un style mystérieux et hermétique."
+  "reading": "Un paragraphe détaillé (100-150 mots) reliant cette carte à ton signe (${sunSign}), aux transits du moment, et à ce que cette énergie signifie concrètement pour ta journée. Des conseils pratiques, des choses à surveiller. Écris comme une amie qui te parle — pas de jargon, pas de style hermétique."
 }
 
 Réponds UNIQUEMENT avec le JSON.`;

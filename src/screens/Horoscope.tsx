@@ -281,7 +281,7 @@ export function Horoscope({ user }: { user: User }) {
       {/* P3 — Fallback LLM badge (discret) */}
       {isFallback && !isOfflineCache && (
         <div className="mb-4 px-3 py-1.5 rounded-xl border border-night-600/50 bg-night-800/40 inline-flex items-center gap-1.5 animate-fade-in">
-          <span className="text-[10px] text-night-400">✦ Contenu de référence — cosmique simplifié</span>
+          <span className="text-[10px] text-night-400">✦ Version simplifiée du jour</span>
         </div>
       )}
 
