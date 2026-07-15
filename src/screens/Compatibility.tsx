@@ -39,7 +39,7 @@ export function Compatibility({ user }: { user: User }) {
   const [pDate, setPDate] = useState('');
   const [pTime, setPTime] = useState('');
   const [pCityIdx, setPCityIdx] = useState(0);
-  const [result, setResult] = useState<any>(null);
+  const [result, setResult] = useState<CompatibilityResult | null>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
 
