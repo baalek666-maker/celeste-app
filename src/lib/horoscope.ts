@@ -64,7 +64,7 @@ function buildGeneral(chart: NatalChart, sunData: SignData, moonData: SignData, 
   const el = chart.elements;
   const intro = rng() > 0.5
     ? "Avec ton Soleil en " + sunData.name
-    : "Ta essence solaire " + sunData.name.toLowerCase();
+    : "Ton essence solaire " + sunData.name.toLowerCase();
 
   let body: string;
   if (el.fire > 2) {
@@ -72,7 +72,7 @@ function buildGeneral(chart: NatalChart, sunData: SignData, moonData: SignData, 
   } else if (el.water > 2) {
     body = " te rend particulièrement réceptif aux nuances émotionnelles. Fais confiance à ton intuition, elle capte des informations que la raison n'a pas encore intégrées.";
   } else if (el.air > 2) {
-    body = " stimulate ton besoin d'échanges et d'idées nouvelles. Connecte-toi, écrivez, partage ta vision. Ton agilité mentale est un atout aujourd'hui.";
+    body = " stimule ton besoin d'échanges et d'idées nouvelles. Connecte-toi, écris, partage ta vision. Ton agilité mentale est un atout aujourd'hui.";
   } else {
     body = " t'invite à ancrer tes projets dans le concret. La patience et la méthode portent leurs fruits. Construis solidement, pierre après pierre.";
   }
@@ -106,7 +106,7 @@ function buildCareer(chart: NatalChart, sunData: SignData, rng: () => number): s
   const marsSign = mars ? ZODIAC_SIGNS[mars.sign].name : sunData.name;
 
   const messages = [
-    "Ton énergie d'action, portée par Mars en " + marsSign + ", te pousse à avancer. Identifie UNE priorité et concentrez-toi dessus.",
+    "Ton énergie d'action, portée par Mars en " + marsSign + ", te pousse à avancer. Identifie UNE priorité et concentre-toi dessus.",
     "Mars en " + marsSign + " dynamise tes ambitions professionnelles. Un projet stagnant pourrait enfin débloquer si tu oses frapper à la bonne porte.",
     "Ton drive professionnel s'exprime à travers Mars " + marsSign + ". Aujourd'hui, l'action directe est plus efficace que la planification.",
     "L'énergie martiale " + marsSign + " te donne du culot. Utilise-la pour défendre une idée ou prendre une initiative qui sort du cadre.",
@@ -142,9 +142,9 @@ export async function generateCompatibility(
     ? "Tu partages le même élément — " + yourSunData.element + ". Cette résonance crée une compréhension instinctive, comme si tu parlais la même langue intérieure."
     : "Tes éléments se renforcent mutuellement. Là où l'un apporte la profondeur, l'autre offre la légèreté.";
 
-  descriptions[65] = "Il y a entre tu une dynamique naturelle qui demande peu d'efforts pour se mettre en place. Tes énergies se reconnaissent.";
+  descriptions[65] = "Il y a entre toi une dynamique naturelle qui demande peu d'efforts pour se mettre en place. Tes énergies se reconnaissent.";
 
-  descriptions[50] = "Tu es suffisamment différents pour toi fasciner, suffisamment proches pour toi comprendre. C'est le duo classique du complémentaire.";
+  descriptions[50] = "Tu es suffisamment différent pour te fasciner, suffisamment proche pour te comprendre. C'est le duo classique du complémentaire.";
 
   descriptions[35] = "Cette relation n'est pas de tout repos, mais elle est formatrice. Tu feras progresser l'un l'autre si tu acceptes tes différences.";
 

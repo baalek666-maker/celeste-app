@@ -260,7 +260,7 @@ export function Settings({ user, onUpdate, onPaywall }: { user: User; onUpdate: 
           <h2 className="text-night-100 font-semibold mb-2">Confidentialité (RGPD)</h2>
           <p className="text-night-400 text-sm leading-relaxed">
             Tes données de naissance (date, heure, lieu) sont stockées localement sur ton appareil
-            et synchronisées sur nos serveurs (chiffrés en transit et au repos) pour toi permettre
+            et synchronisées sur nos serveurs (chiffrés en transit et au repos) pour te permettre
             d'y accéder depuis n'importe quel appareil connecté à ton compte. Elles ne sont jamais
             transmises à des tiers ni utilisées à des fins publicitaires.
           </p>

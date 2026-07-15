@@ -144,7 +144,7 @@ export function Journal({ user }: { user: User }) {
       {/* Today's entry */}
       <div className="glass rounded-3xl p-5 mb-6">
         <p className="text-night-300 text-sm font-medium mb-3 capitalize">{todayFr}</p>
-        <p className="text-night-400 text-sm mb-4">Comment tu sentez-tu aujourd'hui ?</p>
+        <p className="text-night-400 text-sm mb-4">Comment te sens-tu aujourd'hui ?</p>
 
         {/* Rating */}
         <div className="flex gap-2 mb-4">

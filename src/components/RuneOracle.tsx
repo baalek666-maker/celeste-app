@@ -196,7 +196,7 @@ export default function RuneOracle() {
             {spread.name}
           </h3>
           <p className="text-xs text-night-400">
-            Touchez chaque pierre pour reveler sa rune
+            Touche chaque pierre pour révéler sa rune
           </p>
         </div>
 

@@ -164,7 +164,7 @@ export default function ChineseAstrology({ user }: { user: User }) {
         <p className="text-gold-400 text-xs font-bold uppercase tracking-widest mb-2">Pont Est-Ouest</p>
         <p className="text-night-100 text-sm">
           Ton signe chinois <span className="text-gold-300 font-semibold">{myAnimal.name}</span> correspond au signe occidental <span className="text-gold-300 font-semibold">{myAnimal.western}</span>.
-          Cette resonance entre les deux traditions revele une double cle de lecture de ton personnalite.
+          Cette résonance entre les deux traditions révèle une double clé de lecture de ta personnalité.
         </p>
       </div>
     </div>

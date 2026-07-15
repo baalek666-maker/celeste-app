@@ -39,9 +39,9 @@ const PLANET_META: Record<string, { symbol: string; color: string; label: string
 };
 
 const ZODIAC: Array<{ symbol: string; color: string; name: string }> = [
-  { symbol: '\u2648', color: '#ef4444', name: 'Belier' },      // Aries
+  { symbol: '\u2648', color: '#ef4444', name: 'Bélier' },      // Aries
   { symbol: '\u2649', color: '#84cc16', name: 'Taureau' },     // Taurus
-  { symbol: '\u264A', color: '#06b6d4', name: 'Gemeaux' },     // Gemini
+  { symbol: '\u264A', color: '#06b6d4', name: 'Gémeaux' },     // Gemini
   { symbol: '\u264B', color: '#3b82f6', name: 'Cancer' },      // Cancer
   { symbol: '\u264C', color: '#f97316', name: 'Lion' },        // Leo
   { symbol: '\u264D', color: '#a3a300', name: 'Vierge' },      // Virgo

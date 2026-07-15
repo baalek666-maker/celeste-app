@@ -118,7 +118,7 @@ export function Compatibility({ user }: { user: User }) {
   return (
     <div className="px-5 pt-12 pb-4">
       <h1 className="text-2xl font-bold mb-1 text-gold-gradient">Compatibilité</h1>
-      <p className="text-night-400 text-sm mb-6">La chimie entre tu et cette personne</p>
+      <p className="text-night-400 text-sm mb-6">La chimie entre toi et cette personne</p>
 
       {!result && !loading && (
         <>

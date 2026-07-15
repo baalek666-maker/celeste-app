@@ -36,7 +36,7 @@ const FEATURES = [
   {
     glyph: '☉',
     title: 'Horoscope vraiment personnel',
-    desc: "Calculé depuis ton date, heure et lieu de naissance. Pas de texte recyclé — chaque lecture parle de tes planètes, pas de ton seul signe.",
+    desc: "Calculé depuis ta date, heure et lieu de naissance. Pas de texte recyclé — chaque lecture parle de tes planètes, pas de ton seul signe.",
     accent: 'gold',
   },
   {
