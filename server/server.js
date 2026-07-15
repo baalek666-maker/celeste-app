@@ -671,6 +671,12 @@ function auth(req, res, next) {
   try {
     req.user = jwt.verify(token, JWT_SECRET);
     req.db = db; // expose db to billing routes (portal, etc.)
+    // Quick premium check for rate limiting (cached per-request)
+    try {
+      const u = db.prepare('SELECT is_premium, premium_until FROM users WHERE id = ?').get(req.user.id);
+      const now = Math.floor(Date.now() / 1000);
+      req.user.isPremium = !!u?.is_premium && (!u?.premium_until || u.premium_until > now);
+    } catch { /* non-fatal */ }
     next();
   } catch {
     res.status(401).json({ error: 'Invalid token' });
@@ -687,14 +693,21 @@ const authLimiter = rateLimit({
   legacyHeaders: false,
 });
 
-// LLM endpoints: prevent quota burn (key by user id, fall back to IP via ipKeyGenerator helper for IPv6 safety)
+// LLM endpoints: dynamic rate limit (premium = unlimited, free = tight)
 const llmLimiter = rateLimit({
-  windowMs: 60 * 60 * 1000, // 1h
-  max: 30,
+  windowMs: 5 * 60 * 1000, // 5 min window
+  max: (_req) => {
+    // Premium users get generous limit; free users get 5 per 5min
+    const u = _req.user;
+    if (!u) return 5;
+    // isPremium is set on req.user at auth time if available
+    return u.isPremium ? 100 : 5;
+  },
   keyGenerator: (req) => req.user?.id?.toString() || ipKeyGenerator(req.ip),
-  message: { error: 'Limite atteinte. Réessaie dans une heure.' },
+  message: { error: 'Tu consultes beaucoup Céleste ! Attends 5 minutes ou passe Premium pour un accès illimité.' },
   standardHeaders: true,
   legacyHeaders: false,
+  skip: (req) => !!req.user?.isPremium, // skip entirely for premium
 });
 
 // ─── Server ────────────────────────────────────────────────
@@ -818,6 +831,36 @@ app.get('/api/natal-chart', auth, (req, res) => {
   const natal = getNatalPositions(birthData, true);
   res.json({ natal });
 });
+
+// ─── Natal interpretation cache (asteroids, nodes, houses — never change) ──
+db.exec(`CREATE TABLE IF NOT EXISTS natal_interpretations (
+  user_id INTEGER NOT NULL,
+  feature TEXT NOT NULL,
+  data TEXT NOT NULL,
+  created_at INTEGER DEFAULT (strftime('%s','now')),
+  PRIMARY KEY(user_id, feature)
+)`);
+
+// ─── Free-tier rate limiting (in-memory, per-IP) ────────────
+const _rateBuckets = new Map(); // key: ip → { count, windowStart }
+const FREE_RATE_WINDOW_MS = 5 * 60 * 1000; // 5 minutes
+const FREE_RATE_MAX = 5; // max requests per 5-min window for free users
+function freeRateLimit(ip) {
+  const now = Date.now();
+  const bucket = _rateBuckets.get(ip);
+  if (!bucket || now - bucket.windowStart > FREE_RATE_WINDOW_MS) {
+    _rateBuckets.set(ip, { count: 1, windowStart: now });
+    // Cleanup old entries every ~100 calls
+    if (_rateBuckets.size > 5000) {
+      for (const [k, v] of _rateBuckets) {
+        if (now - v.windowStart > FREE_RATE_WINDOW_MS * 4) _rateBuckets.delete(k);
+      }
+    }
+    return true;
+  }
+  bucket.count++;
+  return bucket.count <= FREE_RATE_MAX;
+}
 
 // ─── Planet Interpretation (LLM-powered, cached) ───────────
 db.exec(`CREATE TABLE IF NOT EXISTS planet_interpretations (
@@ -2244,6 +2287,13 @@ app.get('/api/chart/asteroids', auth, async (req, res) => {
     if (!user?.birth_data) return res.status(400).json({ error: 'birth_data missing' });
     const birth = safeJsonParse(user.birth_data, null, 'birth_data');
     if (!birth) return res.status(400).json({ error: 'Corrupted birth data. Please update your profile.' });
+
+    // Check lifetime natal cache (asteroid positions never change)
+    const cached = db.prepare('SELECT data FROM natal_interpretations WHERE user_id = ? AND feature = ?').get(req.user.id, 'asteroids');
+    if (cached) {
+      return res.json({ ...JSON.parse(cached.data), cached: true });
+    }
+
     const [y, m, d] = birth.date.split('-').map(Number);
     const [h, min] = (birth.time || '12:00').split(':').map(Number);
     const birthDate = new Date(Date.UTC(y, m - 1, d, h, min, 0));
@@ -2285,11 +2335,17 @@ app.get('/api/chart/asteroids', auth, async (req, res) => {
     } catch (e) {
       console.warn('asteroids LLM fail (fallback null):', e?.name || e?.message);
     }
-    res.json({
+    const responseData = {
       positions,
       interpretation,
       generatedAt: new Date().toISOString()
-    });
+    };
+
+    // Save to lifetime natal cache
+    db.prepare('INSERT OR REPLACE INTO natal_interpretations (user_id, feature, data) VALUES (?, ?, ?)')
+      .run(req.user.id, 'asteroids', JSON.stringify(responseData));
+
+    res.json(responseData);
   } catch (err) {
     console.error('asteroids error:', err?.message, err?.stack);
     res.status(500).json({ error: 'Failed' });
@@ -2306,6 +2362,13 @@ app.get('/api/chart/lunar-nodes', auth, async (req, res) => {
     if (!user?.birth_data) return res.status(400).json({ error: 'birth_data missing' });
     const birth = safeJsonParse(user.birth_data, null, 'birth_data');
     if (!birth) return res.status(400).json({ error: 'Corrupted birth data. Please update your profile.' });
+
+    // Check lifetime natal cache
+    const cached = db.prepare('SELECT data FROM natal_interpretations WHERE user_id = ? AND feature = ?').get(req.user.id, 'lunar_nodes');
+    if (cached) {
+      return res.json({ ...JSON.parse(cached.data), cached: true });
+    }
+
     const [y, m, d] = birth.date.split('-').map(Number);
     const [h, min] = (birth.time || '12:00').split(':').map(Number);
     const t = Astronomy.MakeTime(new Date(Date.UTC(y, m - 1, d, h, min, 0)));
@@ -2348,12 +2411,18 @@ app.get('/api/chart/lunar-nodes', auth, async (req, res) => {
       console.warn('lunar-nodes LLM fail (fallback null):', e?.name || e?.message);
     }
 
-    res.json({
+    const responseData = {
       northNode: north,
       southNode: south,
       interpretation,
       generatedAt: new Date().toISOString()
-    });
+    };
+
+    // Save to lifetime natal cache
+    db.prepare('INSERT OR REPLACE INTO natal_interpretations (user_id, feature, data) VALUES (?, ?, ?)')
+      .run(req.user.id, 'lunar_nodes', JSON.stringify(responseData));
+
+    res.json(responseData);
   } catch (err) {
     console.error('lunar-nodes error:', err?.message, err?.stack);
     res.status(500).json({ error: 'Failed' });
@@ -2545,6 +2614,13 @@ app.get('/api/chart/houses', auth, async (req, res) => {
     if (!user?.birth_data) return res.status(400).json({ error: 'birth_data missing' });
     const birth = safeJsonParse(user.birth_data, null, 'birth_data');
     if (!birth) return res.status(400).json({ error: 'Corrupted birth data. Please update your profile.' });
+
+    // Check lifetime natal cache
+    const cached = db.prepare('SELECT data FROM natal_interpretations WHERE user_id = ? AND feature = ?').get(req.user.id, 'houses');
+    if (cached) {
+      return res.json({ ...JSON.parse(cached.data), cached: true });
+    }
+
     const { asc, houses } = computeHouses(birth);
     // Compute sun sign from birth date if not stored
     let sunSign = birth.zodiacSign || 'unknown';
@@ -2562,7 +2638,7 @@ app.get('/api/chart/houses', auth, async (req, res) => {
       }
     }
     const interpretation = await interpretHouses(asc, sunSign);
-    res.json({
+    const responseData = {
       system: 'Equal House',
       ascendant: asc,
       sunSign,
@@ -2575,7 +2651,13 @@ app.get('/api/chart/houses', auth, async (req, res) => {
       })),
       interpretation,
       generatedAt: new Date().toISOString()
-    });
+    };
+
+    // Save to lifetime natal cache
+    db.prepare('INSERT OR REPLACE INTO natal_interpretations (user_id, feature, data) VALUES (?, ?, ?)')
+      .run(req.user.id, 'houses', JSON.stringify(responseData));
+
+    res.json(responseData);
   } catch (err) {
     console.error('houses error:', err?.message, err?.stack || err);
     res.status(500).json({ error: 'Failed' });

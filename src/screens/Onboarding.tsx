@@ -228,36 +228,23 @@ export function Onboarding({ onComplete }: { onComplete: (u: User) => void }) {
       </button>
     </div>,
 
-    // Step 1: Date of birth
+    // Step 1: Date + Time of birth (merged — was 2 separate steps)
     <div key="1" className="flex flex-col items-center justify-center min-h-screen px-8 animate-fade-in relative">
       <ProgressBar current={1} />
       <BackButton to={0} />
-      <p className="text-gold-400 text-sm uppercase tracking-widest mb-3">Étape 1 sur 3</p>
+      <p className="text-gold-400 text-sm uppercase tracking-widest mb-3">Étape 1 sur 2</p>
       <h2 className="text-2xl font-bold mb-2 text-center">Quand es-tu né·e ?</h2>
-      <p className="text-night-400 text-sm mb-8 text-center max-w-xs">La position des planètes change chaque jour. Ta date de naissance est le point de départ.</p>
+      <p className="text-night-400 text-sm mb-8 text-center max-w-xs">
+        La position des planètes change chaque jour, chaque heure. Ta date et l'heure de naissance donnent ton Ascendant.
+      </p>
+
+      {/* Date input */}
       <input
         type="date" value={date} onChange={e => setDate(e.target.value)}
-        className="w-full max-w-xs py-4 px-4 rounded-2xl glass border border-night-700 text-night-100 text-lg text-center focus:outline-none focus:border-cosmic-500 transition-colors"
+        className="w-full max-w-xs py-4 px-4 rounded-2xl glass border border-night-700 text-night-100 text-lg text-center focus:outline-none focus:border-cosmic-500 transition-colors mb-3"
       />
-      <div className="mt-auto w-full max-w-xs pb-8">
-        <button
-          disabled={!date}
-          onClick={() => setStep(2)}
-          className="w-full py-4 rounded-2xl bg-gradient-to-r from-cosmic-600 to-cosmic-700 disabled:opacity-30 disabled:cursor-not-allowed text-white font-semibold text-lg transition-all"
-        >
-          Continuer
-        </button>
-      </div>
-    </div>,
 
-    // Step 2: Time of birth
-    <div key="2" className="flex flex-col items-center justify-center min-h-screen px-8 animate-fade-in relative">
-      <ProgressBar current={2} />
-      <BackButton to={1} />
-      <p className="text-gold-400 text-sm uppercase tracking-widest mb-3">Étape 2 sur 3</p>
-      <h2 className="text-2xl font-bold mb-2 text-center">À quelle heure exactement ?</h2>
-      <p className="text-night-400 text-sm mb-6 text-center max-w-xs">L'heure exacte détermine ton Ascendant et tes Maisons astrologiques. Sans elle, ton thème sera incomplet.</p>
-      {/* Skip "heure inconnue" placé AVANT l'input pour visibilité immédiate */}
+      {/* Time input + unknown toggle */}
       <button
         onClick={() => { setTimeUnknown(!timeUnknown); if (!timeUnknown) setTime(''); }}
         className={`w-full max-w-xs mb-3 py-3 rounded-2xl border text-sm font-medium transition-all ${timeUnknown ? 'glass border-cosmic-500 text-cosmic-300' : 'glass border-night-700 text-night-300 hover:border-cosmic-500/50'}`}
@@ -267,17 +254,18 @@ export function Onboarding({ onComplete }: { onComplete: (u: User) => void }) {
       <input
         type="time" value={time} disabled={timeUnknown}
         onChange={e => setTime(e.target.value)}
-        className={`w-full max-w-xs py-4 px-4 rounded-2xl glass border border-night-700 text-night-100 text-lg text-center focus:outline-none focus:border-cosmic-500 transition-colors ${timeUnknown ? 'opacity-40' : ''}`}
+        className={`w-full max-w-xs py-4 px-4 rounded-2xl glass border border-night-700 text-night-100 text-lg text-center focus:outline-none focus:border-cosmic-500 transition-colors mb-2 ${timeUnknown ? 'opacity-40' : ''}`}
       />
       {timeUnknown && (
-        <p className="text-night-500 text-xs mt-3 max-w-xs text-center">
+        <p className="text-night-500 text-xs mt-1 max-w-xs text-center mb-2">
           ⚠️ Sans l'heure, l'Ascendant et les Maisons seront approximatifs (calculés à midi).
         </p>
       )}
+
       <div className="mt-auto w-full max-w-xs pb-8">
         <button
-          disabled={!time && !timeUnknown}
-          onClick={() => setStep(3)}
+          disabled={!date || (!time && !timeUnknown)}
+          onClick={() => setStep(2)}
           className="w-full py-4 rounded-2xl bg-gradient-to-r from-cosmic-600 to-cosmic-700 disabled:opacity-30 disabled:cursor-not-allowed text-white font-semibold text-lg transition-all"
         >
           Continuer
@@ -285,11 +273,11 @@ export function Onboarding({ onComplete }: { onComplete: (u: User) => void }) {
       </div>
     </div>,
 
-    // Step 3: Place of birth
-    <div key="3" className="flex flex-col items-center justify-center min-h-screen px-8 animate-fade-in relative">
-      <ProgressBar current={3} />
-      <BackButton to={2} />
-      <p className="text-gold-400 text-sm uppercase tracking-widest mb-3">Étape 3 sur 3</p>
+    // Step 2: Place of birth (was step 3)
+    <div key="2" className="flex flex-col items-center justify-center min-h-screen px-8 animate-fade-in relative">
+      <ProgressBar current={2} />
+      <BackButton to={1} />
+      <p className="text-gold-400 text-sm uppercase tracking-widest mb-3">Étape 2 sur 2</p>
       <h2 className="text-2xl font-bold mb-2 text-center">Où es-tu né·e ?</h2>
       <p className="text-night-400 text-sm mb-6 text-center max-w-xs">Le lieu de naissance complète ta carte du ciel.</p>
 
@@ -301,7 +289,7 @@ export function Onboarding({ onComplete }: { onComplete: (u: User) => void }) {
       />
 
       <div className="w-full max-w-xs space-y-2 mb-4 max-h-64 overflow-y-auto">
-        {filteredCities.map((c, i) => {
+        {filteredCities.map((c) => {
           const realIdx = CITIES.indexOf(c);
           const isSelected = cityIdx === realIdx;
           return (
@@ -334,7 +322,7 @@ export function Onboarding({ onComplete }: { onComplete: (u: User) => void }) {
         )}
       </div>
 
-      {/* Selection confirmation banner — tells user exactly what will be used. */}
+      {/* Selection confirmation banner */}
       <div className="w-full max-w-xs mb-4 px-4 py-3 rounded-2xl glass border border-gold-500/30 bg-gold-500/5 animate-fade-in">
         <p className="text-night-400 text-xs uppercase tracking-widest mb-1">Ville sélectionnée</p>
         <p className="text-gold-300 text-sm font-medium">
@@ -355,8 +343,8 @@ export function Onboarding({ onComplete }: { onComplete: (u: User) => void }) {
       </div>
     </div>,
 
-    // Step 4: Calculating
-    <div key="4" className="flex flex-col items-center justify-center min-h-screen px-8 text-center animate-fade-in">
+    // Step 3: Calculating (was step 4)
+    <div key="3" className="flex flex-col items-center justify-center min-h-screen px-8 text-center animate-fade-in">
       {calculating ? (
         <>
           <div className="relative mb-8">

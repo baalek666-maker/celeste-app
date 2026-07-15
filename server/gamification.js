@@ -264,6 +264,14 @@ function registerGamificationRoutes(app, db, auth, callLLMWithRetry, getNatalPos
     try {
       const userId = req.user.id;
 
+      // Premium-only: AstroPortrait is the most LLM-expensive feature (8192 tokens)
+      const premCheck = db.prepare('SELECT is_premium, premium_until FROM users WHERE id = ?').get(userId);
+      const now = Math.floor(Date.now() / 1000);
+      const isPremium = !!premCheck?.is_premium && (!premCheck?.premium_until || premCheck.premium_until > now);
+      if (!isPremium) {
+        return res.status(403).json({ error: 'premium_required', message: 'Le Portrait Astral est réservé aux membres Premium.' });
+      }
+
       // Check cache first
       const cached = db.prepare('SELECT * FROM astro_portraits WHERE user_id = ?').get(userId);
       if (cached) {
