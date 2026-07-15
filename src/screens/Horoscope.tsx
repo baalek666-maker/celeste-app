@@ -1,12 +1,13 @@
 import { useState, useEffect, useRef } from 'react';
-import type { User } from '../types';
+import type { User, JournalEntry } from '../types';
 import { api } from '../lib/api';
-import { getCachedHoroscope, cacheHoroscope, localISODate } from '../lib/storage';
+import { getCachedHoroscope, cacheHoroscope, localISODate, getJournal } from '../lib/storage';
 import { Skeleton, SkeletonCard } from '../components/Skeleton';
 import { useFavorites } from '../lib/useFavorites';
 import ShareCard from '../components/ShareCard';
 import SkyMap from '../components/SkyMap';
 import { toast } from '../components/Toast';
+import type { Screen } from '../App';
 import HoroscopeFeedback from '../components/HoroscopeFeedback';
 
 const LOADING_MESSAGES = [
@@ -17,7 +18,7 @@ const LOADING_MESSAGES = [
   'Consultation des étoiles...',
 ];
 
-export function Horoscope({ user }: { user: User }) {
+export function Horoscope({ user, onNavigate }: { user: User; onNavigate: (s: Screen) => void }) {
   const [horoscope, setHoroscope] = useState<any>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
@@ -31,9 +32,11 @@ export function Horoscope({ user }: { user: User }) {
   const [loadingWeek, setLoadingWeek] = useState(false);
   const [weekError, setWeekError] = useState('');
   const [activeSection, setActiveSection] = useState<'general' | 'love' | 'career'>('general');
+  const [recentEntries, setRecentEntries] = useState<JournalEntry[]>([]);
   const today = localISODate();
   const todayFr = new Date().toLocaleDateString('fr-FR', { weekday: 'long', day: 'numeric', month: 'long' });
   const msgIdx = useRef(0);
+  const touchStartX = useRef<number | null>(null);
 
   // 30s — laisse le temps au LLM + retry backoff (3 essais × ~7s max)
   const HOROSCOPE_TIMEOUT_MS = 30000;
@@ -158,6 +161,19 @@ export function Horoscope({ user }: { user: User }) {
     }, 1600);
     return () => clearInterval(interval);
   }, [loading]);
+
+  // P1.2 — Load recent journal entries for the Horoscope↔Journal loop
+  useEffect(() => {
+    const loadEntries = () => {
+      const all = getJournal();
+      setRecentEntries(all.slice(0, 2));
+    };
+    loadEntries();
+    // Re-load when the page becomes visible again (e.g. returning from Journal)
+    const onVis = () => { if (!document.hidden) loadEntries(); };
+    document.addEventListener('visibilitychange', onVis);
+    return () => document.removeEventListener('visibilitychange', onVis);
+  }, []);
 
   const handleRefresh = () => {
     if (loading || refreshing) return;
@@ -371,7 +387,24 @@ export function Horoscope({ user }: { user: User }) {
           ))}
         </div>
 
-        {/* Active content */}
+        {/* P2.1 — Swipeable content area */}
+        <div
+          className="relative overflow-hidden"
+          onTouchStart={(e) => { touchStartX.current = e.touches[0].clientX; }}
+          onTouchEnd={(e) => {
+            if (touchStartX.current === null) return;
+            const delta = e.changedTouches[0].clientX - touchStartX.current;
+            const THRESHOLD = 50;
+            const sections: typeof activeSection[] = ['general', 'love', 'career'];
+            const idx = sections.indexOf(activeSection);
+            if (delta > THRESHOLD && idx > 0) {
+              setActiveSection(sections[idx - 1]);
+            } else if (delta < -THRESHOLD && idx < sections.length - 1) {
+              setActiveSection(sections[idx + 1]);
+            }
+            touchStartX.current = null;
+          }}
+        >
         {activeSection === 'general' && (
           <div className="glass rounded-3xl p-5 animate-fade-in card-glow" key="general">
             <div className="flex items-center justify-between mb-3">
@@ -428,6 +461,7 @@ export function Horoscope({ user }: { user: User }) {
             <p className="text-night-100 leading-relaxed">{horoscope.career || '—'}</p>
           </div>
         )}
+        </div>
       </div>
 
       {/* Lucky */}
@@ -511,6 +545,66 @@ export function Horoscope({ user }: { user: User }) {
                 </div>
               );
             })}
+          </div>
+        )}
+      </div>
+
+      {/* P1.2 — Journal ↔ Horoscope loop */}
+      <div className="mt-6">
+        <div className="flex items-center justify-between mb-3 px-1">
+          <h3 className="text-gold-300 text-sm uppercase tracking-widest font-semibold flex items-center gap-2">
+            <span className="text-base">📔</span> Ton journal
+          </h3>
+          <button
+            onClick={() => onNavigate('journal')}
+            className="text-cosmic-300 text-xs hover:text-cosmic-200 transition-colors"
+          >
+            Tout voir →
+          </button>
+        </div>
+
+        {recentEntries.length === 0 ? (
+          <button
+            onClick={() => onNavigate('journal')}
+            className="w-full glass rounded-2xl p-4 text-left border border-cosmic-500/20 hover:border-cosmic-500/40 transition-all active:scale-[0.98]"
+          >
+            <div className="flex items-center gap-3">
+              <span className="text-2xl">✍️</span>
+              <div>
+                <p className="text-night-100 text-sm font-medium">Note ton ressenti du jour</p>
+                <p className="text-night-400 text-xs">Comment cet horoscope résonne-t-il avec toi ?</p>
+              </div>
+            </div>
+          </button>
+        ) : (
+          <div className="space-y-2">
+            {recentEntries.map((entry) => (
+              <button
+                key={entry.id}
+                onClick={() => onNavigate('journal')}
+                className="w-full glass rounded-2xl p-4 text-left border border-night-700/40 hover:border-gold-500/30 transition-all active:scale-[0.98]"
+              >
+                <div className="flex items-start justify-between mb-1">
+                  <p className="text-night-300 text-xs capitalize">
+                    {new Date(entry.date).toLocaleDateString('fr-FR', { weekday: 'short', day: 'numeric', month: 'short' })}
+                  </p>
+                  {entry.userRating > 0 && (
+                    <div className="flex gap-0.5">
+                      {[1, 2, 3, 4, 5].map(n => (
+                        <span key={n} className={n <= entry.userRating ? 'text-gold-400 text-[10px]' : 'text-night-700 text-[10px]'}>●</span>
+                      ))}
+                    </div>
+                  )}
+                </div>
+                <p className="text-night-100 text-sm leading-snug line-clamp-2">{entry.userNote}</p>
+              </button>
+            ))}
+            <button
+              onClick={() => onNavigate('journal')}
+              className="w-full py-2.5 rounded-xl text-sm text-cosmic-300 hover:text-cosmic-200 transition-colors"
+            >
+              + Nouvelle entrée
+            </button>
           </div>
         )}
       </div>

@@ -261,6 +261,11 @@ export function Compatibility({ user }: { user: User }) {
               </div>
             </div>
             <h2 className="text-xl font-bold text-cosmic-gradient">{result.title}</h2>
+            {mode === 'quick' && (
+              <p className="text-night-500 text-[0.7rem] italic mt-2 leading-snug">
+                ⚠️ Analyse basée sur les signes solaires uniquement. Pour une lecture complète (Lune, Maisons…), utilise le mode Détaillé.
+              </p>
+            )}
           </div>
 
           <div className="glass rounded-3xl p-5 mb-4">

@@ -23,6 +23,7 @@ import CelesteLogo from '../components/CelesteLogo';
 interface LandingProps {
   onStart: () => void;
   onLogin: () => void;
+  onGuest: () => void;
 }
 
 const STATS = [
@@ -64,7 +65,7 @@ const TESTIMONIALS = [
   { name: 'Inès', sign: '♊', role: 'Gémeaux', text: "Le portrait astral m'a fait pleurer. C'est comme si quelqu'un me lisait de l'intérieur." },
 ];
 
-export function Landing({ onStart, onLogin }: LandingProps) {
+export function Landing({ onStart, onLogin, onGuest }: LandingProps) {
   return (
     <div className="cosmic-bg star-field min-h-screen text-night-100 relative overflow-x-hidden">
       {/* Aurora overlay */}
@@ -115,6 +116,13 @@ export function Landing({ onStart, onLogin }: LandingProps) {
         <p className="text-night-500 text-xs mt-3 animate-fade-in" style={{ animationDelay: '0.65s' }}>
           Sans carte bancaire · 1 horoscope + 1 compatibilité offerts
         </p>
+        <button
+          onClick={onGuest}
+          className="block mx-auto mt-4 text-night-400 hover:text-night-200 text-sm transition-colors animate-fade-in"
+          style={{ animationDelay: '0.75s' }}
+        >
+          Explorer d'abord →
+        </button>
       </section>
 
       {/* ── Stat strip ── */}

@@ -38,6 +38,26 @@ function getStoredDraw(): StoredDraw | null {
 function setStoredDraw(card: TarotCard) {
   const today = localISODate();
   localStorage.setItem(STORAGE_KEY, JSON.stringify({ date: today, card }));
+  // P2.4 — also push to history
+  try {
+    const histRaw = localStorage.getItem('celeste_tarot_history');
+    const hist: StoredDraw[] = histRaw ? JSON.parse(histRaw) : [];
+    // Avoid duplicate for same date
+    if (!hist.some(h => h.date === today)) {
+      hist.unshift({ date: today, card });
+      // Keep last 30 entries
+      localStorage.setItem('celeste_tarot_history', JSON.stringify(hist.slice(0, 30)));
+    }
+  } catch { /* ignore */ }
+}
+
+function getHistory(): StoredDraw[] {
+  try {
+    const raw = localStorage.getItem('celeste_tarot_history');
+    return raw ? JSON.parse(raw) : [];
+  } catch {
+    return [];
+  }
 }
 
 type DrawPhase = 'idle' | 'summoning' | 'facedown' | 'revealed';
@@ -49,6 +69,7 @@ export default function DailyTarot() {
   const [loading, setLoading] = useState(false);
   const [imgError, setImgError] = useState(false);
   const [flipSide, setFlipSide] = useState<'recto' | 'verso'>('recto');
+  const [showHistory, setShowHistory] = useState(false);
 
   const draw = async () => {
     setLoading(true);
@@ -70,6 +91,23 @@ export default function DailyTarot() {
 
   const reveal = () => {
     if (phase === 'facedown') setPhase('revealed');
+  };
+
+  // P2.4 — Share tarot draw
+  const share = async () => {
+    if (!drawn) return;
+    const text = `🃏 ${drawn.cardName}${drawn.isReversed ? ' (inversée)' : ''}\n\n"${drawn.message}"\n\n✦ Céleste — Ton oracle astral`;
+    const shareData = { title: 'Céleste', text };
+    if (navigator.share) {
+      try { await navigator.share(shareData); } catch { /* user cancelled */ }
+    } else if (navigator.clipboard) {
+      try {
+        await navigator.clipboard.writeText(text);
+        toast.success('Message copié ! 📋');
+      } catch {
+        toast.error('Impossible de partager');
+      }
+    }
   };
 
   // ─── IDLE: CTA button ───────────────────────────────
@@ -358,6 +396,55 @@ export default function DailyTarot() {
             </div>
           </div>
         </div>
+
+        {/* P2.4 — Share + History actions */}
+        <div className="flex items-center justify-center gap-2 mt-3">
+          <button
+            onClick={share}
+            className="flex items-center gap-1.5 glass rounded-full px-4 py-2 text-night-300 hover:text-gold-300 hover:border-gold-500/30 border border-transparent transition-all text-xs font-medium active:scale-95"
+          >
+            <span>↗</span> Partager
+          </button>
+          <button
+            onClick={() => setShowHistory(s => !s)}
+            className="flex items-center gap-1.5 glass rounded-full px-4 py-2 text-night-300 hover:text-gold-300 hover:border-gold-500/30 border border-transparent transition-all text-xs font-medium active:scale-95"
+          >
+            <span>📜</span> Historique
+          </button>
+        </div>
+
+        {/* P2.4 — History panel */}
+        {showHistory && (
+          <div className="mt-3 glass rounded-2xl p-4 border border-night-700/50 animate-fade-in">
+            {(() => {
+              const history = getHistory();
+              if (history.length === 0) {
+                return <p className="text-night-500 text-xs text-center py-3">Aucun tirage précédent</p>;
+              }
+              return (
+                <div className="space-y-2 max-h-64 overflow-y-auto">
+                  {history.map((h) => (
+                    <div key={h.date} className="flex items-center gap-3 py-2 border-b border-night-800/50 last:border-0">
+                      <div className="text-2xl flex-shrink-0" style={{ transform: h.card.isReversed ? 'rotate(180deg)' : 'none' }}>
+                        {h.card.emoji}
+                      </div>
+                      <div className="flex-1 min-w-0">
+                        <p className="text-night-100 text-xs font-medium truncate">
+                          {h.card.cardName}
+                          {h.card.isReversed && <span className="text-night-500"> ⟲</span>}
+                        </p>
+                        <p className="text-night-500 text-[10px]">
+                          {new Date(h.date).toLocaleDateString('fr-FR', { weekday: 'short', day: 'numeric', month: 'short' })}
+                        </p>
+                      </div>
+                      <span className="text-gold-500/40 text-xs font-bold tracking-widest">{h.card.roman}</span>
+                    </div>
+                  ))}
+                </div>
+              );
+            })()}
+          </div>
+        )}
 
         {/* Hint below card */}
         <p className="text-night-400 text-[10px] text-center mt-3 animate-pulse">

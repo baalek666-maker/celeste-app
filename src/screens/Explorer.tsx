@@ -10,29 +10,22 @@ import HousesChart from '../components/HousesChart';
 import AsteroidInsights from '../components/AsteroidInsights';
 import LunarNodes from '../components/LunarNodes';
 import WeeklyChallenge from '../components/WeeklyChallenge';
-import { YiJingOracle } from '../components/YiJingOracle';
-import RuneOracle from '../components/RuneOracle';
 import ChineseAstrology from '../components/ChineseAstrology';
-import CosmicCalendar from '../components/CosmicCalendar';
 import BadgeGrid from '../components/BadgeGrid';
 import AstroPortrait from '../screens/AstroPortrait';
 
-type ExplorerSection = 'overview' | 'chart' | 'compatibility' | 'insights' | 'portrait' | 'cosmic' | 'yijing' | 'runes' | 'chinese';
+type ExplorerSection = 'overview' | 'chart' | 'compatibility' | 'insights' | 'portrait' | 'chinese';
 
 const SECTIONS: { key: ExplorerSection; label: string; emoji: string; desc: string }[] = [
-  { key: 'overview', label: 'Vue d\u2019ensemble', emoji: '✦', desc: 'Tout pour approfondir ton ciel' },
   { key: 'portrait', label: 'Portrait astral', emoji: '📜', desc: 'Ton portrait profond de 1500 mots' },
   { key: 'chart', label: 'Thème natal', emoji: '☀', desc: 'Toutes tes planètes et maisons' },
   { key: 'compatibility', label: 'Compatibilité', emoji: '☽', desc: 'Affinités avec un proche' },
-  { key: 'cosmic', label: 'Calendrier cosmique', emoji: '🗓', desc: 'Les prochaines étapes célestes' },
   { key: 'insights', label: 'Explorations', emoji: '◈', desc: 'Aspects, nœuds, astéroïdes, rituels' },
-  { key: 'yijing', label: 'Yi Jing', emoji: '☰', desc: 'L\u2019oracle chinois croisé avec l\u2019astro' },
-  { key: 'runes', label: 'Runomancie', emoji: 'ᚱ', desc: 'Les 24 runes du Futhark ancien' },
-  { key: 'chinese', label: 'Astrologie chinoise', emoji: '🐉', desc: 'Ton signe chinois, element et affinites' },
 ];
 
 export function Explorer({ user, onNavigate }: { user: User; onNavigate: (s: Screen) => void }) {
   const [section, setSection] = useState<ExplorerSection>('overview');
+  const [showAncient, setShowAncient] = useState(false);
 
   if (section === 'chart') {
     return (
@@ -63,19 +56,6 @@ export function Explorer({ user, onNavigate }: { user: User; onNavigate: (s: Scr
       </div>
     );
   }
-  if (section === 'cosmic') {
-    return (
-      <div className="page-transition">
-        <div className="px-5 pt-12 pb-3 flex items-center gap-3">
-          <button onClick={() => setSection('overview')} className="text-gold-400 text-sm">‹ Retour</button>
-          <h1 className="text-xl font-bold text-gold-gradient">Calendrier cosmique</h1>
-        </div>
-        <div className="px-5 pb-6">
-          <CosmicCalendar />
-        </div>
-      </div>
-    );
-  }
   if (section === 'insights') {
     return (
       <div className="page-transition">
@@ -91,26 +71,6 @@ export function Explorer({ user, onNavigate }: { user: User; onNavigate: (s: Scr
           <DailyRituals />
           <WeeklyChallenge />
           <OnboardingChecklist />
-        </div>
-      </div>
-    );
-  }
-  if (section === 'yijing') {
-    return (
-      <div className="page-transition">
-        <YiJingOracle />
-      </div>
-    );
-  }
-  if (section === 'runes') {
-    return (
-      <div className="page-transition">
-        <div className="px-5 pt-12 pb-3 flex items-center gap-3">
-          <button onClick={() => setSection('overview')} className="text-gold-400 text-sm">‹ Retour</button>
-          <h1 className="text-xl font-bold text-gold-gradient">Runomancie</h1>
-        </div>
-        <div className="px-5 pb-6">
-          <RuneOracle />
         </div>
       </div>
     );
@@ -163,6 +123,33 @@ export function Explorer({ user, onNavigate }: { user: User; onNavigate: (s: Scr
             </div>
           </button>
         ))}
+      </div>
+
+      {/* Savoirs anciens — sous-menu replié */}
+      <div className="mt-3">
+        <button
+          onClick={() => setShowAncient(!showAncient)}
+          className="w-full glass rounded-2xl p-4 text-left hover:border-gold-500/30 border border-transparent transition-all flex items-center gap-3"
+        >
+          <span className="text-lg text-night-400">📜</span>
+          <span className="flex-1 text-night-300 font-medium text-sm">Savoirs anciens</span>
+          <span className={`text-night-500 text-xs transition-transform ${showAncient ? 'rotate-90' : ''}`}>→</span>
+        </button>
+        {showAncient && (
+          <div className="mt-2 space-y-2 animate-fade-in">
+            <button
+              onClick={() => { setSection('chinese'); window.scrollTo(0, 0); }}
+              className="w-full glass rounded-xl p-4 text-left hover:border-gold-500/30 border border-transparent transition-all flex items-center gap-3"
+            >
+              <span className="text-xl">🐉</span>
+              <div className="flex-1">
+                <p className="text-night-200 font-medium text-sm">Astrologie chinoise</p>
+                <p className="text-night-500 text-xs">Ton signe chinois, élément et affinités</p>
+              </div>
+              <span className="text-night-500 text-xs">→</span>
+            </button>
+          </div>
+        )}
       </div>
 
       {/* Badge Grid — trophy case */}

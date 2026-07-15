@@ -94,6 +94,7 @@ export function App() {
   const [booting, setBooting] = useState<boolean>(!!getToken());
   const [apiDown, setApiDown] = useState<boolean>(false);
   const [bootStuck, setBootStuck] = useState<boolean>(false);
+  const [isGuest, setIsGuest] = useState<boolean>(false);
 
   const retryBoot = () => {
     setApiDown(false);
@@ -262,6 +263,13 @@ export function App() {
   }, [chartKey]);
 
   const handleNavigate = (s: Screen) => {
+    // P1.3 — Guest mode: horoscope/chart/compatibility require birth data → onboarding
+    if (isGuest && !user.birthData) {
+      if (s === 'horoscope' || s === 'chart' || s === 'compatibility') {
+        setScreen('onboarding');
+        return;
+      }
+    }
     if (!user.isPremium) {
       // Horoscope: 3 free consultations, then paywall
       if (s === 'horoscope') {
@@ -319,7 +327,7 @@ export function App() {
   }
 
   // ─── NOT AUTHED: Landing first visit, Auth for returning users ───
-  if (!isAuthed) {
+  if (!isAuthed && !isGuest) {
     if (screen === 'onboarding' && getToken()) {
       // Token exists after onboarding-stage signup — wait for effect
       return <Splash />;
@@ -355,16 +363,28 @@ export function App() {
       <Landing
         onStart={() => setScreen('auth')}
         onLogin={() => setScreen('auth')}
+        onGuest={() => { setIsGuest(true); setScreen('home'); }}
       />
     );
   }
 
   // ─── AUTHED but no birth data: Onboarding ───
-  if (screen === 'onboarding' || (!user.birthData && screen !== 'home')) {
+  // Also reached in guest mode when user tries horoscope/chart or taps the guest banner
+  if (screen === 'onboarding' || ((!user.birthData && screen !== 'home') && (isAuthed || isGuest))) {
     if (!user.birthData) {
       return (
         <Suspense fallback={<Splash />}>
-          <Onboarding onComplete={(u) => { setUser(u); saveUser(u); setScreen('home'); }} />
+          <Onboarding onComplete={(u) => {
+            setUser(u);
+            saveUser(u);
+            if (isGuest) {
+              // Guest completed birth data → now create account to persist
+              setIsGuest(false);
+              setScreen('auth');
+            } else {
+              setScreen('home');
+            }
+          }} />
         </Suspense>
       );
     }
@@ -396,9 +416,9 @@ export function App() {
         <div className="pb-24">
           <div key={screen} className="page-enter">
             <Suspense fallback={<Splash />}>
-              {screen === 'home' && <Home user={user} onNavigate={handleNavigate} />}
+              {screen === 'home' && <Home user={user} onNavigate={handleNavigate} isGuest={isGuest} />}
               {screen === 'chart' && <ChartView user={user} />}
-              {screen === 'horoscope' && <Horoscope user={user} />}
+              {screen === 'horoscope' && <Horoscope user={user} onNavigate={setScreen} />}
               {screen === 'compatibility' && <Compatibility user={user} />}
               {screen === 'journal' && <Journal user={user} />}
               {screen === 'explorer' && <Explorer user={user} onNavigate={handleNavigate} />}

@@ -126,7 +126,7 @@ export default function AstroPortrait({ onBack }: { onBack?: () => void } = {}) 
           <div className="flex flex-col items-center py-28 animate-fade-in text-center">
             <span className="text-4xl text-gold-500/60 mb-4 animate-twinkle">✦</span>
             <p className="text-night-300 mb-6 max-w-xs">{error}</p>
-            <button onClick={load}
+            <button onClick={() => load()}
               className="px-8 py-3 rounded-2xl glass-gold border border-gold-500/30 text-gold-200 font-medium hover:border-gold-500/60 active:scale-[0.98] transition-all">
               Réessayer
             </button>

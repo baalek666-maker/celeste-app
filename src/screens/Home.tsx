@@ -1,17 +1,60 @@
 import type { User } from '../types';
 import type { Screen } from '../App';
+import { useEffect, useState } from 'react';
+import { api, getToken } from '../lib/api';
 import { ZODIAC_SIGNS } from '../data/zodiac';
+import { calculateNatalChart } from '../lib/astrology';
 import StreakCelebration from '../components/StreakCelebration';
 import DailyTarot from '../components/DailyTarot';
 import NatalChart from '../components/NatalChart';
 import XpBar from '../components/XpBar';
 import DailyQuests from '../components/DailyQuests';
 
-export function Home({ user, onNavigate }: { user: User; onNavigate: (s: Screen) => void }) {
+export function Home({ user, onNavigate, isGuest }: { user: User; onNavigate: (s: Screen) => void; isGuest?: boolean }) {
   const streak = user.streak ?? 0;
 
-  // Safe early return if natal chart not hydrated yet
+  // P1.3 — Guest mode: show welcome screen with CTA to create birth chart
   if (!user.natalChart) {
+    if (isGuest) {
+      return (
+        <div className="cosmic-bg star-field min-h-screen text-night-100 px-5 pt-16 pb-24 relative">
+          <div className="fixed inset-0 aurora-bg pointer-events-none" />
+          <div className="relative z-10 text-center">
+            <div className="text-5xl mb-6 animate-float-slow">✦</div>
+            <h1 className="text-2xl font-bold text-gold-gradient mb-3">Bienvenue sur Céleste</h1>
+            <p className="text-night-300 text-sm max-w-xs mx-auto mb-8 leading-relaxed">
+              Explore l'app librement. Quand tu seras prêt, crée ton thème natal pour des lectures personnalisées.
+            </p>
+            <button
+              onClick={() => onNavigate('onboarding')}
+              className="w-full max-w-xs mx-auto block py-3.5 rounded-2xl bg-gradient-to-r from-gold-400 to-gold-600 text-night-950 font-semibold transition-all hover:scale-[1.02] active:scale-[0.98] shadow-lg shadow-gold-500/30 mb-3"
+            >
+              Créer mon thème ✨
+            </button>
+            <button
+              onClick={() => onNavigate('journal')}
+              className="w-full max-w-xs mx-auto block py-3 rounded-2xl glass border border-night-700 text-night-200 text-sm font-medium transition-all hover:border-gold-500/30 active:scale-[0.98]"
+            >
+              📔 Tester le journal
+            </button>
+
+            <div className="mt-10 text-left space-y-3 max-w-xs mx-auto">
+              <p className="text-night-500 text-xs uppercase tracking-widest text-center">Ce qui t'attend</p>
+              {[
+                { icon: '☉', text: 'Horoscope calculé sur tes vraies planètes' },
+                { icon: '☥', text: 'Compatibilité amoureuse détaillée' },
+                { icon: '🃏', text: 'Tirage de tarot quotidien' },
+              ].map((item) => (
+                <div key={item.text} className="glass rounded-xl p-3 flex items-center gap-3 border border-night-800/50">
+                  <span className="text-xl">{item.icon}</span>
+                  <span className="text-night-300 text-xs">{item.text}</span>
+                </div>
+              ))}
+            </div>
+          </div>
+        </div>
+      );
+    }
     return (
       <div className="cosmic-bg star-field min-h-screen flex flex-col items-center justify-center text-night-100 px-6">
         <div className="text-4xl mb-4 animate-float-slow">✦</div>
@@ -114,12 +157,15 @@ export function Home({ user, onNavigate }: { user: User; onNavigate: (s: Screen)
           <div>
             <p className="text-gold-400 text-sm font-medium">Horoscope du jour</p>
             <p className="text-night-300 text-xs mt-0.5">
-              {user.isPremium ? 'Ta lecture t'attend →' : 'Découvre ta journée →'}
+              {user.isPremium ? "Ta lecture t'attend →" : 'Découvre ta journée →'}
             </p>
           </div>
           <span className="text-2xl group-hover:translate-x-1 transition-transform">→</span>
         </div>
       </button>
+
+      {/* ── 5b. Saved profiles preview (P2.3) ── */}
+      <SavedProfilesPreview onNavigate={onNavigate} />
 
       {/* ── 6. Explorer link ── */}
       <button
@@ -134,5 +180,78 @@ export function Home({ user, onNavigate }: { user: User; onNavigate: (s: Screen)
         <span className="text-night-500 group-hover:text-gold-400 group-hover:translate-x-1 transition-all">→</span>
       </button>
     </div>
+  );
+}
+
+// ── P2.3: Saved profiles preview on Home ──
+type HomeProfile = {
+  id: number;
+  name: string;
+  relation: string;
+  birthData: { date: string; time: string; city: string; latitude: number; longitude: number; timezone: number; country?: string };
+};
+
+const RELATION_ICONS: Record<string, string> = {
+  self: '✨', family: '🌳', friend: '🌟', partner: '💞', child: '🧸', other: '🌀',
+};
+
+function SavedProfilesPreview({ onNavigate }: { onNavigate: (s: Screen) => void }) {
+  const [profiles, setProfiles] = useState<HomeProfile[]>([]);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    if (!getToken()) { setLoading(false); return; }
+    let cancelled = false;
+    api.listProfiles().then(({ profiles }) => {
+      if (!cancelled) { setProfiles(profiles); setLoading(false); }
+    }).catch(() => { if (!cancelled) setLoading(false); });
+    return () => { cancelled = true; };
+  }, []);
+
+  // Don't render if loading or no profiles
+  if (loading || profiles.length === 0) return null;
+
+  // Show up to 4 profile avatars in a horizontal scroll
+  const visible = profiles.slice(0, 4);
+  const extra = profiles.length - visible.length;
+
+  return (
+    <button
+      onClick={() => onNavigate('settings')}
+      className="w-full glass rounded-2xl p-4 mb-3 text-left hover:border-gold-500/30 border border-transparent transition-all duration-300 group stagger-card"
+    >
+      <div className="flex items-center justify-between mb-2">
+        <p className="text-night-200 text-sm font-medium">Profils enregistrés</p>
+        <span className="text-night-500 text-xs group-hover:text-gold-400 transition">Gérer →</span>
+      </div>
+      <div className="flex items-center gap-2 overflow-x-auto scrollbar-hide">
+        {visible.map((p) => {
+          const chart = calculateNatalChart({ ...p.birthData, country: p.birthData.country ?? '' });
+          const sunSign = chart ? ZODIAC_SIGNS[chart.sun] : null;
+          return (
+            <div
+              key={p.id}
+              className="flex-shrink-0 flex items-center gap-2 glass rounded-xl px-3 py-2 border border-night-700/50"
+            >
+              <div
+                className="w-8 h-8 rounded-full flex items-center justify-center text-sm"
+                style={sunSign ? { background: `${sunSign.color}18`, border: `1px solid ${sunSign.color}40` } : undefined}
+              >
+                {sunSign ? sunSign.symbol : '✦'}
+              </div>
+              <div className="min-w-0">
+                <p className="text-night-100 text-xs font-medium truncate max-w-[80px]">{p.name}</p>
+                <p className="text-night-500 text-[10px]">{RELATION_ICONS[p.relation] || '·'} {sunSign?.name || ''}</p>
+              </div>
+            </div>
+          );
+        })}
+        {extra > 0 && (
+          <div className="flex-shrink-0 flex items-center justify-center w-10 h-10 rounded-full glass border border-night-700/50 text-night-400 text-xs font-medium">
+            +{extra}
+          </div>
+        )}
+      </div>
+    </button>
   );
 }

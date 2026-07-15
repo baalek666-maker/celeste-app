@@ -31,7 +31,7 @@ function ManageSubscriptionButton() {
       const { url } = await api.openPortal();
       window.location.href = url;
     } catch (err: unknown) {
-      toast.error(err instanceof Error ? err.message : 'Impossible d\'ouvrir le portail de gestion');
+      toast.error(err instanceof Error ? err.message : 'Impossible d’ouvrir le portail de gestion');
       setLoading(false);
     }
   };

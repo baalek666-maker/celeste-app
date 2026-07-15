@@ -256,18 +256,19 @@ export function Onboarding({ onComplete }: { onComplete: (u: User) => void }) {
       <BackButton to={1} />
       <p className="text-gold-400 text-sm uppercase tracking-widest mb-3">Étape 2 sur 3</p>
       <h2 className="text-2xl font-bold mb-2 text-center">À quelle heure exactement ?</h2>
-      <p className="text-night-400 text-sm mb-8 text-center max-w-xs">L'heure exacte détermine ton Ascendant et tes Maisons astrologiques. Sans elle, ton thème sera incomplet.</p>
+      <p className="text-night-400 text-sm mb-6 text-center max-w-xs">L'heure exacte détermine ton Ascendant et tes Maisons astrologiques. Sans elle, ton thème sera incomplet.</p>
+      {/* Skip "heure inconnue" placé AVANT l'input pour visibilité immédiate */}
+      <button
+        onClick={() => { setTimeUnknown(!timeUnknown); if (!timeUnknown) setTime(''); }}
+        className={`w-full max-w-xs mb-3 py-3 rounded-2xl border text-sm font-medium transition-all ${timeUnknown ? 'glass border-cosmic-500 text-cosmic-300' : 'glass border-night-700 text-night-300 hover:border-cosmic-500/50'}`}
+      >
+        {timeUnknown ? '✓ Je ne connais pas mon heure' : '🕐 Je ne connais pas mon heure de naissance'}
+      </button>
       <input
         type="time" value={time} disabled={timeUnknown}
         onChange={e => setTime(e.target.value)}
         className={`w-full max-w-xs py-4 px-4 rounded-2xl glass border border-night-700 text-night-100 text-lg text-center focus:outline-none focus:border-cosmic-500 transition-colors ${timeUnknown ? 'opacity-40' : ''}`}
       />
-      <button
-        onClick={() => { setTimeUnknown(!timeUnknown); if (!timeUnknown) setTime(''); }}
-        className="mt-4 text-cosmic-400 text-sm underline decoration-dotted hover:text-cosmic-300 transition-colors"
-      >
-        {timeUnknown ? '← Entrer mon heure' : 'Je ne connais pas mon heure de naissance'}
-      </button>
       {timeUnknown && (
         <p className="text-night-500 text-xs mt-3 max-w-xs text-center">
           ⚠️ Sans l'heure, l'Ascendant et les Maisons seront approximatifs (calculés à midi).
