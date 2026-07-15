@@ -12,15 +12,19 @@ import LunarNodes from '../components/LunarNodes';
 import WeeklyChallenge from '../components/WeeklyChallenge';
 import ChineseAstrology from '../components/ChineseAstrology';
 import BadgeGrid from '../components/BadgeGrid';
+import XpBar from '../components/XpBar';
+import DailyTarot from '../components/DailyTarot';
+import DailyQuests from '../components/DailyQuests';
 import AstroPortrait from '../screens/AstroPortrait';
 
-type ExplorerSection = 'overview' | 'chart' | 'compatibility' | 'insights' | 'portrait' | 'chinese';
+type ExplorerSection = 'overview' | 'chart' | 'compatibility' | 'insights' | 'portrait' | 'chinese' | 'daily';
 
 const SECTIONS: { key: ExplorerSection; label: string; emoji: string; desc: string }[] = [
   { key: 'portrait', label: 'Portrait astral', emoji: '📜', desc: 'Ton portrait profond de 1500 mots' },
   { key: 'chart', label: 'Thème natal', emoji: '☀', desc: 'Toutes tes planètes et maisons' },
   { key: 'compatibility', label: 'Compatibilité', emoji: '☽', desc: 'Affinités avec un proche' },
   { key: 'insights', label: 'Explorations', emoji: '◈', desc: 'Aspects, nœuds, astéroïdes, rituels' },
+  { key: 'daily', label: 'Quotidien', emoji: '✦', desc: 'Tarot, quêtes, défis et progression' },
 ];
 
 export function Explorer({ user, onNavigate }: { user: User; onNavigate: (s: Screen) => void }) {
@@ -69,7 +73,6 @@ export function Explorer({ user, onNavigate }: { user: User; onNavigate: (s: Scr
           <LunarNodes />
           <AsteroidInsights />
           <DailyRituals />
-          <WeeklyChallenge />
           <OnboardingChecklist />
         </div>
       </div>
@@ -84,6 +87,23 @@ export function Explorer({ user, onNavigate }: { user: User; onNavigate: (s: Scr
         </div>
         <div className="px-5 pb-6">
           <ChineseAstrology user={user} />
+        </div>
+      </div>
+    );
+  }
+
+  if (section === 'daily') {
+    return (
+      <div className="page-transition">
+        <div className="px-5 pt-12 pb-3 flex items-center gap-3">
+          <button onClick={() => setSection('overview')} className="text-gold-400 text-sm">‹ Retour</button>
+          <h1 className="text-xl font-bold text-gold-gradient">Quotidien</h1>
+        </div>
+        <div className="px-5 pb-6 space-y-4">
+          <XpBar />
+          <DailyTarot />
+          <DailyQuests />
+          <WeeklyChallenge />
         </div>
       </div>
     );

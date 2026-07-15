@@ -5,10 +5,7 @@ import { api, getToken } from '../lib/api';
 import { ZODIAC_SIGNS } from '../data/zodiac';
 import { calculateNatalChart } from '../lib/astrology';
 import StreakCelebration from '../components/StreakCelebration';
-import DailyTarot from '../components/DailyTarot';
 import NatalChart from '../components/NatalChart';
-import XpBar from '../components/XpBar';
-import DailyQuests from '../components/DailyQuests';
 
 export function Home({ user, onNavigate, isGuest }: { user: User; onNavigate: (s: Screen) => void; isGuest?: boolean }) {
   const streak = user.streak ?? 0;
@@ -113,13 +110,7 @@ export function Home({ user, onNavigate, isGuest }: { user: User; onNavigate: (s
         </div>
       </div>
 
-      {/* ── 1b. XP Bar (gamification) ── */}
-      <XpBar />
-
-      {/* ── 2. Tarot du jour (gamification) ── */}
-      <DailyTarot />
-
-      {/* ── 3. Big 3 compact ── */}
+      {/* ── 2. Big 3 compact ── */}
       <div className="glass rounded-3xl p-5 mb-5 stagger-card card-glow animate-fade-in" style={{ animationDelay: '0.1s' }}>
         <p className="text-night-400 text-xs uppercase tracking-widest mb-3">Tes trois astres</p>
         <div className="grid grid-cols-3 gap-2">
@@ -142,13 +133,7 @@ export function Home({ user, onNavigate, isGuest }: { user: User; onNavigate: (s
         </div>
       </div>
 
-      {/* ── 3b. Quêtes quotidiennes (gamification) ── */}
-      <DailyQuests />
-
-      {/* ── 4. Theme natal (roue astronomique precise) ── */}
-      <NatalChart />
-
-      {/* ── 5. Horoscope preview ── */}
+      {/* ── 2. Horoscope du jour — la star ── */}
       <button
         onClick={() => onNavigate('horoscope')}
         className="w-full glass rounded-3xl p-5 mb-3 text-left hover:border-gold-500/40 border border-transparent transition-all duration-300 group stagger-card card-glow"
@@ -163,6 +148,9 @@ export function Home({ user, onNavigate, isGuest }: { user: User; onNavigate: (s
           <span className="text-2xl group-hover:translate-x-1 transition-transform">→</span>
         </div>
       </button>
+
+      {/* ── 3. Theme natal (roue astronomique precise) ── */}
+      <NatalChart />
 
       {/* ── 5b. Saved profiles preview (P2.3) ── */}
       <SavedProfilesPreview onNavigate={onNavigate} />
