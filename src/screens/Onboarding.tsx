@@ -208,16 +208,16 @@ export function Onboarding({ onComplete }: { onComplete: (u: User) => void }) {
       <p className="text-night-300 text-lg mb-2">Ta carte du ciel,</p>
       <p className="text-night-300 text-lg mb-12">ton miroir</p>
       <p className="text-night-400 text-sm mb-8 max-w-xs">
-        Une astrologie qui tu parle à toi. Pas de texte recyclé — chaque mot est calculé à partir de tes planètes réelles.
+        Une astrologie qui te parle à toi. Pas de texte recyclé — chaque mot est calculé à partir de tes planètes réelles.
       </p>
       {/* P10 — Explain free tier upfront to set expectations */}
       <div className="glass rounded-2xl px-5 py-4 mb-8 max-w-xs border border-gold-500/20">
         <div className="flex items-center gap-2 mb-2">
           <span className="text-lg">🎁</span>
-          <span className="text-gold-400 text-sm font-semibold">3 scans offerts</span>
+          <span className="text-gold-400 text-sm font-semibold">7 lectures offertes</span>
         </div>
         <p className="text-night-400 text-xs leading-relaxed text-left">
-          Découvre ton compatibilité amoureuse, familiale ou amicale — 3 analyses gratuites pour explorer tout le potentiel de Céleste.
+          Horoscope, compatibilité, portrait astral — explore tout le potentiel de Céleste sans payer. Sans carte bancaire.
         </p>
       </div>
       <button
@@ -233,8 +233,8 @@ export function Onboarding({ onComplete }: { onComplete: (u: User) => void }) {
       <ProgressBar current={1} />
       <BackButton to={0} />
       <p className="text-gold-400 text-sm uppercase tracking-widest mb-3">Étape 1 sur 3</p>
-      <h2 className="text-2xl font-bold mb-2 text-center">Quand êtes-tu né·e ?</h2>
-      <p className="text-night-400 text-sm mb-8 text-center max-w-xs">La position des planètes change chaque jour. Ton date de naissance est le point de départ.</p>
+      <h2 className="text-2xl font-bold mb-2 text-center">Quand es-tu né·e ?</h2>
+      <p className="text-night-400 text-sm mb-8 text-center max-w-xs">La position des planètes change chaque jour. Ta date de naissance est le point de départ.</p>
       <input
         type="date" value={date} onChange={e => setDate(e.target.value)}
         className="w-full max-w-xs py-4 px-4 rounded-2xl glass border border-night-700 text-night-100 text-lg text-center focus:outline-none focus:border-cosmic-500 transition-colors"
@@ -290,7 +290,7 @@ export function Onboarding({ onComplete }: { onComplete: (u: User) => void }) {
       <ProgressBar current={3} />
       <BackButton to={2} />
       <p className="text-gold-400 text-sm uppercase tracking-widest mb-3">Étape 3 sur 3</p>
-      <h2 className="text-2xl font-bold mb-2 text-center">Où êtes-tu né·e ?</h2>
+      <h2 className="text-2xl font-bold mb-2 text-center">Où es-tu né·e ?</h2>
       <p className="text-night-400 text-sm mb-6 text-center max-w-xs">Le lieu de naissance complète ta carte du ciel.</p>
 
       {/* Search bar */}

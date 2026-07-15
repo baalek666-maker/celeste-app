@@ -56,7 +56,7 @@ const FEATURES = [
 const STEPS = [
   { num: '01', title: 'Ta naissance', desc: 'Date, heure et lieu. Trois infos pour calculer ton ciel à la minute près.' },
   { num: '02', title: 'Ta carte du ciel', desc: 'Soleil, Lune, Ascendant — ton thème natal, astronomiquement exact.' },
-  { num: '03', title: 'Ton quotidien', desc: "Chaque jour, lisez ce que les planètes activent vraiment en toi." },
+  { num: '03', title: 'Ton quotidien', desc: "Chaque jour, lis ce que les planètes activent vraiment en toi." },
 ];
 
 const TESTIMONIALS = [
@@ -114,7 +114,7 @@ export function Landing({ onStart, onLogin, onGuest }: LandingProps) {
           <span className="absolute inset-0 bg-gradient-to-r from-transparent via-white/30 to-transparent translate-x-[-100%] group-hover:translate-x-[100%] transition-transform duration-700" />
         </button>
         <p className="text-night-500 text-xs mt-3 animate-fade-in" style={{ animationDelay: '0.65s' }}>
-          Sans carte bancaire · 1 horoscope + 1 compatibilité offerts
+          Sans carte bancaire · 7 lectures offertes
         </p>
         <button
           onClick={onGuest}

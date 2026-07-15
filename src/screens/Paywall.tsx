@@ -109,9 +109,9 @@ export function Paywall({ onClose, onSubscribe }: {
         {/* Features */}
         <div className="space-y-3 mb-8">
           {[
-            { icon: '🌅', title: 'Horoscope vraiment quotidien', desc: "Tes planètes, pas seulement ton signe. Une lecture qui tu ressemble." },
+            { icon: '🌅', title: 'Horoscope vraiment quotidien', desc: "Tes planètes, pas seulement ton signe. Une lecture qui te ressemble." },
             { icon: '💞', title: 'Compatibilité illimitée', desc: 'La chimie astrale avec les personnes qui comptent pour toi' },
-            { icon: '📖', title: 'Journal de bord', desc: 'Note tes ressentis et repérez les cycles qui reviennent' },
+            { icon: '📖', title: 'Journal de bord', desc: 'Note tes ressentis et repère les cycles qui reviennent' },
             { icon: '🔮', title: 'Transits du moment', desc: "Ce qui se joue en toi maintenant, décrypté simplement" },
           ].map((f, i) => (
             <div key={f.title} className="glass rounded-2xl p-4 flex items-start gap-3 animate-fade-in card-glow" style={{ animationDelay: `${0.1 + i * 0.08}s` }}>
@@ -174,8 +174,8 @@ export function Paywall({ onClose, onSubscribe }: {
 
         <p className="text-night-500 text-xs text-center mt-4">
           {plan === 'yearly'
-            ? '3 jours gratuits puis 39,99€/an. Annulez à tout moment. Rappel avant prélèvement.'
-            : '6,99€/semaine. Annulez à tout moment.'}
+            ? '3 jours gratuits puis 39,99€/an. Annule à tout moment. Rappel avant prélèvement.'
+            : '6,99€/semaine. Annule à tout moment.'}
         </p>
 
         {/* Restore Purchases (Fix #2 — obligatoire App Store Guideline 3.1.5) */}

@@ -55,7 +55,7 @@ db.exec(`
     birth_data TEXT,
     natal_chart TEXT,
     is_premium INTEGER DEFAULT 0,
-    scans_remaining INTEGER DEFAULT 3,
+    scans_remaining INTEGER DEFAULT 7,
     trial_started_at INTEGER,
     premium_until INTEGER,
     stripe_customer_id TEXT,
@@ -2844,7 +2844,6 @@ async function runDailyPushJob() {
       SELECT id, email, notification_hour, notification_timezone, last_notification_date, is_premium
       FROM users
       WHERE (last_notification_date IS NULL OR last_notification_date != ?)
-        AND is_premium = 1
         AND notification_hour IS NOT NULL
     `).all(today);
 
@@ -2862,9 +2861,18 @@ async function runDailyPushJob() {
 
       if (!hourMatches) continue;
 
+      // VMF voice: warm, specific, anti-generic. Varie le message selon le contexte.
+      const pushVariants = [
+        'Les planètes ont bougé cette nuit. Un petit coup d\'œil ?',
+        'Ton ciel du jour est prêt. Pas de blabla — juste du vrai.',
+        'Nouveau transit aujourd\'hui. Viens voir ce que ça dit de toi.',
+        'Ton horoscope t\'attend. Pas le même qu\'hier — le ciel a tourné.',
+      ];
+      const dayOfYear = Math.floor((Date.now() - new Date(new Date().getFullYear(), 0, 0).getTime()) / 86400000);
+      const body = pushVariants[dayOfYear % pushVariants.length];
       const payload = {
         title: '✨ Céleste',
-        body: 'Ton horoscope du jour t\'attend. Viens découvrir ce que les étoiles ont préparé pour toi.',
+        body: user.is_premium ? body : body + ' (gratuit)',
         icon: '/icon-192.png',
         badge: '/badge-72.png',
         tag: 'celeste-daily',
@@ -2900,7 +2908,6 @@ async function runReengagementJob() {
       FROM users u
       JOIN push_subscriptions ps ON ps.user_id = u.id
       LEFT JOIN horoscope_cache hc ON hc.user_id = u.id
-      WHERE u.is_premium = 1
       GROUP BY u.id
     `).all();
 

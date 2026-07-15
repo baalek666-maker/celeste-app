@@ -154,7 +154,7 @@ export function YiJingOracle() {
             </div>
             <div className="flex-1">
               <p className="text-night-100 font-semibold text-base">Tirage a 3 pieces</p>
-              <p className="text-night-400 text-xs mt-0.5">Consultez l'oracle sur une question</p>
+              <p className="text-night-400 text-xs mt-0.5">Consulte l'oracle sur une question</p>
             </div>
             <span className="text-night-500">→</span>
           </div>

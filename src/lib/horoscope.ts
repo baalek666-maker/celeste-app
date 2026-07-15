@@ -106,10 +106,10 @@ function buildCareer(chart: NatalChart, sunData: SignData, rng: () => number): s
   const marsSign = mars ? ZODIAC_SIGNS[mars.sign].name : sunData.name;
 
   const messages = [
-    "Ta énergie d'action, portée par Mars en " + marsSign + ", te pousse à avancer. Identifie UNE priorité et concentrez-tu dessus.",
-    "Mars en " + marsSign + " dynamise tes ambitions professionnelles. Un projet stagnation pourrait enfin débloquer si tu ose frapper à la bonne porte.",
+    "Ton énergie d'action, portée par Mars en " + marsSign + ", te pousse à avancer. Identifie UNE priorité et concentrez-toi dessus.",
+    "Mars en " + marsSign + " dynamise tes ambitions professionnelles. Un projet stagnant pourrait enfin débloquer si tu oses frapper à la bonne porte.",
     "Ton drive professionnel s'exprime à travers Mars " + marsSign + ". Aujourd'hui, l'action directe est plus efficace que la planification.",
-    "L'énergie martiale " + marsSign + " te donne du culot. Utilisez-le pour défendre une idée ou prendre une initiative qui sort du cadre.",
+    "L'énergie martiale " + marsSign + " te donne du culot. Utilise-la pour défendre une idée ou prendre une initiative qui sort du cadre.",
   ];
 
   return messages[Math.floor(rng() * messages.length)];

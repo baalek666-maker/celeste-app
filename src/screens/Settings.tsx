@@ -278,7 +278,7 @@ export function Settings({ user, onUpdate, onPaywall }: { user: User; onUpdate: 
         <div className="glass rounded-2xl p-5 mb-4">
           <h2 className="text-night-100 font-semibold mb-2">Documents légaux</h2>
           <p className="text-night-400 text-sm leading-relaxed mb-3">
-            Consultez nos documents complets :
+            Consulte nos documents complets :
           </p>
           <a
             href="/legal/privacy.html"
