@@ -96,7 +96,7 @@ export function Explorer({ user, onNavigate }: { user: User; onNavigate: (s: Scr
         <p className="text-night-400 text-xs uppercase tracking-widest mb-1">Approfondir</p>
         <h1 className="text-2xl font-bold text-gold-gradient mb-2">Explorer</h1>
         <p className="text-night-300 text-sm">
-          Explorez chaque planète de ton thème, en détail.
+          Explore chaque planète de ton thème, en détail.
         </p>
       </div>
 
@@ -166,7 +166,7 @@ export function Explorer({ user, onNavigate }: { user: User; onNavigate: (s: Scr
           <div className="flex items-center gap-3">
             <span className="text-2xl">✦</span>
             <div className="flex-1">
-              <p className="text-gold-300 font-semibold text-sm">Passez Premium</p>
+              <p className="text-gold-300 font-semibold text-sm">Passe Premium</p>
               <p className="text-night-400 text-xs">Horoscope & compatibilité illimitées</p>
             </div>
             <span className="text-gold-400 text-xs">Découvrir →</span>
