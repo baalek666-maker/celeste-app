@@ -18,10 +18,11 @@ type EnergyData = {
  * 2. Phrase générée (240 combinaisons signe × planète × moment)
  * 3. Phrase fallback universelle
  */
-export default function HeroPrediction({ chart, sunSignKey, firstName }: {
+export default function HeroPrediction({ chart, sunSignKey, firstName, streak }: {
   chart: NatalChart;
   sunSignKey: string;
   firstName?: string;
+  streak?: number;
 }) {
   const [data, setData] = useState<EnergyData | null>(null);
   const [loading, setLoading] = useState(true);
@@ -95,6 +96,14 @@ export default function HeroPrediction({ chart, sunSignKey, firstName }: {
             <div className="flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-gold-500/15 border border-gold-500/40 backdrop-blur-sm">
               <span className="text-base">{energyEmoji}</span>
               <span className="text-[10px] text-gold-200 font-semibold capitalize">{energyLabel}</span>
+            </div>
+          )}
+
+          {/* Chantier D (v8) — streak badge visible chaque jour, pas seulement aux milestones */}
+          {streak !== undefined && streak > 0 && (
+            <div className="flex items-center gap-1 px-2 py-1 rounded-full bg-orange-500/15 border border-orange-500/40">
+              <span className="text-[10px]">🔥</span>
+              <span className="text-[10px] text-orange-200 font-bold tabular-nums">{streak}j</span>
             </div>
           )}
         </div>

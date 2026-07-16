@@ -7,6 +7,7 @@ import { pushService } from '../lib/pushNotifications';
  * (streak + reminder du soir + optin notifications) sans bloquer le flux principal.
  *
  * Tap pour déplier. Permet de réduire le "scroll fatigue" de la home (audit Piste #1).
+ * v8 : SmartCTA a migré vers SignatureFooter (plus de double-bloc en home).
  */
 
 export function HomeSecondary({
@@ -135,33 +136,5 @@ function EveningReminderInline() {
         {text}
       </p>
     </div>
-  );
-}
-
-/**
- * SmartCTA — Piste D.
- * Tease ce que l'utilisateur va trouver dans Explorer.
- */
-export function SmartCTA({ onNavigate }: { onNavigate: (s: Screen) => void }) {
-  const hour = new Date().getHours();
-  const tease =
-    hour < 12
-      ? { title: 'Ton ciel de l\'après-midi t\'attend', sub: 'Transits, compatibilité, rituels', icon: '☀️' }
-      : hour < 18
-        ? { title: 'Découvre ce que ton ciel te réserve', sub: 'Transits perso + horoscope de la soirée', icon: '🌅' }
-        : { title: 'Ton bilan astro du soir est prêt', sub: 'Transits perso + rituel de clôture', icon: '🌙' };
-
-  return (
-    <button
-      onClick={() => onNavigate('explorer')}
-      className="w-full glass rounded-2xl p-4 mb-3 text-left hover:border-gold-500/40 border border-transparent transition-all duration-300 group stagger-card flex items-center gap-3"
-    >
-      <span className="text-2xl">{tease.icon}</span>
-      <div className="flex-1">
-        <p className="text-night-100 text-sm font-semibold">{tease.title}</p>
-        <p className="text-night-400 text-xs">{tease.sub}</p>
-      </div>
-      <span className="text-night-500 group-hover:text-gold-400 group-hover:translate-x-1 transition-all">→</span>
-    </button>
   );
 }

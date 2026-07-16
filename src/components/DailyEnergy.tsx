@@ -11,7 +11,12 @@ type DailyEnergy = {
   reflectionText: string;
 };
 
-export default function DailyEnergy() {
+/**
+ * DailyEnergy — 2 modes (v8 audit) :
+ * - default : bloc complet (headline + bar + chips goodFor/avoid + réflexion)
+ * - compact : 1-ligne résumé, pour éviter la redondance quand HeroPrediction a déjà affiché la headline
+ */
+export default function DailyEnergy({ compact = false }: { compact?: boolean } = {}) {
   const [data, setData] = useState<DailyEnergy | null>(null);
   const [loading, setLoading] = useState(true);
   const [reflecting, setReflecting] = useState(false);
@@ -64,6 +69,29 @@ export default function DailyEnergy() {
   if (!data) return null;
 
   const e = data.energy;
+
+  // ─── MODE COMPACT (v8) : 1-ligne, évite la redondance avec HeroPrediction ─────
+  if (compact) {
+    return (
+      <div className="glass rounded-2xl p-3 mb-4 flex items-center gap-3 border border-gold-500/15 animate-fade-in">
+        <div className="text-xl flex-shrink-0">{e.emoji}</div>
+        <div className="flex-1 min-w-0">
+          <div className="flex items-center gap-2 mb-1">
+            <span className="text-[10px] text-gold-400 uppercase tracking-widest font-bold">Énergie du jour</span>
+            <span className="text-night-500 text-[10px]">{e.score}/10</span>
+          </div>
+          <div className="flex flex-wrap gap-1">
+            {data.goodFor.slice(0, 2).map((g, i) => (
+              <span key={i} className="text-emerald-300 text-[10px] bg-emerald-500/10 px-1.5 py-0.5 rounded-full">+ {g}</span>
+            ))}
+            {data.avoid.slice(0, 1).map((a, i) => (
+              <span key={i} className="text-orange-300 text-[10px] bg-orange-500/10 px-1.5 py-0.5 rounded-full">− {a}</span>
+            ))}
+          </div>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="glass rounded-3xl p-5 mb-5 stagger-card card-glow animate-fade-in overflow-hidden relative" style={{ animationDelay: '0.05s' }}>

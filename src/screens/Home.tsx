@@ -5,8 +5,8 @@ import StreakCelebration from '../components/StreakCelebration';
 import DailyTarot from '../components/DailyTarot';
 import DailyEnergy from '../components/DailyEnergy';
 import HeroPrediction from '../components/HeroPrediction';
-import { SignatureCeleste } from '../components/SignatureCeleste';
-import { HomeSecondary, SmartCTA } from '../components/HomeSecondary';
+import { SignatureFooter } from '../components/SignatureFooter';
+import { HomeSecondary } from '../components/HomeSecondary';
 import { pushService } from '../lib/pushNotifications';
 
 export function Home({ user, onNavigate, isGuest }: { user: User; onNavigate: (s: Screen) => void; isGuest?: boolean }) {
@@ -80,27 +80,25 @@ export function Home({ user, onNavigate, isGuest }: { user: User; onNavigate: (s
     <div className="px-5 pt-12 pb-6 relative z-10">
       <StreakCelebration streak={streak} />
 
-      {/* Piste #1 — 4 BLOCS MAX DANS LE FLUX PRINCIPAL */}
+      {/* v8 — 4 BLOCS MAX DANS LE FLUX PRINCIPAL */}
       {/* 1. HERO PREDICTION — phrase qui tue (40% écran, wow effect) */}
-      <HeroPrediction chart={chart} sunSignKey={chart.sun} firstName={firstName} />
+      <HeroPrediction chart={chart} sunSignKey={chart.sun} firstName={firstName} streak={streak} />
 
       {/* 2. TAROT — différenciateur vs Co-Star */}
       <DailyTarot />
 
-      {/* 3. DAILY ENERGY — horoscope (lecture) */}
-      <DailyEnergy />
+      {/* 3. DAILY ENERGY — mode compact (résumé 1-ligne, pas de redondance avec Hero) */}
+      <DailyEnergy compact />
 
-      {/* 4. CTA + ILLUSTRATION regroupés en bas */}
-      <div className="mt-6">
-        <SignatureCeleste
-          sunSignKey={chart.sun}
-          moonSignKey={chart.moon}
-          risingSignKey={chart.rising}
-        />
-      </div>
-      <SmartCTA onNavigate={onNavigate} />
+      {/* 4. SIGNATURE FOOTER — fusion astrolabe + CTA explorateur */}
+      <SignatureFooter
+        sunSignKey={chart.sun}
+        moonSignKey={chart.moon}
+        risingSignKey={chart.rising}
+        onNavigate={onNavigate}
+      />
 
-      {/* Piste #1 — Panneau SECONDARY collapsable (streak + reminder + optin) */}
+      {/* Panneau SECONDARY collapsable (streak inline + reminder + optin push) */}
       <HomeSecondary streak={streak} onNavigate={onNavigate} />
     </div>
   );
