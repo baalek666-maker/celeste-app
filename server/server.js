@@ -15,6 +15,10 @@ import { dirname, join } from 'path';
 import billingRouter, { stripeWebhookHandler, isStripeConfigured } from './billing.js';
 import { registerGamificationRoutes } from './gamification.js';
 import { runMigrations } from './migrate.js';
+import { createNotificationsRouter } from './routes/notifications.js';
+import { createJournalRouter } from './routes/journal.js';
+import { createAccountRouter } from './routes/account.js';
+import { createProfilesRouter } from './routes/profiles.js';
 import { CELESTE_VOICE, celesteSystemPrompt } from './celest-voice.js';
 import {
   signAccessToken,
@@ -1388,217 +1392,11 @@ app.get('/api/profile', auth, (req, res) => {
 // Le token JWT devient inutilisable après suppression (user introuvable en DB).
 // ─── GDPR: Data Export (Art. 20 — portabilité) ───────────
 // Returns all user data as JSON. User can download and import elsewhere.
-app.get('/api/account/export', auth, (req, res) => {
-  const userId = req.user?.id;
-  if (!userId) return res.status(401).json({ error: 'Non authentifié.' });
-
-  try {
-    const user = db.prepare('SELECT id, email, created_at, is_premium, premium_until, streak_count, notification_hour FROM users WHERE id = ?').get(userId);
-    if (!user) return res.status(404).json({ error: 'Compte introuvable.' });
-
-    const data = {
-      exportedAt: new Date().toISOString(),
-      user,
-      profiles: [],
-      journalEntries: [],
-      horoscopeFavorites: [],
-      pushSubscriptions: [],
-      dailyRituals: [],
-      onboardingProgress: null,
-    };
-
-    // Collect from each table (best-effort, skip if table doesn't exist)
-    const collect = (table, where = 'user_id') => {
-      try {
-        return db.prepare(`SELECT * FROM ${table} WHERE ${where} = ?`).all(userId);
-      } catch { return []; }
-    };
-
-    data.profiles = collect('profiles');
-    data.journalEntries = collect('journal_entries');
-    data.horoscopeFavorites = collect('horoscope_favorites');
-    data.pushSubscriptions = collect('push_subscriptions');
-    data.dailyRituals = collect('daily_rituals');
-    try {
-      data.onboardingProgress = db.prepare('SELECT * FROM onboarding_progress WHERE user_id = ?').get(userId) || null;
-    } catch { /* table may not exist */ }
-
-    res.setHeader('Content-Disposition', `attachment; filename="celeste-data-${userId}-${Date.now()}.json"`);
-    res.json(data);
-  } catch (err) {
-    console.error('[gdpr-export] error:', err.message);
-    res.status(500).json({ error: 'Export impossible.' });
-  }
-});
-
-app.delete('/api/account', auth, (req, res) => {
-  const userId = req.user?.id;
-  if (!userId) return res.status(401).json({ error: 'Non authentifié.' });
-
-  // Vérifie existence du compte avant suppression (compte peut avoir été
-  // supprimé via une autre session, ou token volé d'un compte effacé).
-  try {
-    const exists = db.prepare('SELECT 1 FROM users WHERE id = ?').get(userId);
-    if (!exists) return res.status(401).json({ error: 'Compte introuvable. Reconnecte-toi.' });
-  } catch (err) {
-    return res.status(500).json({ error: 'Erreur vérification compte.' });
-  }
-
-  try {
-    const tx = db.transaction(() => {
-      // 1. Cascade explicite — toutes les tables liées à ce user
-      const tables = [
-        'profiles',
-        'push_subscriptions',
-        'daily_rituals',
-        'onboarding_progress',
-        'horoscope_favorites',
-        'journal_entries',
-        'user_xp',
-        'daily_quests',
-        'user_badges',
-        'xp_log',
-        'astro_portraits',
-        'horoscope_feedback',
-      ];
-      for (const t of tables) {
-        try {
-          db.prepare(`DELETE FROM ${t} WHERE user_id = ?`).run(userId);
-        } catch (err) {
-          // Table inexistante (migration pas encore passée) — non bloquant
-          console.warn(`[delete-account] table ${t} skip:`, err.message);
-        }
-      }
-      // 2. Stripe events référencés — best-effort, ne plante pas si vide
-      try { db.prepare('DELETE FROM stripe_events WHERE type LIKE ?').run(`%${userId}%`); }
-      catch (err) { console.warn('[delete-account] stripe_events skip:', err.message); }
-      // 3. Gamification tables — essayer plusieurs noms courants
-      for (const gt of ['gamification_achievements', 'gamification_streaks', 'gamification_xp']) {
-        try { db.prepare(`DELETE FROM ${gt} WHERE user_id = ?`).run(userId); }
-        catch { /* table inexistante — OK */ }
-      }
-      // 4. L'utilisateur lui-même
-      const result = db.prepare('DELETE FROM users WHERE id = ?').run(userId);
-      if (result.changes === 0) {
-        throw new Error('Compte introuvable.');
-      }
-      return result.changes;
-    });
-    const deleted = tx();
-    console.log(`[delete-account] ✅ Compte user ${userId} supprimé (${deleted} row)`);
-    return res.json({ ok: true, deletedAt: new Date().toISOString() });
-  } catch (err) {
-    console.error('[delete-account] ❌', err.message);
-    return res.status(500).json({ error: 'Suppression impossible. Réessaie ou contacte le support.' });
-  }
-});
+app.use('/api/account', createAccountRouter({ db, auth }));
 
 // ─── Multi-profile CRUD (Feature 8) ────────────────────────
 // List all profiles (own natal + saved family/friends)
-app.get('/api/profiles', auth, (req, res) => {
-  const rows = db.prepare(
-    'SELECT id, name, relation, birth_data, is_self, created_at FROM profiles WHERE user_id = ? ORDER BY is_self DESC, created_at ASC'
-  ).all(req.user.id);
-  res.json({
-    profiles: rows.map(r => ({
-      id: r.id,
-      name: r.name,
-      relation: r.relation,
-      isSelf: !!r.is_self,
-      birthData: safeJsonParse(r.birth_data, null, `profile #${r.id} birth_data`),
-      createdAt: r.created_at,
-    })),
-  });
-});
-
-// Create a new profile
-app.post('/api/profiles', auth, (req, res) => {
-  const { name, relation, birthData, isSelf } = req.body || {};
-  if (!name || !birthData) return res.status(400).json({ error: 'name and birthData are required' });
-  const safeName = String(name).slice(0, 60).trim();
-  const safeRelation = ['self', 'family', 'friend', 'partner', 'child', 'other'].includes(relation) ? relation : 'other';
-  if (!birthData.date || !birthData.time || !birthData.city) {
-    return res.status(400).json({ error: 'birthData must include date, time, city' });
-  }
-  const cleanBd = {
-    date: birthData.date,
-    time: birthData.time,
-    city: birthData.city,
-    country: birthData.country || '',
-    latitude: Number(birthData.latitude) || 0,
-    longitude: Number(birthData.longitude) || 0,
-    timezone: Number(birthData.timezone) || 0,
-  };
-  // Uniqueness: only one is_self per user
-  if (isSelf) {
-    db.prepare('UPDATE profiles SET is_self = 0 WHERE user_id = ?').run(req.user.id);
-  }
-  const result = db.prepare(
-    'INSERT INTO profiles (user_id, name, relation, birth_data, is_self) VALUES (?, ?, ?, ?, ?)'
-  ).run(req.user.id, safeName, safeRelation, JSON.stringify(cleanBd), isSelf ? 1 : 0);
-  res.json({ ok: true, id: result.lastInsertRowid });
-});
-
-// Update a profile
-app.put('/api/profiles/:id', auth, (req, res) => {
-  const profileId = parseInt(req.params.id, 10);
-  if (!Number.isFinite(profileId)) return res.status(400).json({ error: 'Invalid profile id' });
-  const existing = db.prepare('SELECT * FROM profiles WHERE id = ? AND user_id = ?').get(profileId, req.user.id);
-  if (!existing) return res.status(404).json({ error: 'Profile not found' });
-  const { name, relation, birthData, isSelf } = req.body || {};
-  const newName = name ? String(name).slice(0, 60).trim() : existing.name;
-  const newRelation = relation && ['self', 'family', 'friend', 'partner', 'child', 'other'].includes(relation) ? relation : existing.relation;
-  let newBd = existing.birth_data;
-  if (birthData) {
-    if (!birthData.date || !birthData.time || !birthData.city) {
-      return res.status(400).json({ error: 'birthData must include date, time, city' });
-    }
-    newBd = JSON.stringify({
-      date: birthData.date,
-      time: birthData.time,
-      city: birthData.city,
-      country: birthData.country || '',
-      latitude: Number(birthData.latitude) || 0,
-      longitude: Number(birthData.longitude) || 0,
-      timezone: Number(birthData.timezone) || 0,
-    });
-  }
-  if (isSelf) {
-    db.prepare('UPDATE profiles SET is_self = 0 WHERE user_id = ? AND id != ?').run(req.user.id, profileId);
-  }
-  const newIsSelf = isSelf === undefined ? existing.is_self : (isSelf ? 1 : 0);
-  db.prepare('UPDATE profiles SET name = ?, relation = ?, birth_data = ?, is_self = ? WHERE id = ?').run(
-    newName, newRelation, newBd, newIsSelf, profileId
-  );
-  res.json({ ok: true });
-});
-
-// Delete a profile
-app.delete('/api/profiles/:id', auth, (req, res) => {
-  const profileId = parseInt(req.params.id, 10);
-  if (!Number.isFinite(profileId)) return res.status(400).json({ error: 'Invalid profile id' });
-  const existing = db.prepare('SELECT * FROM profiles WHERE id = ? AND user_id = ?').get(profileId, req.user.id);
-  if (!existing) return res.status(404).json({ error: 'Profile not found' });
-  db.prepare('DELETE FROM profiles WHERE id = ?').run(profileId);
-  res.json({ ok: true });
-});
-
-// Get a single profile with birth data (for re-use in other endpoints)
-app.get('/api/profiles/:id', auth, (req, res) => {
-  const profileId = parseInt(req.params.id, 10);
-  if (!Number.isFinite(profileId)) return res.status(400).json({ error: 'Invalid profile id' });
-  const r = db.prepare('SELECT id, name, relation, birth_data, is_self, created_at FROM profiles WHERE id = ? AND user_id = ?').get(profileId, req.user.id);
-  if (!r) return res.status(404).json({ error: 'Profile not found' });
-  res.json({
-    id: r.id,
-    name: r.name,
-    relation: r.relation,
-    isSelf: !!r.is_self,
-    // P0 #5 — Guard contre birth_data NULL (profil créé sans données).
-    birthData: safeJsonParse(r.birth_data, null, `partner profile #${r.id} birth_data`),
-    createdAt: r.created_at,
-  });
-});
+app.use('/api/profiles', createProfilesRouter({ db, auth, safeJsonParse }));
 
 // ─── Horoscope (LLM-powered, PERSONAL cache per sun+moon+rising+date) ───────
 // Architecture P2: cache personnalisé (sun, moon, rising, date) ≈ 1728 combos max.
@@ -2009,21 +1807,7 @@ app.post('/api/compatibility', auth, llmLimiter, async (req, res) => {
 });
 
 // ─── Journal ───────────────────────────────────────────────
-app.get('/api/journal', auth, (req, res) => {
-  const entries = db.prepare('SELECT * FROM journal_entries WHERE user_id = ? ORDER BY date DESC LIMIT 90').all(req.user.id);
-  res.json(entries.map(e => ({
-    id: e.id, date: e.date, horoscopeSummary: e.horoscope_summary,
-    userNote: e.user_note, userRating: e.user_rating,
-  })));
-});
-
-app.post('/api/journal', auth, (req, res) => {
-  const { date, horoscopeSummary, userNote, userRating } = req.body;
-  const id = `${req.user.id}-${date}`;
-  db.prepare(`INSERT OR REPLACE INTO journal_entries (id, user_id, date, horoscope_summary, user_note, user_rating)
-    VALUES (?, ?, ?, ?, ?, ?)`).run(id, req.user.id, date, horoscopeSummary, userNote, userRating || 0);
-  res.json({ ok: true });
-});
+app.use('/api/journal', createJournalRouter({ db, auth }));
 
 // ─── Premium status ────────────────────────────────────────
 // ⚠️ Cet endpoint est DÉSACTIVÉ. Le premium ne peut plus être activé
@@ -2049,91 +1833,7 @@ app.get('/api/billing/status', (req, res) => res.json({ configured: isStripeConf
 app.use('/api/billing', auth, billingRouter);
 
 // ─── Web Push endpoints ────────────────────────────────────
-// Public endpoint — frontend needs the public key to subscribe
-app.get('/api/notifications/vapid-key', (req, res) => {
-  if (!VAPID_PUBLIC_KEY) return res.status(503).json({ error: 'Push not configured' });
-  res.json({ publicKey: VAPID_PUBLIC_KEY });
-});
-
-app.get('/api/notifications/status', auth, (req, res) => {
-  const u = db.prepare('SELECT notification_hour, last_notification_date FROM users WHERE id = ?').get(req.user.id);
-  const subs = db.prepare('SELECT COUNT(*) as n FROM push_subscriptions WHERE user_id = ?').get(req.user.id);
-  res.json({
-    enabled: subs.n > 0,
-    subscriptionCount: subs.n,
-    hour: u?.notification_hour ?? 9,
-    lastSent: u?.last_notification_date || null,
-  });
-});
-
-app.post('/api/notifications/subscribe', auth, async (req, res) => {
-  if (!VAPID_PUBLIC_KEY) return res.status(503).json({ error: 'Push not configured' });
-  const { subscription, hour, timezone } = req.body || {};
-  if (!subscription?.endpoint || !subscription?.keys?.p256dh || !subscription?.keys?.auth) {
-    return res.status(400).json({ error: 'Invalid subscription' });
-  }
-  try {
-    db.prepare(`
-      INSERT INTO push_subscriptions (user_id, endpoint, p256dh, auth, user_agent)
-      VALUES (?, ?, ?, ?, ?)
-      ON CONFLICT(endpoint) DO UPDATE SET user_id = excluded.user_id, user_agent = excluded.user_agent
-    `).run(req.user.id, subscription.endpoint, subscription.keys.p256dh, subscription.keys.auth, req.headers['user-agent'] || '');
-    if (Number.isInteger(hour) && hour >= 0 && hour <= 23) {
-      // Fix #6 — sauvegarder le TZ en parallèle de l'heure pour que le cron notifie à l'heure locale
-      const tz = (typeof timezone === 'number' && timezone >= -12 && timezone <= 14) ? timezone : 0;
-      db.prepare('UPDATE users SET notification_hour = ?, notification_timezone = ? WHERE id = ?').run(hour, tz, req.user.id);
-    }
-    res.json({ ok: true });
-  } catch (err) {
-    console.error('subscribe error:', err.message);
-    res.status(500).json({ error: 'Failed to save subscription' });
-  }
-});
-
-app.delete('/api/notifications/unsubscribe', auth, (req, res) => {
-  const { endpoint } = req.body || {};
-  if (endpoint) {
-    db.prepare('DELETE FROM push_subscriptions WHERE user_id = ? AND endpoint = ?').run(req.user.id, endpoint);
-  } else {
-    db.prepare('DELETE FROM push_subscriptions WHERE user_id = ?').run(req.user.id);
-  }
-  res.json({ ok: true });
-});
-
-app.patch('/api/notifications/preferences', auth, (req, res) => {
-  const { hour } = req.body || {};
-  if (!Number.isInteger(hour) || hour < 0 || hour > 23) {
-    return res.status(400).json({ error: 'hour must be 0-23' });
-  }
-  db.prepare('UPDATE users SET notification_hour = ? WHERE id = ?').run(hour, req.user.id);
-  res.json({ ok: true });
-});
-
-// Send test notification to current user (all their devices)
-app.post('/api/notifications/test', auth, async (req, res) => {
-  if (!VAPID_PUBLIC_KEY) return res.status(503).json({ error: 'Push not configured' });
-  const subs = db.prepare('SELECT endpoint, p256dh, auth FROM push_subscriptions WHERE user_id = ?').all(req.user.id);
-  if (subs.length === 0) return res.status(404).json({ error: 'No active subscription' });
-  const payload = JSON.stringify({
-    title: '✨ Céleste — test',
-    body: 'Si tu lis ceci, les notifications marchent. 🌙',
-    icon: '/icon-192.png',
-    badge: '/badge-72.png',
-    url: '/',
-  });
-  const results = await Promise.allSettled(subs.map(s => webpush.sendNotification({
-    endpoint: s.endpoint,
-    keys: { p256dh: s.p256dh, auth: s.auth },
-  }, payload)));
-  const sent = results.filter(r => r.status === 'fulfilled').length;
-  // Cleanup dead subs (410 Gone)
-  results.forEach((r, i) => {
-    if (r.status === 'rejected' && (r.reason?.statusCode === 404 || r.reason?.statusCode === 410)) {
-      db.prepare('DELETE FROM push_subscriptions WHERE endpoint = ?').run(subs[i].endpoint);
-    }
-  });
-  res.json({ sent, total: subs.length });
-});
+app.use('/api/notifications', createNotificationsRouter({ db, auth, webpush, vapidPublicKey: VAPID_PUBLIC_KEY }));
 
 // ─── Transits of the day (Feature 6) ─────────────────────────
 app.get('/api/transits/today', auth, (req, res) => {
