@@ -1,14 +1,22 @@
+import { useEffect } from 'react';
 import type { User } from '../types';
 import type { Screen } from '../App';
 import StreakCelebration from '../components/StreakCelebration';
-import DailyGreeting from '../components/DailyGreeting';
 import DailyTarot from '../components/DailyTarot';
 import DailyEnergy from '../components/DailyEnergy';
+import HeroPrediction from '../components/HeroPrediction';
+import { SignatureCeleste } from '../components/SignatureCeleste';
 import { StreakBanner, EveningReminder, SmartCTA } from '../components/HomeWidgets';
-import { getDailyHighlightPlanet } from '../lib/dailyHighlight';
+import { NotificationOptin } from '../components/NotificationOptin';
+import { pushService } from '../lib/pushNotifications';
 
 export function Home({ user, onNavigate, isGuest }: { user: User; onNavigate: (s: Screen) => void; isGuest?: boolean }) {
   const streak = user.streak ?? 0;
+
+  // Piste #4 — Init des notifications push (in-memory scheduling)
+  useEffect(() => {
+    pushService.init();
+  }, []);
 
   // P1.3 — Guest mode: show welcome screen with CTA to create birth chart
   if (!user.natalChart) {
@@ -82,31 +90,41 @@ export function Home({ user, onNavigate, isGuest }: { user: User; onNavigate: (s
     );
   }
 
-  // P3.3 — extract first name from email or displayName for the greeting
   const firstName = (user.name?.split(' ')[0]) || (user.email?.split('@')[0]) || undefined;
-  const highlight = getDailyHighlightPlanet(chart);
 
   return (
     <div className="px-5 pt-12 pb-6 relative z-10">
       <StreakCelebration streak={streak} />
 
-      {/* Piste C — Streak vivant en permanence */}
+      {/* Piste C — Streak vivant (gardé en haut, notre différenciateur) */}
       <StreakBanner streak={streak} />
 
-      {/* Piste F — Rappel visuel tarot du soir */}
+      {/* Piste #1, #3, #5 — HERO PREDICTION : phrase qui tue + planète perso */}
+      <HeroPrediction chart={chart} sunSignKey={chart.sun} firstName={firstName} />
+
+      {/* Piste F — Rappel tarot du soir (entre hero et tarot, en transition) */}
       <EveningReminder />
 
-      {/* Piste A + E — Hero prediction personnalisée avec planète perso */}
-      <DailyGreeting sunSignKey={chart.sun} firstName={firstName} streak={streak} highlightPlanet={highlight} />
-
-      {/* Piste B — Tarot en HERO (visuel fort + différenciateur vs concurrents) */}
+      {/* Piste #2 — Tarot en HERO (notre différenciateur vs Co-Star) */}
       <DailyTarot />
 
-      {/* DailyEnergy en 2ème (texte long, demande lecture) */}
+      {/* DailyEnergy (lecture) */}
       <DailyEnergy />
+
+      {/* Piste #5 — Illustration signature (astrolabe perso Soleil/Lune/Asc) */}
+      <div className="mt-6 mb-2">
+        <SignatureCeleste
+          sunSignKey={chart.sun}
+          moonSignKey={chart.moon}
+          risingSignKey={chart.rising}
+        />
+      </div>
 
       {/* Piste D — CTA intelligent avec hook personnalisé */}
       <SmartCTA onNavigate={onNavigate} />
+
+      {/* Piste #4 — Opt-in notifications (apparaît après 2 visites) */}
+      <NotificationOptin />
     </div>
   );
 }
