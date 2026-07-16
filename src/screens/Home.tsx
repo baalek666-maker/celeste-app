@@ -2,8 +2,10 @@ import type { User } from '../types';
 import type { Screen } from '../App';
 import StreakCelebration from '../components/StreakCelebration';
 import DailyGreeting from '../components/DailyGreeting';
-import DailyEnergy from '../components/DailyEnergy';
 import DailyTarot from '../components/DailyTarot';
+import DailyEnergy from '../components/DailyEnergy';
+import { StreakBanner, EveningReminder, SmartCTA } from '../components/HomeWidgets';
+import { getDailyHighlightPlanet } from '../lib/dailyHighlight';
 
 export function Home({ user, onNavigate, isGuest }: { user: User; onNavigate: (s: Screen) => void; isGuest?: boolean }) {
   const streak = user.streak ?? 0;
@@ -82,32 +84,29 @@ export function Home({ user, onNavigate, isGuest }: { user: User; onNavigate: (s
 
   // P3.3 — extract first name from email or displayName for the greeting
   const firstName = (user.name?.split(' ')[0]) || (user.email?.split('@')[0]) || undefined;
+  const highlight = getDailyHighlightPlanet(chart);
 
   return (
     <div className="px-5 pt-12 pb-6 relative z-10">
       <StreakCelebration streak={streak} />
 
-      {/* ── 1. Signature VMF v2 : "Ton ciel du jour" + salutation personnalisée ── */}
-      <DailyGreeting sunSignKey={chart.sun} firstName={firstName} streak={streak} />
+      {/* Piste C — Streak vivant en permanence */}
+      <StreakBanner streak={streak} />
 
-      {/* ── 2. La star : l'horoscope/énergie du jour (DailyEnergy) ── */}
-      <DailyEnergy />
+      {/* Piste F — Rappel visuel tarot du soir */}
+      <EveningReminder />
 
-      {/* ── 3. Tarot quotidien : visuel fort + rituel de tirage ── */}
+      {/* Piste A + E — Hero prediction personnalisée avec planète perso */}
+      <DailyGreeting sunSignKey={chart.sun} firstName={firstName} streak={streak} highlightPlanet={highlight} />
+
+      {/* Piste B — Tarot en HERO (visuel fort + différenciateur vs concurrents) */}
       <DailyTarot />
 
-      {/* ── 4. Une seule porte d'entrée : Explorer ── */}
-      <button
-        onClick={() => onNavigate('explorer')}
-        className="w-full glass rounded-2xl p-4 mb-3 text-left hover:border-gold-500/40 border border-transparent transition-all duration-300 group stagger-card flex items-center gap-3"
-      >
-        <span className="text-xl text-gold-400">◈</span>
-        <div className="flex-1">
-          <p className="text-night-100 text-sm font-medium">Aller plus loin</p>
-          <p className="text-night-400 text-xs">Ton thème, ta compatibilité, ton ciel d'aujourd'hui</p>
-        </div>
-        <span className="text-night-500 group-hover:text-gold-400 group-hover:translate-x-1 transition-all">→</span>
-      </button>
+      {/* DailyEnergy en 2ème (texte long, demande lecture) */}
+      <DailyEnergy />
+
+      {/* Piste D — CTA intelligent avec hook personnalisé */}
+      <SmartCTA onNavigate={onNavigate} />
     </div>
   );
 }
