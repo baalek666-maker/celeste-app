@@ -6,6 +6,9 @@ import { ZODIAC_SIGNS } from '../data/zodiac';
 import { calculateNatalChart } from '../lib/astrology';
 import StreakCelebration from '../components/StreakCelebration';
 import NatalChart from '../components/NatalChart';
+import DailyEnergy from '../components/DailyEnergy';
+import LunarCycle from '../components/LunarCycle';
+import MoodCheckin from '../components/MoodCheckin';
 
 export function Home({ user, onNavigate, isGuest }: { user: User; onNavigate: (s: Screen) => void; isGuest?: boolean }) {
   const streak = user.streak ?? 0;
@@ -132,6 +135,13 @@ export function Home({ user, onNavigate, isGuest }: { user: User; onNavigate: (s
           ))}
         </div>
       </div>
+
+      {/* ── 2b. Énergie du jour (personalized astro-forecast + reflection) ── */}
+      <DailyEnergy />
+
+      {/* ── 2c. Check-in humeur + cycle lunaire ── */}
+      <MoodCheckin />
+      <LunarCycle />
 
       {/* ── 2. Horoscope du jour — la star ── */}
       <button

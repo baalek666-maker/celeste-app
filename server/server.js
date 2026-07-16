@@ -19,6 +19,9 @@ import { createNotificationsRouter } from './routes/notifications.js';
 import { createJournalRouter } from './routes/journal.js';
 import { createAccountRouter } from './routes/account.js';
 import { createProfilesRouter } from './routes/profiles.js';
+import { createDailyEnergyRouter } from './routes/daily-energy.js';
+import { createLunarCycleRouter } from './routes/lunar-cycle.js';
+import { createMoodTrackerRouter } from './routes/mood-tracker.js';
 import { CELESTE_VOICE, celesteSystemPrompt } from './celest-voice.js';
 import {
   signAccessToken,
@@ -1808,6 +1811,15 @@ app.post('/api/compatibility', auth, llmLimiter, async (req, res) => {
 
 // ─── Journal ───────────────────────────────────────────────
 app.use('/api/journal', createJournalRouter({ db, auth }));
+
+// ─── Daily Energy (personalized astro-forecast + reflection) ─
+app.use('/api/daily-energy', createDailyEnergyRouter({ db, auth, getNatalPositions, getTransits, callLLMWithRetry }));
+
+// ─── Lunar Cycle (intentions + full moon review) ─────────
+app.use('/api/lunar-cycle', createLunarCycleRouter({ db, auth, moonPhaseForDate }));
+
+// ─── Mood Tracker (daily check-in + astro correlation) ──
+app.use('/api/mood', createMoodTrackerRouter({ db, auth, getNatalPositions, getTransits }));
 
 // ─── Premium status ────────────────────────────────────────
 // ⚠️ Cet endpoint est DÉSACTIVÉ. Le premium ne peut plus être activé

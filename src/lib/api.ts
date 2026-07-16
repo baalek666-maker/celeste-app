@@ -201,6 +201,17 @@ export interface AuthResponse {
   };
 }
 
+export type LunarIntention = {
+  id: number;
+  cycleDate: string;
+  phase: string;
+  intentionText: string;
+  status: 'active' | 'manifested' | 'released';
+  reflectionText: string | null;
+  createdAt: string;
+  reviewedAt: string | null;
+};
+
 export const api = {
   // Auth — CRITIQUES : bypassOfflineQueue. Si offline, on échoue bruyamment
   // (l'utilisateur ne doit pas croire qu'il est loggué alors que la requête attend).
@@ -566,6 +577,75 @@ export const api = {
   exportAccount: () => apiCall<Record<string, unknown>>('/account/export', {
     method: 'GET',
   }, 15_000, { bypassOfflineQueue: true }),
+
+  // ─── Daily Energy (personalized astro-forecast + reflection) ──
+  getDailyEnergy: () => apiCall<{
+    date: string;
+    headline: string;
+    energy: { score: number; label: string; emoji: string; advice: string };
+    goodFor: string[];
+    avoid: string[];
+    reflectionPrompt: string;
+    reflectionText: string;
+  }>('/daily-energy', { method: 'GET' }, 30_000),
+
+  saveReflection: (reflectionText: string) => apiCall<{ ok: true }>('/daily-energy/reflection', {
+    method: 'POST',
+    body: JSON.stringify({ reflectionText }),
+  }),
+
+  getDailyEnergyHistory: (limit?: number) => apiCall<{ entries: Array<{ date: string; headline: string; energy_score: number; energy_label: string; energy_emoji: string; reflection_prompt: string; reflection_text: string }> }>('/daily-energy/history' + (limit ? `?limit=${limit}` : ''), { method: 'GET' }),
+
+  // ─── Lunar Cycle (intentions + full moon review) ────────────
+  getLunarStatus: () => apiCall<{
+    moonPhase: { name: string; emoji: string; description: string; age: number };
+    cycleDate: string;
+    intentions: LunarIntention[];
+    isNewMoonWindow: boolean;
+    isFullMoonWindow: boolean;
+    isWaning: boolean;
+    canSetIntention: boolean;
+    canReview: boolean;
+  }>('/lunar-cycle/status', { method: 'GET' }),
+
+  setLunarIntention: (intentionText: string) => apiCall<LunarIntention>('/lunar-cycle/intention', {
+    method: 'POST',
+    body: JSON.stringify({ intentionText }),
+  }),
+
+  reviewLunarIntention: (id: number, status: 'manifested' | 'released' | 'active', reflectionText?: string) => apiCall<LunarIntention>(`/lunar-cycle/intention/${id}/review`, {
+    method: 'POST',
+    body: JSON.stringify({ status, reflectionText }),
+  }),
+
+  deleteLunarIntention: (id: number) => apiCall<{ ok: true }>(`/lunar-cycle/intention/${id}`, {
+    method: 'DELETE',
+  }),
+
+  getLunarHistory: (limit?: number) => apiCall<{ intentions: LunarIntention[] }>('/lunar-cycle/history' + (limit ? `?limit=${limit}` : ''), { method: 'GET' }),
+
+  // ─── Mood Tracker ────────────────────────────────────────────
+  moodCheckin: (moodEmoji: string, moodScore: number, energyScore: number, note?: string) => apiCall<{ ok: true; date: string }>('/mood/checkin', {
+    method: 'POST',
+    body: JSON.stringify({ moodEmoji, moodScore, energyScore, note }),
+  }),
+
+  getMoodToday: () => apiCall<{ checkedIn: boolean; moodEmoji?: string; moodScore?: number; energyScore?: number; note?: string }>('/mood/today', { method: 'GET' }),
+
+  getMoodStats: (days?: number) => apiCall<{
+    totalCheckins: number;
+    avgMood?: number;
+    avgEnergy?: number;
+    checkins?: Array<{ date: string; mood_emoji: string; mood_score: number; energy_score: number; note?: string }>;
+    insights?: {
+      type: string;
+      bestElement: string;
+      bestAvgMood: number;
+      worstElement: string;
+      worstAvgMood: number;
+      insight: string;
+    } | null;
+  }>('/mood/stats' + (days ? `?days=${days}` : ''), { method: 'GET' }),
   verifySession: (sessionId: string) => apiCall<{ status: string; paymentStatus: string; subscriptionId: string | null }>(`/billing/verify-session`, {
     method: 'POST',
     body: JSON.stringify({ sessionId }),

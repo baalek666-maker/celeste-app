@@ -1,0 +1,207 @@
+import { useEffect, useRef, useState } from 'react';
+import { api } from '../lib/api';
+
+type DailyEnergy = {
+  date: string;
+  headline: string;
+  energy: { score: number; label: string; emoji: string; advice: string };
+  goodFor: string[];
+  avoid: string[];
+  reflectionPrompt: string;
+  reflectionText: string;
+};
+
+export default function DailyEnergy() {
+  const [data, setData] = useState<DailyEnergy | null>(null);
+  const [loading, setLoading] = useState(true);
+  const [reflecting, setReflecting] = useState(false);
+  const [savedReflection, setSavedReflection] = useState(false);
+  const [reflectionDraft, setReflectionDraft] = useState('');
+  const [showReflectZone, setShowReflectZone] = useState(false);
+  const textareaRef = useRef<HTMLTextAreaElement>(null);
+
+  useEffect(() => {
+    let alive = true;
+    api.getDailyEnergy()
+      .then(d => {
+        if (!alive) return;
+        setData(d);
+        if (d.reflectionText) {
+          setReflectionDraft(d.reflectionText);
+          setSavedReflection(true);
+        }
+      })
+      .catch(() => {})
+      .finally(() => { if (alive) setLoading(false); });
+    return () => { alive = false; };
+  }, []);
+
+  const saveReflection = async () => {
+    if (!reflectionDraft.trim()) return;
+    setReflecting(true);
+    try {
+      await api.saveReflection(reflectionDraft);
+      setSavedReflection(true);
+      setShowReflectZone(false);
+    } catch { /* silent */ }
+    finally { setReflecting(false); }
+  };
+
+  // ─── Loading skeleton ─────────────────────────────────
+  if (loading) {
+    return (
+      <div className="glass rounded-3xl p-5 mb-5 animate-pulse">
+        <div className="h-3 bg-gold-500/20 rounded w-1/4 mb-3" />
+        <div className="h-6 bg-gold-500/10 rounded w-3/4 mb-4" />
+        <div className="flex gap-2">
+          <div className="h-8 bg-night-700/30 rounded-full w-20" />
+          <div className="h-8 bg-night-700/30 rounded-full w-20" />
+        </div>
+      </div>
+    );
+  }
+
+  if (!data) return null;
+
+  const e = data.energy;
+
+  return (
+    <div className="glass rounded-3xl p-5 mb-5 stagger-card card-glow animate-fade-in overflow-hidden relative" style={{ animationDelay: '0.05s' }}>
+      {/* Subtle energy glow background */}
+      <div
+        className="absolute inset-0 opacity-20 pointer-events-none"
+        style={{ background: `radial-gradient(circle at 50% 0%, ${energyColor(e.score)}, transparent 70%)` }}
+      />
+
+      <div className="relative z-10">
+        {/* Header */}
+        <div className="flex items-center justify-between mb-3">
+          <p className="text-gold-400 text-xs uppercase tracking-widest font-medium">Énergie du jour</p>
+          <div className="flex items-center gap-1">
+            {Array.from({ length: 5 }).map((_, i) => (
+              <span key={i} className="text-xs" style={{ opacity: i < Math.ceil(e.score / 2) ? 1 : 0.2 }}>✦</span>
+            ))}
+          </div>
+        </div>
+
+        {/* Headline — the star */}
+        <p className="text-night-100 text-[15px] leading-relaxed font-medium mb-4">
+          {data.headline}
+        </p>
+
+        {/* Energy bar */}
+        <div className="flex items-center gap-3 mb-4">
+          <span className="text-2xl">{e.emoji}</span>
+          <div className="flex-1">
+            <div className="flex items-center gap-2 mb-1">
+              <span className="text-night-200 text-xs font-semibold capitalize">{e.label}</span>
+              <span className="text-night-500 text-[10px]">{e.score}/10</span>
+            </div>
+            <div className="h-1.5 rounded-full bg-night-700/40 overflow-hidden">
+              <div
+                className="h-full rounded-full transition-all duration-1000"
+                style={{ width: `${e.score * 10}%`, background: energyGradient(e.score) }}
+              />
+            </div>
+          </div>
+        </div>
+
+        {/* Good for / Avoid */}
+        <div className="grid grid-cols-2 gap-2 mb-4">
+          <div className="glass rounded-xl p-2.5 border border-emerald-500/10">
+            <p className="text-emerald-400/80 text-[10px] uppercase tracking-wider mb-1.5">Favorable</p>
+            <div className="flex flex-wrap gap-1">
+              {data.goodFor.map((g, i) => (
+                <span key={i} className="text-night-200 text-[11px] bg-emerald-500/10 px-2 py-0.5 rounded-full">
+                  {g}
+                </span>
+              ))}
+            </div>
+          </div>
+          <div className="glass rounded-xl p-2.5 border border-orange-500/10">
+            <p className="text-orange-400/80 text-[10px] uppercase tracking-wider mb-1.5">À éviter</p>
+            <div className="flex flex-wrap gap-1">
+              {data.avoid.map((a, i) => (
+                <span key={i} className="text-night-200 text-[11px] bg-orange-500/10 px-2 py-0.5 rounded-full">
+                  {a}
+                </span>
+              ))}
+            </div>
+          </div>
+        </div>
+
+        {/* Reflection zone */}
+        {!showReflectZone && !savedReflection && (
+          <button
+            onClick={() => { setShowReflectZone(true); setTimeout(() => textareaRef.current?.focus(), 100); }}
+            className="w-full glass-gold rounded-xl py-2.5 px-4 text-left group transition-all hover:scale-[1.01]"
+          >
+            <p className="text-gold-300 text-xs font-medium mb-0.5">💭 Réflexion du jour</p>
+            <p className="text-night-300 text-[11px] leading-snug">{data.reflectionPrompt}</p>
+          </button>
+        )}
+
+        {showReflectZone && (
+          <div className="glass-gold rounded-xl p-4 animate-fade-in">
+            <p className="text-gold-300 text-xs font-medium mb-2">💭 {data.reflectionPrompt}</p>
+            <textarea
+              ref={textareaRef}
+              value={reflectionDraft}
+              onChange={e => setReflectionDraft(e.target.value)}
+              placeholder="Écris ce qui te vient…"
+              maxLength={5000}
+              rows={4}
+              className="w-full bg-night-900/50 text-night-100 text-sm rounded-lg p-3 border border-night-700/50 focus:border-gold-500/40 focus:outline-none resize-none placeholder:text-night-600"
+            />
+            <div className="flex items-center justify-between mt-2">
+              <span className="text-night-500 text-[10px]">{reflectionDraft.length}/5000</span>
+              <div className="flex gap-2">
+                <button
+                  onClick={() => setShowReflectZone(false)}
+                  className="text-night-400 text-xs px-3 py-1.5 rounded-lg hover:text-night-200 transition"
+                >
+                  Annuler
+                </button>
+                <button
+                  onClick={saveReflection}
+                  disabled={!reflectionDraft.trim() || reflecting}
+                  className="bg-gold-500/20 text-gold-300 text-xs font-medium px-4 py-1.5 rounded-lg hover:bg-gold-500/30 disabled:opacity-40 transition"
+                >
+                  {reflecting ? '…' : 'Sauvegarder ✓'}
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {savedReflection && !showReflectZone && (
+          <button
+            onClick={() => { setShowReflectZone(true); setTimeout(() => textareaRef.current?.focus(), 100); }}
+            className="w-full glass rounded-xl p-3 text-left border border-emerald-500/20 transition-all hover:border-emerald-500/40"
+          >
+            <div className="flex items-center gap-2 mb-1">
+              <span className="text-emerald-400 text-xs">✓ Réflexion sauvegardée</span>
+              <span className="text-night-500 text-[10px]">· cliquer pour modifier</span>
+            </div>
+            <p className="text-night-300 text-xs italic line-clamp-2">{reflectionDraft}</p>
+          </button>
+        )}
+      </div>
+    </div>
+  );
+}
+
+// ─── Helpers ─────────────────────────────────────────────
+
+function energyColor(score: number): string {
+  if (score <= 2) return '#4f6d9e';   // calm blue
+  if (score <= 4) return '#7b8fa6';   // muted
+  if (score <= 6) return '#c9a84c';   // warm gold
+  if (score <= 8) return '#d4794f';   // warm orange
+  return '#c84a4a';                    // intense red
+}
+
+function energyGradient(score: number): string {
+  const c = energyColor(score);
+  return `linear-gradient(90deg, ${c}80, ${c})`;
+}
