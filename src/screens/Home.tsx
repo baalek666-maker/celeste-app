@@ -3,7 +3,7 @@ import type { Screen } from '../App';
 import StreakCelebration from '../components/StreakCelebration';
 import DailyGreeting from '../components/DailyGreeting';
 import DailyEnergy from '../components/DailyEnergy';
-import { ZODIAC_SIGNS } from '../data/zodiac';
+import DailyRituals from '../components/DailyRituals';
 
 export function Home({ user, onNavigate, isGuest }: { user: User; onNavigate: (s: Screen) => void; isGuest?: boolean }) {
   const streak = user.streak ?? 0;
@@ -62,12 +62,7 @@ export function Home({ user, onNavigate, isGuest }: { user: User; onNavigate: (s
   }
 
   const chart = user.natalChart!;
-  const sun = ZODIAC_SIGNS[chart.sun];
-  const moon = ZODIAC_SIGNS[chart.moon];
-  const rising = ZODIAC_SIGNS[chart.rising];
-
-  // Guard: if any Big 3 sign is missing/invalid, show fallback instead of crashing
-  if (!sun || !moon || !rising) {
+  if (!chart) {
     return (
       <div className="cosmic-bg star-field min-h-screen flex flex-col items-center justify-center text-night-100 px-6">
         <div className="text-4xl mb-4 animate-float-slow">✦</div>
@@ -98,28 +93,8 @@ export function Home({ user, onNavigate, isGuest }: { user: User; onNavigate: (s
       {/* ── 2. La star : l'horoscope/énergie du jour (DailyEnergy) ── */}
       <DailyEnergy />
 
-      {/* ── 3. Identité : Big 3 compact (signature personnelle stable) ── */}
-      <div className="glass rounded-3xl p-4 mb-4 stagger-card card-glow animate-fade-in" style={{ animationDelay: '0.15s' }}>
-        <p className="text-night-500 text-[10px] uppercase tracking-widest mb-2.5">Tes trois astres</p>
-        <div className="grid grid-cols-3 gap-2">
-          {[
-            { label: '☉', sub: 'Soleil', sign: sun },
-            { label: '☽', sub: 'Lune', sign: moon },
-            { label: '↑', sub: 'Ascendant', sign: rising },
-          ].map(({ sub, sign }) => (
-            <div key={sub} className="text-center">
-              <div
-                className="w-12 h-12 mx-auto rounded-xl flex items-center justify-center mb-1 transition-transform hover:scale-110"
-                style={{ background: `${sign.color}18`, border: `1px solid ${sign.color}40` }}
-              >
-                <span className="text-base" style={{ color: sign.color }}>{sign.symbol}</span>
-              </div>
-              <p className="text-night-400 text-[9px] uppercase tracking-wider">{sub}</p>
-              <p className="text-night-100 font-semibold text-[11px]">{sign.name}</p>
-            </div>
-          ))}
-        </div>
-      </div>
+      {/* ── 3. Ton rituel : action concrète du jour (DailyRituals) ── */}
+      <DailyRituals />
 
       {/* ── 4. Une seule porte d'entrée : Explorer ── */}
       <button
