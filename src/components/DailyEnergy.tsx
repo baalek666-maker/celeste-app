@@ -73,7 +73,7 @@ export default function DailyEnergy({ compact = false }: { compact?: boolean } =
   // ─── MODE COMPACT (v8) : 1-ligne, évite la redondance avec HeroPrediction ─────
   if (compact) {
     return (
-      <div className="glass rounded-2xl p-3 mb-4 flex items-center gap-3 border border-gold-500/15 animate-fade-in">
+      <div className="glass rounded-2xl p-3 mb-2 flex items-center gap-3 border border-gold-500/15 animate-fade-in">
         <div className="text-xl flex-shrink-0">{e.emoji}</div>
         <div className="flex-1 min-w-0">
           <div className="flex items-center gap-2 mb-1">

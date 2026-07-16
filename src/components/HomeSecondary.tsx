@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
 import type { Screen } from '../App';
 import { pushService } from '../lib/pushNotifications';
+import { MoodWidget } from './MoodWidget';
 
 /**
  * HomeSecondary — panneau repliable qui regroupe les widgets de rétention
@@ -51,6 +52,7 @@ export function HomeSecondary({
 
       {open && (
         <div className="mt-3 space-y-2 animate-fade-in">
+          <MoodWidget />
           {streak > 0 && <StreakInline streak={streak} />}
           <EveningReminderInline />
           {!pushEnabled ? (

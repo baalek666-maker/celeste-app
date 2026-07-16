@@ -97,6 +97,16 @@ export function App() {
   const [bootStuck, setBootStuck] = useState<boolean>(false);
   const [isGuest, setIsGuest] = useState<boolean>(false);
 
+  // v9 — Listener global pour navigation depuis CTA contextuel
+  useEffect(() => {
+    const handler = (e: Event) => {
+      const target = (e as CustomEvent<Screen>).detail;
+      if (typeof target === 'string') setScreen(target);
+    };
+    window.addEventListener('celeste:navigate', handler);
+    return () => window.removeEventListener('celeste:navigate', handler);
+  }, []);
+
   const retryBoot = () => {
     setApiDown(false);
     setBooting(true);

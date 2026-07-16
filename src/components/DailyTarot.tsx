@@ -3,6 +3,7 @@ import { api } from '../lib/api';
 import { toast } from './Toast';
 import { getTarotImage } from '../data/tarotImages';
 import { localISODate } from '../lib/storage';
+import { ContextualCTA } from './ContextualCTA';
 
 interface TarotCard {
   cardName: string;
@@ -420,6 +421,9 @@ export default function DailyTarot() {
             <span>📜</span> Historique
           </button>
         </div>
+
+        {/* v9 — CTA contextuel basé sur le transit dominant du jour */}
+        <ContextualCTA />
 
         {/* P2.4 — History panel */}
         {showHistory && (

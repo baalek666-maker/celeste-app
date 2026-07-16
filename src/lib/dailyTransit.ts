@@ -89,10 +89,10 @@ export function getDailyDominantTransit(now: Date = new Date()): Transit {
   }
 }
 
-export const TRANSIT_INFO: Record<Transit, { label: string; glyph: string }> = {
-  mercury: { label: 'Mercure', glyph: '☿' },
-  venus:   { label: 'Vénus',   glyph: '♀' },
-  mars:    { label: 'Mars',    glyph: '♂' },
-  jupiter: { label: 'Jupiter', glyph: '♃' },
-  saturn:  { label: 'Saturne', glyph: '♄' },
+export const TRANSIT_INFO: Record<Transit, { label: string; glyph: string; dailyHook: string }> = {
+  mercury: { label: 'Mercure',  glyph: '☿', dailyHook: 'Paroles, idées, mouvements — tout circule vite.' },
+  venus:   { label: 'Vénus',    glyph: '♀', dailyHook: 'Ton cœur cherche une douceur, même minuscule.' },
+  mars:    { label: 'Mars',     glyph: '♂', dailyHook: 'Une étincelle veut sortir — laisse-la.' },
+  jupiter: { label: 'Jupiter',  glyph: '♃', dailyHook: 'Une porte s\'entrouvre. Tu peux viser plus large.' },
+  saturn:  { label: 'Saturne',  glyph: '♄', dailyHook: 'Pose un geste concret, même petit. Le ciel ancre.' },
 };

@@ -8,7 +8,10 @@
  * 4. Notification immédiate via registration.showNotification() — survit à la fermeture de l'onglet
  *
  * Pas de backend Firebase requis — tout en local via Service Worker.
+ * v9 — body des push enrichi avec le transit dominant du jour (contextualHint)
  */
+
+import { getDailyDominantTransit, TRANSIT_INFO } from './dailyTransit';
 
 const STORAGE_KEY = 'celeste_push_enabled';
 const TIMES_KEY = 'celeste_push_times';
@@ -150,16 +153,54 @@ class PushNotificationService {
 
   private async fireScheduled(t: NotifTime): Promise<void> {
     if (!this.registration) return;
+    // v9 — enrich body avec le transit dominant du jour pour rendre le push contextuel
+    const transitBody = this.contextualHint();
     // vibrate est valide sur SW NotificationOptions mais absent du DOM lib → cast global
     const opts = {
-      body: t.body,
+      body: transitBody || t.body,
       icon: '/icons/icon-192.png',
       badge: '/icons/icon-512.png',
       tag: t.tag,
-      data: { url: '/' },
+      data: { url: this.contextualUrl() },
       vibrate: [100, 50, 100],
     } as unknown as NotificationOptions;
     await this.registration.showNotification(t.title, opts);
+  }
+
+  /**
+   * v9 — Génère un hint contextuel basé sur le transit dominant du jour.
+   * Retourne string|null. null si pas de hint (ex: API éphémérides KO).
+   */
+  private contextualHint(): string | null {
+    try {
+      const transit = getDailyDominantTransit();
+      const info = TRANSIT_INFO[transit];
+      if (!info) return null;
+      const hints: Record<string, string> = {
+        mercury: `Aujourd'hui Mercure est ton fil. ☿ ${info.dailyHook}`,
+        venus:   `Vénus drague ton ciel aujourd'hui. ♀ ${info.dailyHook}`,
+        mars:    `Mars pulse fort. ♂ ${info.dailyHook}`,
+        jupiter: `Jupiter élargit l'horizon. ♃ ${info.dailyHook}`,
+        saturn:  `Saturne ancre. ♄ ${info.dailyHook}`,
+      };
+      return hints[transit] || null;
+    } catch {
+      return null;
+    }
+  }
+
+  private contextualUrl(): string {
+    try {
+      const transit = getDailyDominantTransit();
+      const urls: Record<string, string> = {
+        mercury: '/?focus=horoscope',
+        venus:   '/?focus=compatibility',
+        mars:    '/?focus=explorer',
+        jupiter: '/?focus=journal',
+        saturn:  '/?focus=rituals',
+      };
+      return urls[transit] || '/';
+    } catch { return '/'; }
   }
 
   private clearTimers(): void {

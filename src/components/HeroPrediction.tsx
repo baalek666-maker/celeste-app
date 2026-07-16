@@ -101,12 +101,39 @@ export default function HeroPrediction({ chart, sunSignKey, firstName, streak }:
 
           {/* Chantier D (v8) — streak badge visible chaque jour, pas seulement aux milestones */}
           {streak !== undefined && streak > 0 && (
-            <div className="flex items-center gap-1 px-2 py-1 rounded-full bg-orange-500/15 border border-orange-500/40">
+            <div
+              className="flex items-center gap-1 px-2 py-1 rounded-full bg-orange-500/15 border border-orange-500/40 animate-flame-flicker"
+              title={`${streak} jour${streak > 1 ? 's' : ''} d'affilée — reviens chaque jour pour entretenir le fil`}
+            >
               <span className="text-[10px]">🔥</span>
               <span className="text-[10px] text-orange-200 font-bold tabular-nums">{streak}j</span>
             </div>
           )}
         </div>
+
+        {/* v9 — streak milestone ribbon (7, 14, 30j+) */}
+        {streak !== undefined && streak > 0 && (streak === 7 || streak === 14 || streak === 30 || streak % 30 === 0) && (
+          <div className="mt-2 flex items-center justify-center gap-2 text-[10px] text-gold-300 animate-fade-in">
+            <span>✦</span>
+            <span className="uppercase tracking-widest">
+              {streak === 7 && 'Une semaine de présence'}
+              {streak === 14 && 'Deux semaines — le rythme s\'installe'}
+              {streak === 30 && 'Un mois entier — tu fais partie du ciel'}
+              {streak > 30 && streak % 30 === 0 && `${streak / 30} mois de présence`}
+            </span>
+            <span>✦</span>
+          </div>
+        )}
+
+        <style>{`
+          @keyframes flame-flicker {
+            0%, 100% { box-shadow: 0 0 8px rgba(251, 146, 60, 0.3); }
+            50%      { box-shadow: 0 0 16px rgba(251, 146, 60, 0.6); }
+          }
+          .animate-flame-flicker {
+            animation: flame-flicker 2.5s ease-in-out infinite;
+          }
+        `}</style>
 
         {/* THE PHRASE — signature mémorable */}
         {loading ? (
