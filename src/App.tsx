@@ -6,6 +6,7 @@ import CelesteLogo from './components/CelesteLogo';
 import { BottomNav } from './components/BottomNav';
 import { getToken, clearToken, api } from './lib/api';
 import { getUser, saveUser, getFreeScans, incrementFreeScans, getFreeCompat, incrementFreeCompat } from './lib/storage';
+import { identifyUser, track, resetUser } from './lib/monitoring';
 import { calculateNatalChart } from './lib/astrology';
 import type { User } from './types';
 
@@ -124,6 +125,7 @@ export function App() {
           setApiDown(true);
         } else {
           clearToken();
+          resetUser();
           setIsAuthed(false);
         }
         setBooting(false);
@@ -204,6 +206,7 @@ export function App() {
           if (isAuthFail) {
             window.clearTimeout(stuckTimer);
             clearToken();
+            resetUser();
             setIsAuthed(false);
             setBooting(false);
             return;
@@ -336,6 +339,8 @@ export function App() {
     if (screen === 'auth') {
       return (
         <Auth onSuccess={(serverUser) => {
+          identifyUser(serverUser.id, { email: serverUser.email, isPremium: serverUser.isPremium });
+          track('user_logged_in');
           const updated: User = {
             ...user,
             email: serverUser.email,

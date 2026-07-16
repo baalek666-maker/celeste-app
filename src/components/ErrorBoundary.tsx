@@ -1,4 +1,5 @@
 import { Component, type ReactNode } from 'react';
+import { captureError } from '../lib/monitoring';
 
 interface Props {
   children: ReactNode;
@@ -22,8 +23,7 @@ export class ErrorBoundary extends Component<Props, State> {
   }
 
   componentDidCatch(error: Error, info: React.ErrorInfo) {
-    // Log so we can investigate remotely if a logging sink is added later.
-    console.error('[ErrorBoundary]', error, info.componentStack);
+    captureError(error, { componentStack: info.componentStack });
   }
 
   reset = () => this.setState({ error: null });
