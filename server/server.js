@@ -14,6 +14,7 @@ import { fileURLToPath } from 'url';
 import { dirname, join } from 'path';
 import billingRouter, { stripeWebhookHandler, isStripeConfigured } from './billing.js';
 import { registerGamificationRoutes } from './gamification.js';
+import { runMigrations } from './migrate.js';
 import { CELESTE_VOICE, celesteSystemPrompt } from './celest-voice.js';
 import {
   signAccessToken,
@@ -937,6 +938,11 @@ db.exec(`CREATE TABLE IF NOT EXISTS interpretation_templates (
   updated_at INTEGER DEFAULT (strftime('%s','now')),
   PRIMARY KEY(planet, sign, degree, language)
 )`);
+
+// ─── Run pending migrations ───────────────────────────────
+// Must run AFTER all inline CREATE TABLE statements and BEFORE the server
+// starts accepting requests. Migrations are idempotent and transactional.
+await runMigrations(db);
 
 const PLANET_FR = {
   sun: 'Soleil', moon: 'Lune', mercury: 'Mercure', venus: 'Vénus',
