@@ -3,7 +3,7 @@ import type { Screen } from '../App';
 import StreakCelebration from '../components/StreakCelebration';
 import DailyGreeting from '../components/DailyGreeting';
 import DailyEnergy from '../components/DailyEnergy';
-import DailyRituals from '../components/DailyRituals';
+import DailyTarot from '../components/DailyTarot';
 
 export function Home({ user, onNavigate, isGuest }: { user: User; onNavigate: (s: Screen) => void; isGuest?: boolean }) {
   const streak = user.streak ?? 0;
@@ -93,8 +93,8 @@ export function Home({ user, onNavigate, isGuest }: { user: User; onNavigate: (s
       {/* ── 2. La star : l'horoscope/énergie du jour (DailyEnergy) ── */}
       <DailyEnergy />
 
-      {/* ── 3. Ton rituel : action concrète du jour (DailyRituals) ── */}
-      <DailyRituals />
+      {/* ── 3. Tarot quotidien : visuel fort + rituel de tirage ── */}
+      <DailyTarot />
 
       {/* ── 4. Une seule porte d'entrée : Explorer ── */}
       <button
