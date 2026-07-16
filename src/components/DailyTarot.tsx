@@ -234,7 +234,11 @@ export default function DailyTarot() {
             perspective: '1200px',
             animation: 'tarot-drop-in 0.6s ease-out',
           }}
+          role="button"
+          tabIndex={0}
+          aria-label="Carte face cachée, appuie pour révéler"
           onClick={reveal}
+          onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); reveal(); } }}
         >
           <div
             className="absolute inset-0 rounded-2xl flex flex-col items-center justify-center"
@@ -288,7 +292,11 @@ export default function DailyTarot() {
         <div
           className="relative cursor-pointer select-none"
           style={{ perspective: '1500px' }}
+          role="button"
+          tabIndex={0}
+          aria-label={flipSide === 'recto' ? `Carte ${drawn.cardName}. Appuie pour la lecture détaillée` : `Lecture détaillée. Appuie pour revoir la carte`}
           onClick={toggleFlip}
+          onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); toggleFlip(); } }}
         >
           <div
             className="relative w-full transition-transform duration-700 ease-out"

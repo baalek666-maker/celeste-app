@@ -84,14 +84,17 @@ export function BottomNav({ items, labels, active, onNavigate }: NavProps) {
   };
 
   return (
-    <div className="glass-dark border-t border-gold-500/10 px-2 py-2 safe-area-bottom relative">
-      <div className="flex justify-around items-center">
+    <nav className="glass-dark border-t border-gold-500/10 px-2 py-2 safe-area-bottom relative" aria-label="Navigation principale">
+      <ul className="flex justify-around items-center" role="list">
         {items.map(item => {
           const isActive = active === item;
           return (
+            <li key={item}>
             <button
               key={item}
               onClick={() => handleNav(item)}
+              aria-current={isActive ? 'page' : undefined}
+              aria-label={labels[item]}
               className="flex flex-col items-center gap-1 px-3 py-1.5 transition-all duration-300 active:scale-90"
             >
               <div className={`relative transition-all duration-300 ${isActive ? 'scale-110' : 'scale-100'}`}>
@@ -111,9 +114,10 @@ export function BottomNav({ items, labels, active, onNavigate }: NavProps) {
                 {labels[item]}
               </span>
             </button>
+            </li>
           );
         })}
-      </div>
-    </div>
+      </ul>
+    </nav>
   );
 }

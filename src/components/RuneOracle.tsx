@@ -201,11 +201,14 @@ export default function RuneOracle() {
         </div>
 
         {/* Question optionnelle */}
+        <label htmlFor="rune-question" className="sr-only">Pose ta question (optionnel)</label>
         <input
+          id="rune-question"
           type="text"
           value={question}
           onChange={(e) => setQuestion(e.target.value)}
           placeholder="Pose ta question (optionnel)..."
+          aria-label="Pose ta question (optionnel)"
           className="w-full glass rounded-xl px-4 py-2 text-sm text-night-100 placeholder-night-500 outline-none border-gold-500/20"
         />
 

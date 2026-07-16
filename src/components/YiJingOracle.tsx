@@ -21,10 +21,10 @@ function dailyHexagram(date = new Date()): Hexagram {
   return HEXAGRAMS.find(h => h.id === id) || HEXAGRAMS[0];
 }
 
-function renderHexagram(lines: number[], highlightChanging?: number[]) {
+function renderHexagram(lines: number[], highlightChanging?: number[], label?: string) {
   // lines[0] = bottom, lines[5] = top
   return (
-    <div className="flex flex-col gap-1.5 items-center">
+    <div className="flex flex-col gap-1.5 items-center" role="img" aria-label={label || 'Hexagramme du Yi Jing'}>
       {[5, 4, 3, 2, 1, 0].map((idx) => {
         const isYang = lines[idx] === 1;
         const isChanging = highlightChanging?.includes(idx);
