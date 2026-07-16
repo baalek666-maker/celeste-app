@@ -1,9 +1,33 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { api } from '../lib/api';
 import { ZODIAC_SIGNS } from '../data/zodiac';
 import type { ZodiacSign, NatalChart } from '../types';
 import { getDailyHighlightPlanet } from '../lib/dailyHighlight';
 import { generateSignaturePhrase } from '../lib/signaturePhrases';
+
+/**
+ * Typewriter — reveal lettre par lettre en ~1.2s pour donner le wow cinématique
+ * au mount. Vitesse adaptative : 60ms/caractère, plafonné à 1.2s total.
+ */
+function useTypewriter(text: string, enabled: boolean, durationMs = 1200) {
+  const [out, setOut] = useState(enabled ? '' : text);
+  useEffect(() => {
+    if (!enabled || !text) {
+      setOut(text);
+      return;
+    }
+    setOut('');
+    const step = Math.max(20, Math.floor(durationMs / Math.max(1, text.length)));
+    let i = 0;
+    const id = setInterval(() => {
+      i += 1;
+      setOut(text.slice(0, i));
+      if (i >= text.length) clearInterval(id);
+    }, step);
+    return () => clearInterval(id);
+  }, [text, enabled, durationMs]);
+  return out;
+}
 
 type EnergyData = {
   headline: string;
@@ -64,6 +88,22 @@ export default function HeroPrediction({ chart, sunSignKey, firstName, streak }:
 
   const energyEmoji = data?.energy?.emoji ?? '✦';
   const energyLabel = data?.energy?.label ?? '';
+
+  // v10 — Typewriter : la phrase se révèle lettre par lettre au mount (1.2s)
+  // pour donner le moment cinématique signature.
+  const displayedPhrase = useTypewriter(heroPhrase, !loading);
+  // SubInfo arrive 200ms après la fin du typewriter pour séquencer le reveal
+  const [showSubInfo, setShowSubInfo] = useState(false);
+  useEffect(() => {
+    if (loading || !subInfo) {
+      setShowSubInfo(false);
+      return;
+    }
+    const step = Math.max(20, Math.floor(1200 / Math.max(1, heroPhrase.length)));
+    const totalMs = step * heroPhrase.length + 200;
+    const id = setTimeout(() => setShowSubInfo(true), totalMs);
+    return () => clearTimeout(id);
+  }, [loading, heroPhrase, subInfo]);
 
   return (
     <div className="relative mb-6 rounded-3xl overflow-hidden border border-gold-500/40 animate-fade-in shadow-2xl shadow-gold-500/10">
@@ -144,11 +184,20 @@ export default function HeroPrediction({ chart, sunSignKey, firstName, streak }:
         ) : (
           <>
             <p className="text-[1.65rem] leading-[1.2] font-bold text-night-50 tracking-tight animate-fade-in">
-              {heroPhrase}
+              {displayedPhrase}
+              {/* Curseur clignotant pendant la frappe */}
+              {displayedPhrase.length < heroPhrase.length && (
+                <span
+                  className="inline-block w-0.5 h-5 ml-0.5 bg-gold-400 align-middle animate-pulse"
+                  aria-hidden="true"
+                />
+              )}
             </p>
 
             {subInfo && (
-              <p className="text-[11px] text-night-400 mt-3 italic flex items-center gap-1.5">
+              <p
+                className={`text-[11px] text-night-400 mt-3 italic flex items-center gap-1.5 transition-opacity duration-700 ${showSubInfo ? 'opacity-100' : 'opacity-0'}`}
+              >
                 <span className="text-gold-400">✦</span>
                 {subInfo}
               </p>

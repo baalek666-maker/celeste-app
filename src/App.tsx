@@ -107,6 +107,27 @@ export function App() {
     return () => window.removeEventListener('celeste:navigate', handler);
   }, []);
 
+  // v10 — Deep-link push : si l'URL contient ?focus=<screen>, on y va directement.
+  // Ex: push "Ouvre ton horoscope" → tap → URL/?focus=horoscope → écran horoscope.
+  // Valide ?focus contre la liste des Screen connus pour éviter injection.
+  useEffect(() => {
+    try {
+      const params = new URLSearchParams(window.location.search);
+      const focus = params.get('focus');
+      if (!focus) return;
+      const allowed: Screen[] = ['home', 'chart', 'horoscope', 'compatibility', 'journal', 'explorer', 'settings'];
+      if (allowed.includes(focus as Screen)) {
+        setScreen(focus as Screen);
+      }
+      // Nettoie l'URL après navigation pour éviter que le back-reload re-trigger
+      const url = new URL(window.location.href);
+      url.searchParams.delete('focus');
+      window.history.replaceState({}, '', url.toString());
+    } catch {
+      // URLSearchParams ou history.replaceState indisponible — silencieux.
+    }
+  }, []);
+
   const retryBoot = () => {
     setApiDown(false);
     setBooting(true);

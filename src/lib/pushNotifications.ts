@@ -197,7 +197,7 @@ class PushNotificationService {
         venus:   '/?focus=compatibility',
         mars:    '/?focus=explorer',
         jupiter: '/?focus=journal',
-        saturn:  '/?focus=rituals',
+        saturn:  '/?focus=explorer',
       };
       return urls[transit] || '/';
     } catch { return '/'; }

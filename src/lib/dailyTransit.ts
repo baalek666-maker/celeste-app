@@ -89,10 +89,18 @@ export function getDailyDominantTransit(now: Date = new Date()): Transit {
   }
 }
 
-export const TRANSIT_INFO: Record<Transit, { label: string; glyph: string; dailyHook: string }> = {
-  mercury: { label: 'Mercure',  glyph: '☿', dailyHook: 'Paroles, idées, mouvements — tout circule vite.' },
-  venus:   { label: 'Vénus',    glyph: '♀', dailyHook: 'Ton cœur cherche une douceur, même minuscule.' },
-  mars:    { label: 'Mars',     glyph: '♂', dailyHook: 'Une étincelle veut sortir — laisse-la.' },
-  jupiter: { label: 'Jupiter',  glyph: '♃', dailyHook: 'Une porte s\'entrouvre. Tu peux viser plus large.' },
-  saturn:  { label: 'Saturne',  glyph: '♄', dailyHook: 'Pose un geste concret, même petit. Le ciel ancre.' },
+export const TRANSIT_INFO: Record<Transit, {
+  label: string;
+  glyph: string;
+  dailyHook: string;
+  /** v10 — couleur d'accent dominante du transit (fond adaptatif + astrolabe) */
+  accent: string;
+  /** v10 — couleur secondaire pour le halo (gradient overlay) */
+  halo: string;
+}> = {
+  mercury: { label: 'Mercure', glyph: '☿', dailyHook: 'Paroles, idées, mouvements — tout circule vite aujourd\'hui. Accroche-toi au sens, pas au bruit.', accent: '#C9D6E0', halo: '#A8B5C2' },
+  venus:   { label: 'Vénus',   glyph: '♀', dailyHook: 'Mars pulse fort. ♂ Une étincelle veut sortir — canalise-la, ne la réprime pas.', accent: '#E8A5B8', halo: '#D87C95' },
+  mars:    { label: 'Mars',    glyph: '♂', dailyHook: 'Ton cœur déborde. ♀ Laisse quelqu\'un approcher — la tendresse n\'est pas une faiblesse.', accent: '#D85A4A', halo: '#B8402F' },
+  jupiter: { label: 'Jupiter', glyph: '♃', dailyHook: 'Quelque chose de plus grand que toi t\'attend. Élargis le cadre.', accent: '#F4D27A', halo: '#D4A858' },
+  saturn:  { label: 'Saturne', glyph: '♄', dailyHook: 'Pose les fondations. La patience aujourd\'hui construit l\'impossible demain.', accent: '#9BA8B8', halo: '#7A8A9C' },
 };

@@ -5,9 +5,11 @@ import StreakCelebration from '../components/StreakCelebration';
 import DailyTarot from '../components/DailyTarot';
 import DailyEnergy from '../components/DailyEnergy';
 import HeroPrediction from '../components/HeroPrediction';
+import DailyIntention from '../components/DailyIntention';
 import { SignatureFooter } from '../components/SignatureFooter';
 import { HomeSecondary } from '../components/HomeSecondary';
 import { pushService } from '../lib/pushNotifications';
+import { getDailyDominantTransit, TRANSIT_INFO } from '../lib/dailyTransit';
 
 export function Home({ user, onNavigate, isGuest }: { user: User; onNavigate: (s: Screen) => void; isGuest?: boolean }) {
   const streak = user.streak ?? 0;
@@ -58,13 +60,32 @@ export function Home({ user, onNavigate, isGuest }: { user: User; onNavigate: (s
   const chart = user.natalChart as NonNullable<User['natalChart']>;
   const firstName = (user.name?.split(' ')[0]) || (user.email?.split('@')[0]) || undefined;
 
+  // v10 — Fond adaptatif au transit dominant : un halo subtil qui teinte la Home
+  // selon la planète qui domine aujourd'hui. Le fond cosmic-bg reste, on ajoute
+  // juste un radial-gradient overlay en transition lente (4s) entre les transits.
+  const transit = getDailyDominantTransit();
+  const transitAccent = TRANSIT_INFO[transit].accent;
+  const transitHalo = TRANSIT_INFO[transit].halo;
+
   return (
     <div className="px-5 pt-12 pb-6 relative z-10">
+      {/* v10 — halo overlay adaptatif au transit (sous les blocs, au-dessus du fond) */}
+      <div
+        className="pointer-events-none fixed inset-0 -z-0 transition-all duration-[4000ms] ease-in-out"
+        style={{
+          background: `radial-gradient(ellipse at top, ${transitHalo}26 0%, ${transitAccent}14 30%, transparent 70%)`,
+        }}
+        aria-hidden="true"
+      />
+      <div className="relative z-10">
       <StreakCelebration streak={streak} />
 
       {/* v8 — 4 BLOCS MAX DANS LE FLUX PRINCIPAL */}
       {/* 1. HERO PREDICTION — phrase qui tue (40% écran, wow effect) */}
       <HeroPrediction chart={chart} sunSignKey={chart.sun} firstName={firstName} streak={streak} />
+
+      {/* v10 — INTENTION DU JOUR — geste rituel signature (cercle + phrase méditative) */}
+      <DailyIntention />
 
       {/* 2. TAROT — différenciateur vs Co-Star */}
       <DailyTarot />
@@ -82,6 +103,7 @@ export function Home({ user, onNavigate, isGuest }: { user: User; onNavigate: (s
 
       {/* Panneau SECONDARY collapsable (streak inline + reminder + optin push) */}
       <HomeSecondary streak={streak} onNavigate={onNavigate} />
+      </div>
     </div>
   );
 }
