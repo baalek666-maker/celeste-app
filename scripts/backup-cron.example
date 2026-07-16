@@ -1,0 +1,2 @@
+# P1 #11 — Backup SQLite automatique
+0 */6 * * * /home/ubuntu/celeste-app/scripts/backup-db.sh >> /home/ubuntu/celeste-app/logs/backup.log 2>&1

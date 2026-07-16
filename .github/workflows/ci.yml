@@ -1,0 +1,60 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: 'npm'
+
+      - name: Install deps
+        run: npm ci
+
+      - name: Type check
+        run: npx tsc --noEmit
+
+      - name: Build frontend
+        run: npm run build
+
+      - name: Install server deps
+        working-directory: server
+        run: npm ci || npm install
+
+      - name: Test server boots
+        working-directory: server
+        run: node -e "import('./server.js').then(()=>process.exit(0)).catch(e=>{console.error(e.message);process.exit(1)})"
+        env:
+          JWT_SECRET: test-secret-do-not-use-in-prod
+          DATABASE_PATH: /tmp/ci-test.db
+          NODE_ENV: test
+          # Stripe/webpush optional in CI
+          STRIPE_SECRET_KEY: sk_test_dummy
+          VAPID_PUBLIC_KEY: dummy
+          VAPID_PRIVATE_KEY: dummy
+          VAPID_SUBJECT: mailto:test@example.com
+
+  # ─── Tests e2e Playwright (run only when tests are added in Phase 2C)
+  e2e:
+    runs-on: ubuntu-latest
+    needs: build
+    if: false  # Set true once tests/playwright/ files exist
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: 'npm'
+      - run: npm ci
+      - run: npx playwright install --with-deps chromium
+      - run: npm run test:e2e
