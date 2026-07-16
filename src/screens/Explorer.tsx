@@ -7,12 +7,11 @@ import PersonalTransits from '../components/PersonalTransits';
 import DailyRituals from '../components/DailyRituals';
 import ActivatedHouses from '../components/ActivatedHouses';
 import AsteroidWisdom from '../components/AsteroidWisdom';
-import WeeklyChallenge from '../components/WeeklyChallenge';
+import ProgressionHub from '../components/ProgressionHub';
 import ChineseAstrology from '../components/ChineseAstrology';
 import BadgeGrid from '../components/BadgeGrid';
 import XpBar from '../components/XpBar';
 import DailyTarot from '../components/DailyTarot';
-import DailyQuests from '../components/DailyQuests';
 import AstroPortrait from '../screens/AstroPortrait';
 
 type Pilier = 'sky' | 'links' | 'daily';
@@ -42,14 +41,11 @@ const LINKS_MODULES: Module[] = [
 ];
 
 const DAILY_MODULES: Module[] = [
-  { key: 'aspects',   label: 'Transits du jour', emoji: '🌌', desc: 'Comment le ciel d\'aujourd\'hui touche TON thème' },
-  { key: 'houses',    label: 'Maisons activées', emoji: '🏠', desc: 'Les domaines de ta vie qui vibrent aujourd\'hui' },
-  { key: 'rituals',   label: 'Rituels du jour',  emoji: '🕯️', desc: 'Un geste à poser aujourd\'hui' },
-  { key: 'tarot',     label: 'Tarot quotidien',   emoji: '🃏', desc: 'Une carte pour ta journée' },
-  { key: 'quests',    label: 'Quêtes',            emoji: '⚔️', desc: 'Tes missions du jour' },
-  { key: 'challenge', label: 'Défi hebdomadaire', emoji: '🎯', desc: 'Un objectif sur la semaine' },
-  { key: 'xp',        label: 'Progression',       emoji: '📊', desc: 'Ton niveau et ton XP' },
-  { key: 'badges',    label: 'Badges',            emoji: '🏆', desc: 'Tes récompenses débloquées' },
+  { key: 'aspects',     label: 'Transits du jour',   emoji: '🌌', desc: 'Comment le ciel d\'aujourd\'hui touche TON thème' },
+  { key: 'houses',      label: 'Maisons activées',   emoji: '🏠', desc: 'Les domaines de ta vie qui vibrent aujourd\'hui' },
+  { key: 'rituals',     label: 'Rituels du jour',    emoji: '🕯️', desc: 'Un geste à poser aujourd\'hui' },
+  { key: 'tarot',       label: 'Tarot quotidien',    emoji: '🃏', desc: 'Une carte pour ta journée' },
+  { key: 'progression', label: 'Progression',        emoji: '✨', desc: 'XP, quêtes, défi de la semaine, badges' },
 ];
 
 function PilierHeader({ label, onBack }: { label: string; onBack: () => void }) {
@@ -117,8 +113,7 @@ export function Explorer({ user, onNavigate }: { user: User; onNavigate: (s: Scr
           {modKey === 'chinese'      && <ChineseAstrology user={user} />}
           {modKey === 'xp'           && <XpBar />}
           {modKey === 'tarot'        && <DailyTarot />}
-          {modKey === 'quests'       && <DailyQuests />}
-          {modKey === 'challenge'    && <WeeklyChallenge />}
+          {modKey === 'progression'  && <ProgressionHub />}
           {modKey === 'badges'       && <BadgeGrid />}
         </div>
       </div>
