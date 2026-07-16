@@ -6,7 +6,6 @@ import jwt from 'jsonwebtoken';
 import Database from 'better-sqlite3';
 import { rateLimit, ipKeyGenerator } from 'express-rate-limit';
 import helmet from 'helmet';
-import compression from 'compression';
 import * as Astronomy from 'astronomy-engine';
 const { AstroTime, Body, GeoVector, SiderealTime, EclipticGeoMoon, Rotation_EQJ_ECL, RotateVector, Observer, Horizon, Equator, MakeTime, Ecliptic } = Astronomy;
 import { readFileSync } from 'fs';
@@ -714,18 +713,6 @@ const llmLimiter = rateLimit({
 // ─── Server ────────────────────────────────────────────────
 const app = express();
 app.set('trust proxy', 1);
-
-// P1 #5 — Compression HTTP (gzip/brotli) — gain ~70% bande passante sur JSON.
-app.use(compression({
-  level: 6,
-  threshold: 1024, // ne compresse rien < 1KB (overhead)
-  filter: (req, res) => {
-    // Stripe webhook doit recevoir le body brut, pas de compression
-    if (req.path === '/api/billing/webhook') return false;
-    return compression.filter(req, res);
-  },
-}));
-
 app.use(cors({
   origin(origin, cb) {
     // Pas d'origin = requête same-origin ou curl ; on permet.
@@ -754,10 +741,6 @@ app.use(helmet({
   crossOriginEmbedderPolicy: false,
 }));
 
-// P0 #25 — Scan metrics: counter + flush every 5min so it shows in Render/Fly logs
-// without flooding them. Helps you decide if fail2ban / Cloudflare is worth it.
-const scanStats = { count: 0, lastPath: '', lastIp: '' };
-
 // P0 #23 — Fail-fast sur les routes hors-scope (scanners / bots).
 // Économise CPU + log propre. Bloque les scans Next.js / MCP / ONVIF / SSH / etc.
 const SCAN_PATTERNS = [
@@ -781,6 +764,9 @@ app.use((req, res, next) => {
   next();
 });
 
+// P0 #25 — Scan metrics: counter + flush every 5min so it shows in Render/Fly logs
+// without flooding them. Helps you decide if fail2ban / Cloudflare is worth it.
+const scanStats = { count: 0, lastPath: '', lastIp: '' };
 setInterval(() => {
   if (scanStats.count > 0) {
     console.log(`[scan-blocked] ${scanStats.count} hits (last: ${scanStats.lastPath} from ${scanStats.lastIp})`);
@@ -803,10 +789,9 @@ app.post(
 app.use(express.json({ limit: '2mb' }));
 
 // ─── DEBUG: logger TOUTES les requêtes POST entrantes ───
-// P1 #9 — Logger les requêtes POST seulement en dev (NODE_ENV !== 'production').
-// En prod, ne pas spammer les logs avec des IP/UA — Sentry/PostHog font ce boulot.
+// P0 #4 — Filtre les champs sensibles (password, token) avant de logger.
+// Sans ce filtre, les mots de passe login/register étaient persistés en clair.
 const SENSITIVE_FIELDS = ['password', 'token', 'jwt', 'authorization', 'secret'];
-const LOG_POSTS = process.env.NODE_ENV !== 'production';
 function sanitizeBody(body) {
   if (!body || typeof body !== 'object') return body;
   const out = {};
@@ -816,7 +801,7 @@ function sanitizeBody(body) {
   return out;
 }
 app.use((req, res, next) => {
-  if (LOG_POSTS && req.method === 'POST') {
+  if (req.method === 'POST') {
     console.log('[POST IN]', req.path, JSON.stringify({
       body: sanitizeBody(req.body),
       ip: req.ip,
@@ -1152,9 +1137,7 @@ app.post('/api/auth/register', authLimiter, async (req, res) => {
   if (typeof email !== 'string' || typeof password !== 'string') {
     return res.status(400).json({ error: 'Email et mot de passe requis' });
   }
-  // P2 #14 — Min 8 caractères (était 6). Hash bcrypt(10) protège, mais on évite
-  // les mots de passe triviaux type "123456" qui passent vite en leak.
-  if (password.length < 8) return res.status(400).json({ error: 'Mot de passe trop court (8 min)' });
+  if (password.length < 6) return res.status(400).json({ error: 'Mot de passe trop court (6 min)' });
 
   const emailLower = email.toLowerCase();
   if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(emailLower)) {
