@@ -42,3 +42,5 @@ docs/*.json
 android/app/build/
 ios/build/
 ios/Pods/
+test-results/
+playwright-report/
