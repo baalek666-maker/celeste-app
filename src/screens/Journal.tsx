@@ -2,6 +2,7 @@ import { useEffect, useState, useRef } from 'react';
 import type { User, JournalEntry } from '../types';
 import { getJournal, addJournalEntry, localISODate } from '../lib/storage';
 import { api, getToken } from '../lib/api';
+import MoodCheckin from '../components/MoodCheckin';
 
 function calcStreak(entries: JournalEntry[]): number {
   if (entries.length === 0) return 0;
@@ -140,6 +141,11 @@ export function Journal({ user }: { user: User }) {
           {syncing ? '⟳ Synchronisation…' : `✓ ${syncMsg}`}
         </p>
       )}
+
+      {/* Mood check-in (P3.3 — moved from Home) */}
+      <div className="mb-4">
+        <MoodCheckin />
+      </div>
 
       {/* Today's entry */}
       <div className="glass rounded-3xl p-5 mb-6">
