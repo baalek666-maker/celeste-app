@@ -561,6 +561,11 @@ export const api = {
   deleteAccount: () => apiCall<{ ok: true; deletedAt: string }>('/account', {
     method: 'DELETE',
   }, 15_000, { bypassOfflineQueue: true }),
+
+  // RGPD Art. 20 — portabilité des données
+  exportAccount: () => apiCall<Record<string, unknown>>('/account/export', {
+    method: 'GET',
+  }, 15_000, { bypassOfflineQueue: true }),
   verifySession: (sessionId: string) => apiCall<{ status: string; paymentStatus: string; subscriptionId: string | null }>(`/billing/verify-session`, {
     method: 'POST',
     body: JSON.stringify({ sessionId }),

@@ -847,6 +847,22 @@ app.use((req, res, next) => {
   next();
 });
 
+// ─── Global rate limiter ─────────────────────────────────
+// P1 #11 — Applies to ALL /api/* routes (except auth, which has its own limiter).
+// Prevents abuse: brute-force, scraping, resource exhaustion.
+// 200 req/min per IP — generous enough for normal use, tight enough for bots.
+const globalLimiter = rateLimit({
+  windowMs: 60 * 1000, // 1 min
+  max: 200,
+  keyGenerator: (req) => ipKeyGenerator(req.ip),
+  message: { error: 'Trop de requêtes. Ralentis un peu.' },
+  standardHeaders: true,
+  legacyHeaders: false,
+  // Skip rate-limiting for Stripe webhooks (they have their own retry logic)
+  skip: (req) => req.path === '/api/billing/webhook',
+});
+app.use('/api/', globalLimiter);
+
 // Health check
 app.get('/api/health', (req, res) => {
   res.json({ status: 'ok', ephemeris: 'astronomy-engine v2' });
@@ -1364,6 +1380,51 @@ app.get('/api/profile', auth, (req, res) => {
 //   - gamification_* (streak, achievements) — best-effort
 //
 // Le token JWT devient inutilisable après suppression (user introuvable en DB).
+// ─── GDPR: Data Export (Art. 20 — portabilité) ───────────
+// Returns all user data as JSON. User can download and import elsewhere.
+app.get('/api/account/export', auth, (req, res) => {
+  const userId = req.user?.id;
+  if (!userId) return res.status(401).json({ error: 'Non authentifié.' });
+
+  try {
+    const user = db.prepare('SELECT id, email, created_at, is_premium, premium_until, streak_count, notification_hour FROM users WHERE id = ?').get(userId);
+    if (!user) return res.status(404).json({ error: 'Compte introuvable.' });
+
+    const data = {
+      exportedAt: new Date().toISOString(),
+      user,
+      profiles: [],
+      journalEntries: [],
+      horoscopeFavorites: [],
+      pushSubscriptions: [],
+      dailyRituals: [],
+      onboardingProgress: null,
+    };
+
+    // Collect from each table (best-effort, skip if table doesn't exist)
+    const collect = (table, where = 'user_id') => {
+      try {
+        return db.prepare(`SELECT * FROM ${table} WHERE ${where} = ?`).all(userId);
+      } catch { return []; }
+    };
+
+    data.profiles = collect('profiles');
+    data.journalEntries = collect('journal_entries');
+    data.horoscopeFavorites = collect('horoscope_favorites');
+    data.pushSubscriptions = collect('push_subscriptions');
+    data.dailyRituals = collect('daily_rituals');
+    try {
+      data.onboardingProgress = db.prepare('SELECT * FROM onboarding_progress WHERE user_id = ?').get(userId) || null;
+    } catch { /* table may not exist */ }
+
+    res.setHeader('Content-Disposition', `attachment; filename="celeste-data-${userId}-${Date.now()}.json"`);
+    res.json(data);
+  } catch (err) {
+    console.error('[gdpr-export] error:', err.message);
+    res.status(500).json({ error: 'Export impossible.' });
+  }
+});
+
 app.delete('/api/account', auth, (req, res) => {
   const userId = req.user?.id;
   if (!userId) return res.status(401).json({ error: 'Non authentifié.' });
