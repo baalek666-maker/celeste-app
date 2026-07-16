@@ -15,6 +15,14 @@ import { dirname, join } from 'path';
 import billingRouter, { stripeWebhookHandler, isStripeConfigured } from './billing.js';
 import { registerGamificationRoutes } from './gamification.js';
 import { CELESTE_VOICE, celesteSystemPrompt } from './celest-voice.js';
+import {
+  signAccessToken,
+  signRefreshToken,
+  verifyAccessToken,
+  verifyRefreshToken,
+  blacklistRefreshToken,
+  issueTokenPair,
+} from './auth-tokens.js';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const JWT_SECRET = process.env.JWT_SECRET;
@@ -171,7 +179,22 @@ if (!db.prepare("SELECT name FROM sqlite_master WHERE type='table' AND name='pus
   `);
 }
 
-// users columns for notification preferences
+// token_blacklist — revoked refresh tokens (JWT blacklist)
+if (!db.prepare("SELECT name FROM sqlite_master WHERE type='table' AND name='token_blacklist'").get()) {
+  db.exec(`
+    CREATE TABLE token_blacklist (
+      jti TEXT PRIMARY KEY,
+      user_id INTEGER,
+      revoked_at INTEGER NOT NULL,
+      expires_at INTEGER
+    );
+    CREATE INDEX idx_blacklist_user ON token_blacklist(user_id);
+  `);
+}
+// Auto-clean expired blacklist entries (> 31 days old)
+db.prepare('DELETE FROM token_blacklist WHERE revoked_at < ?').run(
+  Math.floor(Date.now() / 1000) - 31 * 86400
+);
 const userColsForNotif = db.prepare("PRAGMA table_info(users)").all();
 if (!userColsForNotif.find(c => c.name === 'notification_hour')) {
   db.exec('ALTER TABLE users ADD COLUMN notification_hour INTEGER DEFAULT 9');
@@ -670,11 +693,12 @@ function auth(req, res, next) {
   const token = req.headers.authorization?.replace('Bearer ', '');
   if (!token) return res.status(401).json({ error: 'No token' });
   try {
-    req.user = jwt.verify(token, JWT_SECRET);
+    const decoded = verifyAccessToken(token);
+    req.user = decoded;
     req.db = db; // expose db to billing routes (portal, etc.)
     // Quick premium check for rate limiting (cached per-request)
     try {
-      const u = db.prepare('SELECT is_premium, premium_until FROM users WHERE id = ?').get(req.user.id);
+      const u = db.prepare('SELECT is_premium, premium_until FROM users WHERE id = ?').get(decoded.id);
       const now = Math.floor(Date.now() / 1000);
       req.user.isPremium = !!u?.is_premium && (!u?.premium_until || u.premium_until > now);
     } catch { /* non-fatal */ }
@@ -1162,22 +1186,51 @@ app.post('/api/auth/register', authLimiter, async (req, res) => {
 
   const hash = bcrypt.hashSync(password, 10);
   const result = db.prepare('INSERT INTO users (email, password_hash) VALUES (?, ?)').run(emailLower, hash);
-  const token = jwt.sign({ id: result.lastInsertRowid, email: emailLower }, JWT_SECRET, { expiresIn: '30d' });
-  res.json({ token, user: { id: result.lastInsertRowid, email: emailLower, isPremium: false, scansRemaining: 3 } });
+  const user = { id: result.lastInsertRowid, email: emailLower };
+  const { access, refresh } = issueTokenPair(db, user);
+  res.json({ token: access, refreshToken: refresh, user: { id: user.id, email: emailLower, isPremium: false, scansRemaining: 3 } });
 });
 
 // ─── Auth: Logout ───────────────────────────────────────────
-// Endpoint minimal pour traçabilité + invalidation côté serveur (best-effort).
-// Note: le vrai logout reste client-side (clear localStorage JWT) puisque le JWT
-// est stateless. Cet endpoint sert juste à logger l'événement pour analytics/sécurité.
+// Revokes the refresh token server-side (JWT blacklist). The access token
+// is short-lived (15min) so it expires naturally.
 app.post('/api/auth/logout', auth, (req, res) => {
   try {
-    const userId = req.user?.id;
-    console.log(`[auth] logout user_id=${userId} at ${new Date().toISOString()}`);
+    const { refreshToken } = req.body || {};
+    if (refreshToken) {
+      try {
+        const decoded = verifyRefreshToken(refreshToken, db);
+        blacklistRefreshToken(decoded.jti, db);
+      } catch { /* token may already be expired/invalid — ignore */ }
+    }
+    console.log(`[auth] logout user_id=${req.user?.id} at ${new Date().toISOString()}`);
     res.json({ ok: true });
   } catch (err) {
     console.error('[auth] logout error:', err.message);
     res.status(500).json({ error: 'Logout failed' });
+  }
+});
+
+// ─── Auth: Refresh ─────────────────────────────────────────
+// Exchange a valid refresh token for a new access + refresh pair.
+// Old refresh token is blacklisted (rotation).
+app.post('/api/auth/refresh', authLimiter, (req, res) => {
+  const { refreshToken } = req.body || {};
+  if (!refreshToken) return res.status(400).json({ error: 'Refresh token requis' });
+
+  try {
+    const decoded = verifyRefreshToken(refreshToken, db);
+    // Verify user still exists
+    const user = db.prepare('SELECT id, email FROM users WHERE id = ?').get(decoded.id);
+    if (!user) return res.status(401).json({ error: 'Compte introuvable' });
+
+    // Rotate: blacklist old refresh token, issue new pair
+    blacklistRefreshToken(decoded.jti, db);
+    const { access, refresh } = issueTokenPair(db, user);
+    res.json({ token: access, refreshToken: refresh });
+  } catch (err) {
+    // If the refresh token is invalid/expired/blacklisted, user must re-login
+    res.status(401).json({ error: 'Session expirée, reconnecte-toi' });
   }
 });
 
@@ -1191,9 +1244,10 @@ app.post('/api/auth/login', authLimiter, async (req, res) => {
   if (!user || !bcrypt.compareSync(password, user.password_hash)) {
     return res.status(401).json({ error: 'Email ou mot de passe incorrect' });
   }
-  const token = jwt.sign({ id: user.id, email: user.email }, JWT_SECRET, { expiresIn: '30d' });
+  const { access, refresh } = issueTokenPair(db, user);
   res.json({
-    token,
+    token: access,
+    refreshToken: refresh,
     user: {
       id: user.id,
       email: user.email,

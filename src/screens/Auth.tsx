@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { api, setToken, errMsg } from '../lib/api';
+import { api, errMsg } from '../lib/api';
 
 export function Auth({ onSuccess }: { onSuccess: (user: any) => void }) {
   const [mode, setMode] = useState<'login' | 'register'>('register');
@@ -16,7 +16,6 @@ export function Auth({ onSuccess }: { onSuccess: (user: any) => void }) {
       const res = mode === 'register'
         ? await api.register(email, password)
         : await api.login(email, password);
-      setToken(res.token);
       onSuccess(res.user);
     } catch (err: unknown) {
       // Friendlier, localized error messages

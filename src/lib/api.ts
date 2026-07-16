@@ -17,6 +17,8 @@ export function errMsg(e: unknown, fallback = 'Une erreur est survenue'): string
 }
 
 // ─── Token management ──────────────────────────────
+const REFRESH_TOKEN_KEY = 'celeste_refresh';
+
 export function getToken(): string | null {
   return localStorage.getItem(TOKEN_KEY);
 }
@@ -27,6 +29,50 @@ export function setToken(token: string): void {
 
 export function clearToken(): void {
   localStorage.removeItem(TOKEN_KEY);
+  localStorage.removeItem(REFRESH_TOKEN_KEY);
+}
+
+export function getRefreshToken(): string | null {
+  return localStorage.getItem(REFRESH_TOKEN_KEY);
+}
+
+export function setRefreshToken(token: string): void {
+  localStorage.setItem(REFRESH_TOKEN_KEY, token);
+}
+
+// ─── Token refresh (singleton to avoid parallel refresh races) ──
+let refreshPromise: Promise<string> | null = null;
+
+async function tryRefresh(): Promise<string | null> {
+  const refreshToken = getRefreshToken();
+  if (!refreshToken) return null;
+
+  // Singleton: if a refresh is already in flight, piggyback on it
+  if (refreshPromise) return refreshPromise;
+
+  refreshPromise = (async () => {
+    try {
+      const res = await fetch(`${API_URL}/auth/refresh`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ refreshToken }),
+      });
+      if (!res.ok) throw new Error('Refresh failed');
+      const data = await res.json();
+      setToken(data.token);
+      setRefreshToken(data.refreshToken);
+      return data.token as string;
+    } catch {
+      // Refresh failed — clear everything, user must re-login
+      clearToken();
+      return '';
+    } finally {
+      refreshPromise = null;
+    }
+  })();
+
+  const newToken = await refreshPromise;
+  return newToken || null;
 }
 
 function isMutation(method?: string) {
@@ -52,7 +98,7 @@ async function apiCall<T = any>(
   path: string,
   options: RequestInit = {},
   timeoutMs: number = DEFAULT_TIMEOUT_MS,
-  opts: { bypassOfflineQueue?: boolean } = {},
+  opts: { bypassOfflineQueue?: boolean; __retried?: boolean } = {},
 ): Promise<T> {
   const token = getToken();
   const headers: Record<string, string> = {
@@ -119,6 +165,16 @@ async function apiCall<T = any>(
   clearTimeout(tid);
 
   if (!res.ok) {
+    // 401 → try refresh once, then retry the original request
+    if (res.status === 401 && !opts.__retried) {
+      const newToken = await tryRefresh();
+      if (newToken) {
+        return apiCall<T>(path, {
+          ...options,
+          headers: { ...options.headers, Authorization: `Bearer ${newToken}` },
+        }, timeoutMs, { ...opts, __retried: true } as any);
+      }
+    }
     const err = await res.json().catch(() => ({ error: 'Network error' }));
     throw new Error(err.error || `HTTP ${res.status}`);
   }
@@ -134,6 +190,7 @@ export async function flushOfflineQueue() {
 // ─── Auth ──────────────────────────────────────────
 export interface AuthResponse {
   token: string;
+  refreshToken: string;
   user: {
     id: number;
     email: string;
@@ -147,20 +204,39 @@ export interface AuthResponse {
 export const api = {
   // Auth — CRITIQUES : bypassOfflineQueue. Si offline, on échoue bruyamment
   // (l'utilisateur ne doit pas croire qu'il est loggué alors que la requête attend).
-  register: (email: string, password: string) =>
-    apiCall<AuthResponse>('/auth/register', {
+  register: async (email: string, password: string) => {
+    const res = await apiCall<AuthResponse>('/auth/register', {
       method: 'POST',
       body: JSON.stringify({ email, password }),
-    }, DEFAULT_TIMEOUT_MS, { bypassOfflineQueue: true }),
+    }, DEFAULT_TIMEOUT_MS, { bypassOfflineQueue: true });
+    setToken(res.token);
+    setRefreshToken(res.refreshToken);
+    return res;
+  },
 
-  login: (email: string, password: string) =>
-    apiCall<AuthResponse>('/auth/login', {
+  login: async (email: string, password: string) => {
+    const res = await apiCall<AuthResponse>('/auth/login', {
       method: 'POST',
       body: JSON.stringify({ email, password }),
-    }, DEFAULT_TIMEOUT_MS, { bypassOfflineQueue: true }),
+    }, DEFAULT_TIMEOUT_MS, { bypassOfflineQueue: true });
+    setToken(res.token);
+    setRefreshToken(res.refreshToken);
+    return res;
+  },
 
-  logout: () =>
-    apiCall<{ ok: boolean }>('/auth/logout', { method: 'POST' }, DEFAULT_TIMEOUT_MS, { bypassOfflineQueue: true }),
+  logout: async () => {
+    const refreshToken = getRefreshToken();
+    try {
+      await apiCall<{ ok: boolean }>('/auth/logout', {
+        method: 'POST',
+        body: JSON.stringify({ refreshToken }),
+      }, DEFAULT_TIMEOUT_MS, { bypassOfflineQueue: true });
+    } finally {
+      // Always clear locally, even if server call fails
+      clearToken();
+    }
+    return { ok: true };
+  },
 
   // Profile
   saveBirthData: (birthData: BirthData) =>
