@@ -3,15 +3,10 @@ import type { User } from '../types';
 import type { Screen } from '../App';
 import { ChartView } from './ChartView';
 import { Compatibility } from './Compatibility';
-import PersonalTransits from '../components/PersonalTransits';
-import DailyRituals from '../components/DailyRituals';
-import ActivatedHouses from '../components/ActivatedHouses';
+import DailySky from '../components/DailySky';
+import DailyDraws from '../components/DailyDraws';
 import AsteroidWisdom from '../components/AsteroidWisdom';
-import ProgressionHub from '../components/ProgressionHub';
 import ChineseAstrology from '../components/ChineseAstrology';
-import BadgeGrid from '../components/BadgeGrid';
-import XpBar from '../components/XpBar';
-import DailyTarot from '../components/DailyTarot';
 import AstroPortrait from '../screens/AstroPortrait';
 
 type Pilier = 'sky' | 'links' | 'daily';
@@ -41,11 +36,8 @@ const LINKS_MODULES: Module[] = [
 ];
 
 const DAILY_MODULES: Module[] = [
-  { key: 'aspects',     label: 'Transits du jour',   emoji: '🌌', desc: 'Comment le ciel d\'aujourd\'hui touche TON thème' },
-  { key: 'houses',      label: 'Maisons activées',   emoji: '🏠', desc: 'Les domaines de ta vie qui vibrent aujourd\'hui' },
-  { key: 'rituals',     label: 'Rituels du jour',    emoji: '🕯️', desc: 'Un geste à poser aujourd\'hui' },
-  { key: 'tarot',       label: 'Tarot quotidien',    emoji: '🃏', desc: 'Une carte pour ta journée' },
-  { key: 'progression', label: 'Progression',        emoji: '✨', desc: 'XP, quêtes, défi de la semaine, badges' },
+  { key: 'sky',    label: 'Ton ciel aujourd\'hui', emoji: '🌌', desc: 'Transits, maisons activées, rituels — tout ton ciel du jour' },
+  { key: 'draws',  label: 'Tes tirages',           emoji: '🃏', desc: 'Tarot du jour + ta progression (XP, quêtes, badges)' },
 ];
 
 function PilierHeader({ label, onBack }: { label: string; onBack: () => void }) {
@@ -105,16 +97,11 @@ export function Explorer({ user, onNavigate }: { user: User; onNavigate: (s: Scr
         <PilierHeader label={modLabel} onBack={goBack} />
         <div className="px-5 pb-6">
           {modKey === 'chart'        && <ChartView user={user} />}
-          {modKey === 'houses'       && <ActivatedHouses />}
-          {modKey === 'aspects'      && <PersonalTransits />}
           {modKey === 'asteroids'    && <AsteroidWisdom />}
-          {modKey === 'rituals'      && <DailyRituals />}
           {modKey === 'compatibility'&& <Compatibility user={user} />}
           {modKey === 'chinese'      && <ChineseAstrology user={user} />}
-          {modKey === 'xp'           && <XpBar />}
-          {modKey === 'tarot'        && <DailyTarot />}
-          {modKey === 'progression'  && <ProgressionHub />}
-          {modKey === 'badges'       && <BadgeGrid />}
+          {modKey === 'sky'          && <DailySky />}
+          {modKey === 'draws'        && <DailyDraws />}
         </div>
       </div>
     );
