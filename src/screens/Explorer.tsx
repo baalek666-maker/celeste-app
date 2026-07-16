@@ -3,10 +3,10 @@ import type { User } from '../types';
 import type { Screen } from '../App';
 import { ChartView } from './ChartView';
 import { Compatibility } from './Compatibility';
-import DailyAspects from '../components/DailyAspects';
+import PersonalTransits from '../components/PersonalTransits';
 import DailyRituals from '../components/DailyRituals';
-import HousesChart from '../components/HousesChart';
-import AsteroidInsights from '../components/AsteroidInsights';
+import ActivatedHouses from '../components/ActivatedHouses';
+import AsteroidWisdom from '../components/AsteroidWisdom';
 import LunarNodes from '../components/LunarNodes';
 import WeeklyChallenge from '../components/WeeklyChallenge';
 import ChineseAstrology from '../components/ChineseAstrology';
@@ -34,11 +34,11 @@ const PILIERS: { key: Pilier; label: string; emoji: string; desc: string }[] = [
 const SKY_MODULES: Module[] = [
   { key: 'portrait',  label: 'Portrait astral',  emoji: '📜', desc: 'Ton portrait profond de 1500 mots' },
   { key: 'chart',     label: 'Thème natal',      emoji: '☀️', desc: 'Toutes tes planètes et maisons' },
-  { key: 'houses',    label: 'Maisons',          emoji: '🏠', desc: 'Les douze domaines de ta vie' },
-  { key: 'aspects',   label: 'Aspects du jour',  emoji: '◈',  desc: 'Les angles planétaires actuels' },
+  { key: 'houses',    label: 'Maisons activées', emoji: '🏠', desc: 'Quels domaines de ta vie sont illuminés aujourd\'hui' },
+  { key: 'aspects',   label: 'Transits du jour', emoji: '🌌', desc: 'Comment le ciel d\'aujourd\'hui touche TON thème' },
   { key: 'nodes',     label: 'Nœuds lunaires',   emoji: '☊',  desc: 'Ta mission karmique' },
-  { key: 'asteroids', label: 'Astéroïdes',       emoji: '✦',  desc: 'Chiron, Lilith et les autres' },
-  { key: 'rituals',   label: 'Rituels du jour',  emoji: '🕯️', desc: "Un geste à poser aujourd'hui" },
+  { key: 'asteroids', label: 'Blessures & Pouvoirs', emoji: '🌑', desc: 'Chiron, Lilith — tes archétypes intérieurs' },
+  { key: 'rituals',   label: 'Rituels du jour',  emoji: '🕯️', desc: 'Un geste à poser aujourd\'hui' },
 ];
 
 const LINKS_MODULES: Module[] = [
@@ -111,10 +111,10 @@ export function Explorer({ user, onNavigate }: { user: User; onNavigate: (s: Scr
         <PilierHeader label={modLabel} onBack={goBack} />
         <div className="px-5 pb-6">
           {modKey === 'chart'        && <ChartView user={user} />}
-          {modKey === 'houses'       && <HousesChart />}
-          {modKey === 'aspects'      && <DailyAspects />}
+          {modKey === 'houses'       && <ActivatedHouses />}
+          {modKey === 'aspects'      && <PersonalTransits />}
           {modKey === 'nodes'        && <LunarNodes />}
-          {modKey === 'asteroids'    && <AsteroidInsights />}
+          {modKey === 'asteroids'    && <AsteroidWisdom />}
           {modKey === 'rituals'      && <DailyRituals />}
           {modKey === 'compatibility'&& <Compatibility user={user} />}
           {modKey === 'chinese'      && <ChineseAstrology user={user} />}

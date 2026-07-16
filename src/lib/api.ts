@@ -760,4 +760,68 @@ export const api = {
     method: 'POST',
     body: JSON.stringify({ rating, note }),
   }),
+
+  // ─── Personal Transits (refonte "Aspects du jour") ─────────
+  getPersonalTransits: () => apiCall<{
+    date: string;
+    headline: string;
+    flowScore: number;
+    challengeScore: number;
+    aspects: Array<{
+      transitPlanet: string;
+      natalPlanet: string;
+      transitPlanetFr: string;
+      natalPlanetFr: string;
+      transitGlyph: string;
+      natalGlyph: string;
+      aspect: string;
+      aspectFr: string;
+      aspectGlyph: string;
+      nature: 'tension' | 'harmonique' | 'neutre';
+      orb: number;
+      exact: boolean;
+      transitRetrograde: boolean;
+      interpretation: string;
+      conseil: string;
+    }>;
+  }>('/personal-transits', { method: 'GET' }),
+
+  // ─── Activated Houses (refonte "Maisons natales") ──────────
+  getActivatedHouses: () => apiCall<{
+    date: string;
+    headline: string;
+    houses: Array<{
+      num: number;
+      theme: string;
+      icon: string;
+      short: string;
+      sign: string;
+      activated: boolean;
+      natalPlanets: Array<{ key: string; name: string; glyph: string; sign: string; degree: number; }>;
+      transitPlanets: Array<{ key: string; name: string; glyph: string; sign: string; degree: number; retrograde?: boolean; }>;
+      insight: string;
+      action: string;
+    }>;
+  }>('/activated-houses', { method: 'GET' }),
+
+  // ─── Asteroid Wisdom (refonte "Astéroïdes natals") ─────────
+  getAsteroidWisdom: () => apiCall<{
+    headline: string;
+    archetypes: Array<{
+      key: string;
+      name: string;
+      archetype: string;
+      icon: string;
+      sign: string;
+      degree: number;
+      glyph: string;
+      title?: string;
+      meaning?: string;
+      gift?: string;
+      shadow?: string;
+      practice?: string;
+    }>;
+    generatedAt?: string;
+    cached?: boolean;
+  }>('/asteroid-wisdom', { method: 'GET' }),
 };

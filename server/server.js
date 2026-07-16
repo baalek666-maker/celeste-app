@@ -22,6 +22,9 @@ import { createProfilesRouter } from './routes/profiles.js';
 import { createDailyEnergyRouter } from './routes/daily-energy.js';
 import { createLunarCycleRouter } from './routes/lunar-cycle.js';
 import { createMoodTrackerRouter } from './routes/mood-tracker.js';
+import { createPersonalTransitsRouter } from './routes/personal-transits.js';
+import { createActivatedHousesRouter } from './routes/activated-houses.js';
+import { createAsteroidWisdomRouter } from './routes/asteroid-wisdom.js';
 import { CELESTE_VOICE, celesteSystemPrompt } from './celest-voice.js';
 import {
   signAccessToken,
@@ -1820,6 +1823,15 @@ app.use('/api/lunar-cycle', createLunarCycleRouter({ db, auth, moonPhaseForDate 
 
 // ─── Mood Tracker (daily check-in + astro correlation) ──
 app.use('/api/mood', createMoodTrackerRouter({ db, auth, getNatalPositions, getTransits }));
+
+// ─── Personal Transits (refonte "Aspects du jour") ──────
+app.use('/api/personal-transits', createPersonalTransitsRouter({ db, auth, getNatalPositions, getTransits, callLLMWithRetry }));
+
+// ─── Activated Houses (refonte "Maisons natales") ───────
+app.use('/api/activated-houses', createActivatedHousesRouter({ db, auth, getNatalPositions, getTransits, callLLMWithRetry }));
+
+// ─── Asteroid Wisdom (refonte "Astéroïdes natals") ──────
+app.use('/api/asteroid-wisdom', createAsteroidWisdomRouter({ db, auth, getNatalPositions, callLLMWithRetry }));
 
 // ─── Premium status ────────────────────────────────────────
 // ⚠️ Cet endpoint est DÉSACTIVÉ. Le premium ne peut plus être activé

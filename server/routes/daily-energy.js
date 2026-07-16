@@ -115,14 +115,18 @@ export function createDailyEnergyRouter({ db, auth, getNatalPositions, getTransi
     }
 
     // Need to generate. Get user's birth data.
-    const user = db.prepare('SELECT birth_data FROM birth_data WHERE user_id = ?').get(userId);
-    if (!user?.birth_data) {
+    let row = null;
+    try { row = db.prepare('SELECT birth_data FROM profiles WHERE user_id = ? AND is_self = 1').get(userId); } catch {}
+    if (!row || !row.birth_data) {
+      try { row = db.prepare('SELECT birth_data FROM users WHERE id = ?').get(userId); } catch {}
+    }
+    if (!row || !row.birth_data) {
       return res.status(400).json({ error: 'Configure d\'abord tes données de naissance pour recevoir ton énergie du jour.' });
     }
 
     let birthData;
     try {
-      birthData = typeof user.birth_data === 'string' ? JSON.parse(user.birth_data) : user.birth_data;
+      birthData = typeof row.birth_data === 'string' ? JSON.parse(row.birth_data) : row.birth_data;
     } catch {
       return res.status(400).json({ error: 'Données de naissance invalides.' });
     }

@@ -106,10 +106,14 @@ export function createMoodTrackerRouter({ db, auth, getNatalPositions, getTransi
 
       // Compute correlation with transits (if we have birth data)
       let correlations = null;
-      const user = db.prepare('SELECT birth_data FROM birth_data WHERE user_id = ?').get(userId);
-      if (user?.birth_data && rows.length >= 5) {
+      let bRow = null;
+      try { bRow = db.prepare('SELECT birth_data FROM profiles WHERE user_id = ? AND is_self = 1').get(userId); } catch {}
+      if (!bRow || !bRow.birth_data) {
+        try { bRow = db.prepare('SELECT birth_data FROM users WHERE id = ?').get(userId); } catch {}
+      }
+      if (bRow?.birth_data && rows.length >= 5) {
         try {
-          const birthData = typeof user.birth_data === 'string' ? JSON.parse(user.birth_data) : user.birth_data;
+          const birthData = typeof bRow.birth_data === 'string' ? JSON.parse(bRow.birth_data) : bRow.birth_data;
           const natal = getNatalPositions(birthData, true);
           const elementMood = { Fire: [], Earth: [], Air: [], Water: [] };
 
