@@ -1,146 +1,180 @@
 /**
- * PushNotificationService — Notifications natives navigateur (Piste #4).
+ * pushNotifications.ts — rappels quotidiens persistants via Service Worker (Piste #4 audit).
  *
- * Stratégie : on ne peut pas programmer de notifications différées sans service worker
- * + Push API + backend Firebase. Mais on peut :
- * 1. Demander la permission
- * 2. Programmer des notifications locales dans la session (aujourd'hui)
- * 3. Préparer le terrain pour le push distant (TODO: service worker registration)
+ * Stratégie :
+ * 1. Demande permission à l'utilisateur (après interaction, contexte = bouton opt-in)
+ * 2. Enregistre /sw.js (déjà présent dans public/, gère push + notificationclick + offline cache)
+ * 3. Schedule des notifications aux heures clés : 7h30 (matin), 18h (tarot soir), 22h (rituel coucher)
+ * 4. Notification immédiate via registration.showNotification() — survit à la fermeture de l'onglet
+ *
+ * Pas de backend Firebase requis — tout en local via Service Worker.
  */
 
-const STORAGE_KEY_PERMISSION = 'celeste:push-permission-asked';
-const STORAGE_KEY_TIMES = 'celeste:notif-times';
+const STORAGE_KEY = 'celeste_push_enabled';
+const TIMES_KEY = 'celeste_push_times';
 
-const DEFAULT_TIMES: NotifTime[] = [
-  { hour: 7, minute: 30, label: 'morning' },
-  { hour: 18, minute: 0, label: 'evening' },
-  { hour: 22, minute: 0, label: 'night' },
+export interface NotifTime {
+  hour: number;
+  minute: number;
+  label: string;
+  title: string;
+  body: string;
+  tag: string;
+}
+
+export const DEFAULT_TIMES: NotifTime[] = [
+  { hour: 7, minute: 30, label: 'Matin', title: '✦ Ton ciel du matin', body: "Ouvre Céleste, ton horoscope du jour t'attend.", tag: 'celeste-morning' },
+  { hour: 18, minute: 0, label: 'Soir', title: '🌙 Ton tarot du soir est prêt', body: 'Le voile se lève. Tire ta carte.', tag: 'celeste-evening' },
+  { hour: 22, minute: 0, label: 'Nuit', title: '🌌 Rituel du coucher', body: 'Trois lignes dans ton journal pour sceller la journée.', tag: 'celeste-night' },
 ];
 
-const MESSAGES = {
-  morning: [
-    'Ton horoscope du matin est prêt ✨',
-    'Le ciel a quelque chose à te dire aujourd\'hui',
-    'Ton café astral t\'attend ☕',
-  ],
-  evening: [
-    'Ton tarot du soir t\'attend 🃏',
-    'Le ciel du soir a une surprise pour toi',
-    'Ton rituel du soir ouvre maintenant 🌙',
-  ],
-  night: [
-    'Comment s\'est passée ta journée ? 📔',
-    'Ton journal t\'attend pour la rétrospective',
-    'Note ce que le ciel t\'a appris aujourd\'hui',
-  ],
-};
-
-export type NotifTime = { hour: number; minute: number; label: 'morning' | 'evening' | 'night' };
-
 class PushNotificationService {
-  private timers: number[] = [];
-  private permission: NotificationPermission = 'default';
+  private registration: ServiceWorkerRegistration | null = null;
+  private scheduledTimers: number[] = [];
+  private enabled = false;
 
-  async init() {
-    if (!('Notification' in window)) return false;
+  async init(): Promise<void> {
+    if (typeof window === 'undefined') return;
+    if (!('serviceWorker' in navigator)) return;
+    if (!('Notification' in window)) return;
 
-    this.permission = Notification.permission;
+    // Restore state
+    this.enabled = localStorage.getItem(STORAGE_KEY) === '1';
 
-    if (this.permission === 'granted') {
+    try {
+      this.registration = await navigator.serviceWorker.register('/sw.js');
+    } catch (e) {
+      console.warn('[push] SW registration failed', e);
+      return;
+    }
+
+    if (this.enabled && Notification.permission === 'granted') {
       this.scheduleAll();
-      return true;
     }
-
-    // Demande une seule fois (pas spammer l'utilisateur)
-    const asked = localStorage.getItem(STORAGE_KEY_PERMISSION);
-    if (!asked && this.permission === 'default') {
-      // On ne demande PAS automatiquement — on attend que l'utilisateur interagisse
-      // (Chrome bloque les demandes sans contexte)
-    }
-
-    return false;
   }
 
-  async requestPermission(): Promise<NotificationPermission> {
-    if (!('Notification' in window)) return 'denied';
-    const result = await Notification.requestPermission();
-    this.permission = result;
-    localStorage.setItem(STORAGE_KEY_PERMISSION, '1');
-    if (result === 'granted') {
-      this.scheduleAll();
-    }
-    return result;
+  isEnabled(): boolean {
+    return this.enabled && Notification.permission === 'granted';
   }
 
   getPermission(): NotificationPermission {
-    return this.permission;
+    if (typeof window === 'undefined' || !('Notification' in window)) return 'denied';
+    return Notification.permission;
   }
 
-  isSupported(): boolean {
-    return 'Notification' in window;
+  async requestPermission(): Promise<boolean> {
+    if (typeof window === 'undefined' || !('Notification' in window)) return false;
+    if (Notification.permission === 'denied') return false;
+    if (Notification.permission === 'granted') {
+      this.enable();
+      return true;
+    }
+    const result = await Notification.requestPermission();
+    if (result === 'granted') {
+      this.enable();
+      return true;
+    }
+    return false;
   }
 
-  getConfiguredTimes(): NotifTime[] {
+  disable(): void {
+    this.enabled = false;
+    localStorage.removeItem(STORAGE_KEY);
+    this.clearTimers();
+  }
+
+  /** Notification immédiate (debug + opt-in confirmation). */
+  async notifyNow(title: string, body: string, url = '/'): Promise<void> {
+    if (!this.registration || Notification.permission !== 'granted') return;
+    // vibrate est valide sur SW NotificationOptions mais absent du DOM lib → cast global
+    const opts = {
+      body,
+      icon: '/icons/icon-192.png',
+      badge: '/icons/icon-512.png',
+      tag: 'celeste-immediate',
+      data: { url },
+      vibrate: [100, 50, 100],
+    } as unknown as NotificationOptions;
+    await this.registration.showNotification(title, opts);
+  }
+
+  /** Reprogramme tous les timers. À appeler au boot + après changement d'heure. */
+  scheduleAll(times: NotifTime[] = this.getStoredTimes()): void {
+    this.clearTimers();
+    if (!this.isEnabled()) return;
+
+    times.forEach((t) => {
+      const ms = this.msUntilNext(t.hour, t.minute);
+      const id = window.setTimeout(() => {
+        this.fireScheduled(t);
+        // Re-schedule pour demain
+        this.scheduleSingle(t);
+      }, ms);
+      this.scheduledTimers.push(id);
+    });
+
+    console.info(`[push] ${times.length} notifs programmées (prochain dans ${Math.round(this.msUntilNext(times[0]?.hour ?? 7, times[0]?.minute ?? 30) / 60000)}min)`);
+  }
+
+  getStoredTimes(): NotifTime[] {
     try {
-      const stored = localStorage.getItem(STORAGE_KEY_TIMES);
-      if (stored) return JSON.parse(stored);
-    } catch { /* silent */ }
+      const raw = localStorage.getItem(TIMES_KEY);
+      if (raw) return JSON.parse(raw);
+    } catch { /* fallback */ }
     return DEFAULT_TIMES;
   }
 
-  setTimes(times: NotifTime[]) {
-    localStorage.setItem(STORAGE_KEY_TIMES, JSON.stringify(times));
-    this.clearTimers();
+  setTimes(times: NotifTime[]): void {
+    localStorage.setItem(TIMES_KEY, JSON.stringify(times));
+    if (this.enabled) this.scheduleAll(times);
+  }
+
+  // ─── PRIVÉS ───────────────────────────────────────────────────────────
+
+  private enable(): void {
+    this.enabled = true;
+    localStorage.setItem(STORAGE_KEY, '1');
     this.scheduleAll();
+    // Notification de bienvenue
+    this.notifyNow('✦ Céleste activé', 'Tes rappels quotidiens sont en place. À demain matin.');
   }
 
-  private scheduleAll() {
-    this.clearTimers();
-    const times = this.getConfiguredTimes();
-    times.forEach((t) => this.scheduleNext(t));
+  private scheduleSingle(t: NotifTime): void {
+    const ms = this.msUntilNext(t.hour, t.minute);
+    const id = window.setTimeout(() => {
+      this.fireScheduled(t);
+      this.scheduleSingle(t); // re-arm
+    }, ms);
+    this.scheduledTimers.push(id);
   }
 
-  private scheduleNext(time: NotifTime) {
+  private async fireScheduled(t: NotifTime): Promise<void> {
+    if (!this.registration) return;
+    // vibrate est valide sur SW NotificationOptions mais absent du DOM lib → cast global
+    const opts = {
+      body: t.body,
+      icon: '/icons/icon-192.png',
+      badge: '/icons/icon-512.png',
+      tag: t.tag,
+      data: { url: '/' },
+      vibrate: [100, 50, 100],
+    } as unknown as NotificationOptions;
+    await this.registration.showNotification(t.title, opts);
+  }
+
+  private clearTimers(): void {
+    this.scheduledTimers.forEach((id) => clearTimeout(id));
+    this.scheduledTimers = [];
+  }
+
+  private msUntilNext(hour: number, minute: number): number {
     const now = new Date();
     const next = new Date();
-    next.setHours(time.hour, time.minute, 0, 0);
-    if (next <= now) {
+    next.setHours(hour, minute, 0, 0);
+    if (next.getTime() <= now.getTime()) {
       next.setDate(next.getDate() + 1);
     }
-    const delay = next.getTime() - now.getTime();
-
-    const id = window.setTimeout(() => {
-      this.showNotification(time.label);
-      // Reprogrammer pour demain
-      this.scheduleNext(time);
-    }, delay);
-
-    this.timers.push(id);
-  }
-
-  private showNotification(label: 'morning' | 'evening' | 'night') {
-    if (this.permission !== 'granted') return;
-    const messages = MESSAGES[label];
-    const text = messages[Math.floor(Math.random() * messages.length)];
-
-    try {
-      new Notification('Céleste', {
-        body: text,
-        icon: '/icon-192.png',
-        badge: '/icon-192.png',
-        tag: `celeste-${label}`,
-      });
-    } catch { /* silent */ }
-  }
-
-  private clearTimers() {
-    this.timers.forEach((id) => clearTimeout(id));
-    this.timers = [];
-  }
-
-  /** Démontage (cleanup) — utile pour HMR */
-  destroy() {
-    this.clearTimers();
+    return next.getTime() - now.getTime();
   }
 }
 
