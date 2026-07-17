@@ -39,6 +39,26 @@ export function Journal({ user }: { user: User }) {
   const streak = calcStreak(entries);
   const hasToday = entries.some(e => e.date === today);
 
+  // P1 — Prompt contextuel qui change selon le jour de la semaine + heure
+  // 14 prompts, on en pioche 1 selon l'index du jour pour variety jour-par-jour
+  const JOURNAL_PROMPTS = [
+    "Qu'est-ce qui t'a surpris aujourd'hui ?",
+    "Une rencontre, un mot, un signe — note ce qui a résonné.",
+    "Quel feedback de ton corps aujourd'hui (énergie, sommeil, appétit) ?",
+    "Y a-t-il eu un décalage entre ce que tu voulais et ce que tu as fait ?",
+    "Qu'as-tu évité aujourd'hui ? Pourquoi ?",
+    "Quel a été le moment le plus dense ? Le plus léger ?",
+    "Si tu devais résumer la journée en une couleur, laquelle ?",
+    "Qui t'a fait te sentir vu·e aujourd'hui ?",
+    "Quelle a été ta plus grande victoire — même petite ?",
+    "Note ce qui t'a échappé. Leçons ou regrets, à toi de voir.",
+    "Demande-toi : qu'est-ce qui te ferait du bien, là, maintenant ?",
+    "Un truc que tu as aimé chez toi aujourd'hui.",
+    "Quel alignement (ou désalignement) entre ton intention et tes actes ?",
+    "Si la journée était une note de musique, laquelle serait-elle ?",
+  ];
+  const todaysPrompt = JOURNAL_PROMPTS[new Date().getDate() % JOURNAL_PROMPTS.length];
+
   // On mount, if logged in, fetch server-side entries and merge with local.
   // Server is source of truth; localStorage acts as offline cache.
   useEffect(() => {
@@ -162,10 +182,15 @@ export function Journal({ user }: { user: User }) {
           ))}
         </div>
 
+        {/* P1 — Prompt contextuel du jour (au-dessus du textarea) */}
+        <p className="text-cosmic-300 text-sm mb-2 italic border-l-2 border-cosmic-500/40 pl-3">
+          {todaysPrompt}
+        </p>
+
         <textarea
           value={note}
           onChange={e => setNote(e.target.value)}
-          placeholder="Note tes pensées, ressentis, synchronicités..."
+          placeholder="Écris ici ce qui te traverse…"
           rows={3}
           className="w-full p-3 rounded-xl glass border border-night-700 text-night-100 text-sm placeholder:text-night-600 focus:outline-none focus:border-cosmic-500 resize-none"
         />
@@ -175,27 +200,48 @@ export function Journal({ user }: { user: User }) {
         </button>
       </div>
 
-      {/* Past entries */}
-      {entries.length > 0 && (
-        <>
-          <p className="text-night-400 text-xs uppercase tracking-widest mb-3">Historique</p>
-          <div className="space-y-3">
-            {entries.map((e, idx) => (
-              <div key={e.id} className="glass rounded-2xl p-4 animate-fade-in card-glow" style={{ animationDelay: `${idx * 0.06}s` }}>
-                <div className="flex items-center justify-between mb-2">
-                  <p className="text-night-300 text-sm capitalize">
-                    {new Date(e.date).toLocaleDateString('fr-FR', { day: 'numeric', month: 'short' })}
+      {/* Past entries — grouped by month (P2) */}
+      {entries.length > 0 && (() => {
+        // Group entries by YYYY-MM
+        const groups = new Map<string, { label: string; items: JournalEntry[] }>();
+        for (const e of entries) {
+          const d = new Date(e.date);
+          const key = `${d.getFullYear()}-${String(d.getMonth()).padStart(2, '0')}`;
+          const label = d.toLocaleDateString('fr-FR', { month: 'long', year: 'numeric' });
+          if (!groups.has(key)) groups.set(key, { label, items: [] });
+          groups.get(key)!.items.push(e);
+        }
+        return (
+          <div className="space-y-6">
+            {Array.from(groups.entries()).map(([key, group]) => (
+              <div key={key}>
+                {/* Sticky-style month header */}
+                <div className="sticky top-12 z-10 -mx-5 px-5 py-2 bg-night-900/85 backdrop-blur-sm border-y border-night-700/60 mb-3 flex items-baseline justify-between">
+                  <p className="text-gold-400 text-sm font-semibold capitalize tracking-wider">
+                    {group.label}
                   </p>
-                  {e.userRating > 0 && (
-                    <p className="text-gold-400 text-sm">{'★'.repeat(e.userRating)}{'☆'.repeat(5 - e.userRating)}</p>
-                  )}
+                  <span className="text-night-500 text-xs tabular-nums">{group.items.length}</span>
                 </div>
-                <p className="text-night-200 text-sm">{e.userNote}</p>
+                <div className="space-y-3">
+                  {group.items.map((e, idx) => (
+                    <div key={e.id} className="glass rounded-2xl p-4 animate-fade-in card-glow" style={{ animationDelay: `${idx * 0.04}s` }}>
+                      <div className="flex items-center justify-between mb-2">
+                        <p className="text-night-300 text-sm capitalize">
+                          {new Date(e.date).toLocaleDateString('fr-FR', { weekday: 'short', day: 'numeric' })}
+                        </p>
+                        {e.userRating > 0 && (
+                          <p className="text-gold-400 text-sm">{'★'.repeat(e.userRating)}{'☆'.repeat(5 - e.userRating)}</p>
+                        )}
+                      </div>
+                      <p className="text-night-200 text-sm">{e.userNote}</p>
+                    </div>
+                  ))}
+                </div>
               </div>
             ))}
           </div>
-        </>
-      )}
+        );
+      })()}
 
       {entries.length === 0 && (
         <div className="text-center py-12">
