@@ -35,6 +35,7 @@ export function Horoscope({ user, onNavigate }: { user: User; onNavigate: (s: Sc
   const [recentEntries, setRecentEntries] = useState<JournalEntry[]>([]);
   const today = localISODate();
   const todayFr = new Date().toLocaleDateString('fr-FR', { weekday: 'long', day: 'numeric', month: 'long' });
+  const isToday = true; // Horoscope est générée pour today — toujours "actuel"
   const msgIdx = useRef(0);
   const touchStartX = useRef<number | null>(null);
 
@@ -301,10 +302,27 @@ export function Horoscope({ user, onNavigate }: { user: User; onNavigate: (s: Sc
         </div>
       )}
 
-      <div className="flex items-start justify-between mb-6">
+      <div className="flex items-start justify-between mb-4">
         <div>
-          <p className="text-night-400 text-sm capitalize mb-1">{todayFr}</p>
-          <h1 className="text-2xl font-bold text-gold-gradient">Ton horoscope</h1>
+          {/* P1 — Date en gold + check quand aujourd'hui (signal premium) */}
+          <div className="flex items-center gap-2 mb-1">
+            <p className="text-gold-400 text-sm capitalize font-medium">{todayFr}</p>
+            {isToday && (
+              <span className="inline-flex items-center gap-1 text-[10px] uppercase tracking-wider text-gold-300 border border-gold-500/40 rounded-full px-2 py-0.5 bg-gold-500/10">
+                <span className="w-1.5 h-1.5 rounded-full bg-gold-400 animate-pulse" />
+                Aujourd'hui
+              </span>
+            )}
+          </div>
+          <h1 className="text-2xl font-bold text-gold-gradient leading-tight">Ton horoscope</h1>
+          {/* P1 — Phrase accroche émotionnelle selon le mood du jour (vs The Pattern) */}
+          {horoscope.mood && (
+            <p className="text-night-200 text-sm mt-2 italic leading-relaxed border-l-2 border-gold-500/40 pl-3">
+              {horoscope.mood.length > 80
+                ? `« ${horoscope.mood.slice(0, 80).trim().replace(/[.,;:]$/, '')}… »`
+                : `« ${horoscope.mood} »`}
+            </p>
+          )}
         </div>
         {/* Action buttons */}
         <div className="flex gap-2">
