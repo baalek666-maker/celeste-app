@@ -347,10 +347,26 @@ export default function DailyTarot() {
 
               {/* Text content below image */}
               <div className="px-4 py-3">
+                {/* v11.7 — Badge "Renversée" très visible au-dessus du titre */}
+                {drawn.isReversed && (
+                  <div
+                    className="mb-2 inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full text-[11px] font-bold uppercase tracking-wider animate-fade-in"
+                    style={{
+                      background: 'linear-gradient(135deg, rgba(220,120,80,0.25) 0%, rgba(180,80,40,0.35) 100%)',
+                      border: '1.5px solid rgba(255,160,100,0.6)',
+                      color: '#ffb088',
+                      boxShadow: '0 0 16px rgba(255,140,80,0.3), inset 0 0 12px rgba(255,140,80,0.15)',
+                    }}
+                    aria-label="Carte en position inversée"
+                  >
+                    <span className="text-base">⟲</span>
+                    <span>Position inversée</span>
+                    <span className="text-[10px] opacity-75 normal-case font-medium">— c'est normal, c'est le tirage</span>
+                  </div>
+                )}
                 <div className="flex items-center justify-between mb-1">
                   <h3 className="text-gold-gradient font-bold text-base leading-tight">
                     {drawn.cardName}
-                    {drawn.isReversed && <span className="ml-1.5 text-[10px] text-night-400">⟲ inversée</span>}
                   </h3>
                 </div>
                 <p className="text-night-300 text-[11px] italic mb-2">{drawn.archetype}</p>

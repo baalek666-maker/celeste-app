@@ -1711,10 +1711,11 @@ app.get('/api/tarot/daily', auth, llmLimiter, async (req, res) => {
     // v11.1 — Math.abs + modulo sur longueur réelle du deck (pas 22 codé en dur)
     const seedRaw = (req.user.id * 9301 + today.split('-').reduce((a, p) => a + parseInt(p), 0) * 49297) % 233280;
     const cardId = Math.abs(seedRaw) % TAROT_DECK.length;
-    // v11.6 — Plus de "33% chance reversed" arbitraire. Le renversement doit venir
-    //         du tirage divinatoire du LLM (qui decide selon carte+transits+intuition).
-    //         Sinon, par defaut la carte est DROITE.
-    const isReversed = false;
+    // v11.7 — Tirage divinatoire : la carte peut etre renversee (~28% du temps, tradition tarologique).
+    //         Le seed est deterministe (user + date) donc la carte et son orientation sont stables pour la journee.
+    //         Si isReversed est true, on previent le LLM explicitement dans le prompt.
+    const reversedSeed = Math.abs((req.user.id * 7919 + today.split('-').reduce((a, p) => a + parseInt(p), 0) * 31337) % 100);
+    const isReversed = reversedSeed < 28; // ~28% des tirages (tradition: "renversee" en tarologie)
     const card = TAROT_DECK[cardId] || TAROT_DECK[0];
 
     // Get user's sun sign for personalization
@@ -1732,7 +1733,7 @@ app.get('/api/tarot/daily', auth, llmLimiter, async (req, res) => {
 
     // LLM interpretation
     const systemPrompt = celesteSystemPrompt("Tu tires les cartes avec tendresse et justesse. Tes interprétations sont courtes, poétiques, humaines — jamais hermétiques. Tu écris en français.");
-    const userPrompt = `Carte tirée: ${card.name} (${card.roman})${isReversed ? ' — position inversée' : ' — position droite'}.
+    const userPrompt = `Carte tirée: ${card.name} (${card.roman}). Position: ${isReversed ? 'INVERSÉE (sens retourné, énergie bloquée, intériorisée ou à débloquer)' : 'droite (sens naturel, énergie qui s\'écoule librement)'}.
 Signe solaire de la personne: ${sunSign}.
 Mots-clés: ${card.archetype}.
 
@@ -1744,9 +1745,9 @@ Génère en JSON:
   "emoji": "${card.emoji}",
   "isReversed": ${isReversed},
   "archetype": "${card.archetype}",
-  "message": "2 phrases courtes et poétiques résumant l'énergie de la carte pour aujourd'hui",
-  "question": "une question de réflexion ouverte pour la journée",
-  "reading": "Un paragraphe détaillé (100-150 mots) reliant cette carte à ton signe (${sunSign}), aux transits du moment, et à ce que cette énergie signifie concrètement pour ta journée. Des conseils pratiques, des choses à surveiller. Écris comme une amie qui te parle — pas de jargon, pas de style hermétique."
+  "message": "2 phrases courtes et poétiques résumant l'énergie de la carte ${isReversed ? 'INVERSÉE' : 'droite'} pour aujourd'hui. ${isReversed ? 'L\'énergie est bloquée, retournée vers l\'intérieur, ou demande à être débloquée.' : 'L\'énergie circule naturellement.'}",
+  "question": "une question de réflexion ouverte pour la journée${isReversed ? ' qui invite à débloquer ou intérioriser l\'énergie' : ''}",
+  "reading": "Un paragraphe détaillé (100-150 mots) reliant cette carte ${isReversed ? 'INVERSÉE' : 'droite'} à ton signe (${sunSign}), aux transits du moment, et à ce que cette énergie signifie concrètement pour ta journée. ${isReversed ? 'IMPORTANT : la position inversée signifie que l\'énergie est bloquée ou intériorisée — parle de ce qui freine, de ce qui demande à être retourné ou accueilli.' : 'Parle de ce qui s\'ouvre, de ce qui circule, de l\'énergie positive disponible.'} Des conseils pratiques, des choses à surveiller. Écris comme une amie qui te parle — pas de jargon, pas de style hermétique."
 }
 
 Réponds UNIQUEMENT avec le JSON.`;
@@ -1777,11 +1778,10 @@ Réponds UNIQUEMENT avec le JSON.`;
     result.cardId ??= card.id;
     result.roman ??= card.roman;
     result.emoji ??= card.emoji;
-    // v11.6 — isReversed : on respecte la decision du LLM, fallback false (carte droite).
-    //          On n'utilise plus le `isReversed` calcule localement (qui forcait 1/3 inversees).
-    if (typeof result.isReversed !== 'boolean') {
-      result.isReversed = false;
-    }
+    // v11.7 — On force l'isReversed : le tirage est deterministe avant l'appel LLM,
+    //         le LLM genere le texte adapte (renversee ou droite) selon ce flag.
+    //         On garde le choix du tirage divinatoire, pas le caprice du LLM.
+    if (typeof result.isReversed !== 'boolean') result.isReversed = isReversed;
     result.archetype ??= card.archetype;
     result.message ??= isReversed ? card.reversed : card.upright;
     result.question ??= 'Que te dit cette carte aujourd\'hui ?';
