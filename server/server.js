@@ -473,15 +473,51 @@ function getNatalPositions(birthData, full = false) {
 
 // ─── LLM Horoscope Generation ──────────────────────────────
 // Retry with exponential backoff on 429 (rate limit) and 5xx
-// ─── v11.1 — LLM Mutex : sérialise les appels (provider = 1 concurrent max par clé). ───
+// v11.1 — LLM Mutex : sérialise les appels (provider = 1 concurrent max par clé).
+// v11.5 — Circuit breaker : si 3 échecs consécutifs en 2 min, on coupe 5 min et toutes
+//         les routes servent leur fallback déterministe immédiatement.
 let llmQueue = Promise.resolve();
+let llmFailureStreak = 0;
+let llmCircuitOpenedAt = 0;
+const LLM_CIRCUIT_THRESHOLD = 3;
+const LLM_CIRCUIT_WINDOW_MS = 2 * 60_000;
+const LLM_CIRCUIT_COOLDOWN_MS = 5 * 60_000;
+
+function isLLMCircuitOpen() {
+  if (llmCircuitOpenedAt === 0) return false;
+  if (Date.now() - llmCircuitOpenedAt > LLM_CIRCUIT_COOLDOWN_MS) {
+    console.log('[LLM] circuit cooldown écoulé, on retente');
+    llmCircuitOpenedAt = 0;
+    llmFailureStreak = 0;
+    return false;
+  }
+  return true;
+}
+
 function withLLMMutex(fn) {
   const next = llmQueue.then(() => fn(), () => fn());
-  llmQueue = next.catch(() => {}); // ne pas casser la chaîne si une requête échoue
+  llmQueue = next.catch(() => {});
   return next;
 }
 
+function recordLLMSuccess() {
+  llmFailureStreak = 0;
+}
+function recordLLMFailure() {
+  llmFailureStreak++;
+  if (llmFailureStreak >= LLM_CIRCUIT_THRESHOLD && llmCircuitOpenedAt === 0) {
+    llmCircuitOpenedAt = Date.now();
+    console.warn(`[LLM] CIRCUIT OUVERT — ${LLM_CIRCUIT_THRESHOLD} échecs consécutifs. Fallbacks déterministes pendant ${LLM_CIRCUIT_COOLDOWN_MS/1000}s.`);
+  }
+}
+
 async function callLLMWithRetry(messages, maxRetries = 3, maxTokens = 4096, extraBody = {}, timeoutMs = 45000) {
+  // v11.5 — Circuit breaker : si on est en cooldown, throw immédiatement pour que la route serve son fallback.
+  if (isLLMCircuitOpen()) {
+    const err = new Error('LLM circuit open — fallback déterministe servi');
+    err.code = 'LLM_CIRCUIT_OPEN';
+    throw err;
+  }
   return withLLMMutex(async () => {
     let lastErr;
     for (let attempt = 0; attempt <= maxRetries; attempt++) {
@@ -504,9 +540,13 @@ async function callLLMWithRetry(messages, maxRetries = 3, maxTokens = 4096, extr
           signal: controller.signal,
         });
         clearTimeout(timeout);
-        if (response.ok) return await response.json();
+        if (response.ok) {
+          recordLLMSuccess();
+          return await response.json();
+        }
         const errText = await response.text().catch(() => '');
         lastErr = new Error(`LLM ${response.status}`);
+        recordLLMFailure();
         if (response.status === 429 || response.status >= 500) {
           if (attempt < maxRetries) {
             const delayMs = 1000 * Math.pow(2, attempt); // 1s, 2s, 4s
@@ -523,6 +563,7 @@ async function callLLMWithRetry(messages, maxRetries = 3, maxTokens = 4096, extr
           // P0 #10 — Log dynamique au lieu de "45s" hardcodé.
           console.warn(`[LLM] attempt ${attempt + 1} timed out after ${Math.round(timeoutMs / 1000)}s`);
           lastErr = new Error(`LLM timeout (${Math.round(timeoutMs / 1000)}s)`);
+          recordLLMFailure();
           if (attempt < maxRetries) {
             await new Promise(r => setTimeout(r, 1000));
             continue;
