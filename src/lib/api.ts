@@ -802,7 +802,7 @@ export const api = {
       insight: string;
       action: string;
     }>;
-  }>('/activated-houses', { method: 'GET' }),
+  }>('/activated-houses', { method: 'GET' }, LLM_TIMEOUT_MS),
 
   // ─── Asteroid Wisdom (refonte "Astéroïdes natals") ─────────
   getAsteroidWisdom: () => apiCall<{
