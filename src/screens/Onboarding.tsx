@@ -159,16 +159,34 @@ export function Onboarding({ onComplete }: { onComplete: (u: User) => void }) {
     });
   };
 
-  // Step indicator: 3 dots + progress bar (visible on steps 1-3)
+  // Step indicator (P1 — segments glass + gold avec labels, vs simple dots)
+  const STEP_LABELS = ['Bienvenue', 'Tes infos', 'Ton thème'];
   const ProgressBar = ({ current }: { current: number }) => (
-    <div className="fixed top-0 left-0 right-0 px-8 pt-4 z-50">
-      <div className="flex gap-2 mb-2">
-        {[1, 2, 3].map(n => (
-          <div key={n} className="flex-1 h-1 rounded-full bg-night-800 overflow-hidden">
+    <div className="fixed top-0 left-0 right-0 px-6 pt-5 z-50">
+      {/* Segmented progress */}
+      <div className="flex gap-1.5 mb-2">
+        {STEP_LABELS.map((_, n) => (
+          <div key={n} className="flex-1 h-1.5 rounded-full bg-night-800/80 overflow-hidden backdrop-blur-sm">
             <div
-              className={`h-full bg-gradient-to-r from-cosmic-500 to-gold-500 transition-all duration-500 ${current >= n ? 'w-full' : 'w-0'}`}
+              className={`h-full bg-gradient-to-r from-cosmic-500 via-cosmic-400 to-gold-400 transition-all duration-700 ease-out shadow-[0_0_8px_rgba(251,191,36,0.4)] ${
+                current >= n ? 'w-full' : 'w-0'
+              }`}
             />
           </div>
+        ))}
+      </div>
+      {/* Step labels */}
+      <div className="flex justify-between">
+        {STEP_LABELS.map((label, n) => (
+          <p key={label} className={`text-[10px] uppercase tracking-wider transition-colors ${
+            current === n
+              ? 'text-gold-400 font-semibold'
+              : current > n
+                ? 'text-night-300'
+                : 'text-night-700'
+          }`}>
+            {label}
+          </p>
         ))}
       </div>
     </div>
@@ -220,6 +238,28 @@ export function Onboarding({ onComplete }: { onComplete: (u: User) => void }) {
           Horoscope, compatibilité, portrait astral — explore tout le potentiel de Céleste sans payer. Sans carte bancaire.
         </p>
       </div>
+      {/* P3 — 3 mini-cartes preview avant le CTA : montre ce qui t'attend */}
+      <div className="w-full max-w-xs mb-8">
+        <p className="text-night-500 text-xs uppercase tracking-widest mb-3 text-center">Tu vas découvrir</p>
+        <div className="grid grid-cols-3 gap-2">
+          {[
+            { icon: '✦', title: 'Horoscope', sub: 'quotidien', gradient: 'from-cosmic-500/30 to-cosmic-500/10' },
+            { icon: '☽', title: 'Portrait', sub: 'cosmique', gradient: 'from-gold-500/30 to-gold-500/10' },
+            { icon: '♡', title: 'Compatibilité', sub: 'deux ciels', gradient: 'from-rose-500/25 to-rose-500/5' },
+          ].map((card, idx) => (
+            <div
+              key={card.title}
+              className={`glass rounded-2xl p-3 text-center border border-white/10 bg-gradient-to-br ${card.gradient} animate-fade-in`}
+              style={{ animationDelay: `${0.15 + idx * 0.12}s` }}
+            >
+              <div className="text-2xl mb-1.5">{card.icon}</div>
+              <p className="text-white text-xs font-semibold leading-tight">{card.title}</p>
+              <p className="text-night-400 text-[10px] mt-0.5">{card.sub}</p>
+            </div>
+          ))}
+        </div>
+      </div>
+
       <button
         onClick={() => setStep(1)}
         className="w-full max-w-xs py-4 rounded-2xl bg-gradient-to-r from-cosmic-600 to-cosmic-700 text-white font-semibold text-lg shadow-lg shadow-cosmic-900/50 hover:shadow-cosmic-700/50 transition-all animate-glow"
