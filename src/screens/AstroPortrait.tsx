@@ -117,7 +117,7 @@ export default function AstroPortrait({ onBack }: { onBack?: () => void } = {}) 
         <div className="flex items-center gap-3">
           <button onClick={back} aria-label="Retour"
             className="text-gold-400 text-sm hover:text-gold-300 transition-colors">‹ Retour</button>
-          <h1 className="font-display text-lg font-semibold text-gold-gradient tracking-[0.18em]">PORTRAIT ASTRAL</h1>
+          <h1 className="font-display text-lg font-semibold text-gold-gradient tracking-[0.18em]">PORTRAIT COSMIQUE</h1>
         </div>
       </div>
 
