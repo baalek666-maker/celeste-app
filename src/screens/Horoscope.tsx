@@ -360,25 +360,27 @@ export function Horoscope({ user, onNavigate }: { user: User; onNavigate: (s: Sc
         </div>
       </div>
 
-      {/* Sky map (Feature 6) */}
-      <SkyMap />
+      {/* Sky map (Feature 6) — moved to hero position, right after Énergie/Humeur */}
+      <div className="mb-5">
+        <SkyMap />
+      </div>
 
       {/* Section Tabs */}
       <div className="mb-5">
-        {/* Tab bar — iOS segmented control style */}
+        {/* Tab bar — iOS segmented control style, color-coded per section */}
         <div className="flex gap-1 glass rounded-2xl p-1.5 mb-4">
           {([
-            { key: 'general', label: 'Général', icon: '✦' },
-            { key: 'love', label: 'Amour', icon: '♥' },
-            { key: 'career', label: 'Carrière', icon: '★' },
+            { key: 'general', label: 'Général', icon: '✦', active: 'text-gold-300', idle: 'text-night-400', glow: 'shadow-[0_0_20px_rgba(251,191,36,0.18)]' },
+            { key: 'love', label: 'Amour', icon: '♥', active: 'text-rose-300', idle: 'text-night-400', glow: 'shadow-[0_0_20px_rgba(244,114,182,0.20)]' },
+            { key: 'career', label: 'Carrière', icon: '★', active: 'text-blue-300', idle: 'text-night-400', glow: 'shadow-[0_0_20px_rgba(147,197,253,0.18)]' },
           ] as const).map((tab) => (
             <button
               key={tab.key}
               onClick={() => setActiveSection(tab.key)}
               className={`flex-1 py-2.5 px-2 rounded-xl text-sm font-medium transition-all duration-200 ${
                 activeSection === tab.key
-                  ? 'glass-dark text-gold-400 shadow-lg'
-                  : 'text-night-400 hover:text-night-200'
+                  ? `glass-dark ${tab.active} ${tab.glow}`
+                  : `${tab.idle} hover:text-night-200`
               }`}
             >
               <span className="mr-1.5">{tab.icon}</span>
