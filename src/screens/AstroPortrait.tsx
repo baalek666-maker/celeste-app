@@ -1,5 +1,6 @@
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useMemo } from 'react';
 import { api } from '../lib/api';
+import { useSpeech } from '../lib/useSpeech';
 
 type Section = { heading: string; paragraphs: string[] };
 
@@ -110,6 +111,19 @@ export default function AstroPortrait({ onBack }: { onBack?: () => void } = {}) 
     else window.history.back();
   };
 
+  // Concatenate all sections for audio playback: "heading. paragraph paragraph. …"
+  const audioText = useMemo(() => {
+    if (!sections) return '';
+    return sections
+      .map((s) => {
+        const head = s.heading ? `${s.heading}. ` : '';
+        return head + s.paragraphs.join(' ');
+      })
+      .join(' ');
+  }, [sections]);
+
+  const { supported: ttsSupported, speaking: ttsSpeaking, toggle: ttsToggle, stop: ttsStop } = useSpeech(audioText);
+
   return (
     <div className="page-transition min-h-screen pb-20">
       {/* Sticky header */}
@@ -118,7 +132,33 @@ export default function AstroPortrait({ onBack }: { onBack?: () => void } = {}) 
           <button onClick={back} aria-label="Retour"
             className="text-gold-400 text-sm hover:text-gold-300 transition-colors">‹ Retour</button>
           <h1 className="font-display text-lg font-semibold text-gold-gradient tracking-[0.18em]">PORTRAIT COSMIQUE</h1>
+          {ttsSupported && sections && sections.length > 0 && (
+            <button
+              onClick={ttsToggle}
+              aria-label={ttsSpeaking ? 'Arrêter la lecture' : 'Lire le portrait à voix haute'}
+              title={ttsSpeaking ? 'Arrêter' : 'Écouter mon portrait'}
+              className={`ml-auto w-9 h-9 rounded-full flex items-center justify-center border transition-all ${
+                ttsSpeaking
+                  ? 'border-gold-400/80 bg-gold-500/15 text-gold-200 animate-gold-glow'
+                  : 'border-gold-500/30 bg-night-800/40 text-gold-300 hover:border-gold-400/60 hover:bg-gold-500/10 active:scale-95'
+              }`}
+            >
+              {ttsSpeaking ? (
+                <span className="block w-3 h-3 border-l-[5px] border-r-[5px] border-gold-200" aria-hidden="true" />
+              ) : (
+                <svg viewBox="0 0 16 16" width="14" height="14" fill="currentColor" aria-hidden="true">
+                  <path d="M3 5.5v5h3l4 3V2.5l-4 3H3z" />
+                  <path d="M11.5 5.2a3.5 3.5 0 010 5.6" stroke="currentColor" strokeWidth="1.2" fill="none" strokeLinecap="round" />
+                </svg>
+              )}
+            </button>
+          )}
         </div>
+        {ttsSpeaking && (
+          <p className="text-gold-400/80 text-[10px] tracking-[0.25em] uppercase text-center mt-2 animate-fade-in">
+            ✦ Lecture en cours…
+          </p>
+        )}
       </div>
 
       <div className="max-w-2xl mx-auto px-5">
