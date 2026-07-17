@@ -1711,7 +1711,10 @@ app.get('/api/tarot/daily', auth, llmLimiter, async (req, res) => {
     // v11.1 — Math.abs + modulo sur longueur réelle du deck (pas 22 codé en dur)
     const seedRaw = (req.user.id * 9301 + today.split('-').reduce((a, p) => a + parseInt(p), 0) * 49297) % 233280;
     const cardId = Math.abs(seedRaw) % TAROT_DECK.length;
-    const isReversed = cardId % 3 === 0; // ~33% chance reversed
+    // v11.6 — Plus de "33% chance reversed" arbitraire. Le renversement doit venir
+    //         du tirage divinatoire du LLM (qui decide selon carte+transits+intuition).
+    //         Sinon, par defaut la carte est DROITE.
+    const isReversed = false;
     const card = TAROT_DECK[cardId] || TAROT_DECK[0];
 
     // Get user's sun sign for personalization
@@ -1774,7 +1777,11 @@ Réponds UNIQUEMENT avec le JSON.`;
     result.cardId ??= card.id;
     result.roman ??= card.roman;
     result.emoji ??= card.emoji;
-    result.isReversed ??= isReversed;
+    // v11.6 — isReversed : on respecte la decision du LLM, fallback false (carte droite).
+    //          On n'utilise plus le `isReversed` calcule localement (qui forcait 1/3 inversees).
+    if (typeof result.isReversed !== 'boolean') {
+      result.isReversed = false;
+    }
     result.archetype ??= card.archetype;
     result.message ??= isReversed ? card.reversed : card.upright;
     result.question ??= 'Que te dit cette carte aujourd\'hui ?';
