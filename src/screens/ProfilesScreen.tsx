@@ -132,22 +132,35 @@ export function ProfilesScreen({ user, onClose }: { user: User; onClose: () => v
           </div>
         )}
         {!loading && profiles.map(p => (
-          <div key={p.id} className="rounded-2xl bg-white/5 border border-white/10 p-4 hover:border-white/20 transition-colors">
+          <div key={p.id} className={`rounded-2xl border p-4 transition-all ${
+            p.isSelf
+              // P1 — Profil actif : anneau doré continu + glow pulsé, vs default
+              ? 'border-gold-500/50 bg-gradient-to-br from-gold-500/10 via-night-900 to-gold-500/5 shadow-[0_0_28px_rgba(251,191,36,0.18)] relative overflow-hidden'
+              : 'bg-white/5 border-white/10 hover:border-white/20'
+          }`}>
+            {p.isSelf && (
+              <span className="absolute top-2 right-2 flex items-center gap-1 text-[10px] uppercase tracking-wider text-gold-300 border border-gold-500/40 rounded-full px-2 py-0.5 bg-gold-500/10">
+                <span className="w-1.5 h-1.5 rounded-full bg-gold-400 animate-pulse" />
+                Actif
+              </span>
+            )}
             <div className="flex items-start justify-between gap-3">
-              <div className="flex-1 min-w-0">
-                <div className="flex items-center gap-2 mb-1">
-                  <span className="text-lg">{RELATION_ICONS[p.relation] || '🌀'}</span>
-                  <span className="font-medium truncate">{p.name}</span>
-                  {p.isSelf && (
-                    <span className="text-[10px] uppercase tracking-wider bg-amber-400/20 text-amber-200 px-2 py-0.5 rounded-full">
-                      Mon thème
-                    </span>
-                  )}
+              <div className="flex items-center gap-3 flex-1 min-w-0">
+                {/* P1 — Avatar dans un anneau doré pour le profil self */}
+                <div className={`w-12 h-12 rounded-full flex items-center justify-center text-2xl flex-shrink-0 transition-all ${
+                  p.isSelf
+                    ? 'bg-gold-500/20 border-2 border-gold-400 shadow-[0_0_16px_rgba(251,191,36,0.45)]'
+                    : 'bg-white/10 border border-white/15'
+                }`}>
+                  {RELATION_ICONS[p.relation] || '🌀'}
                 </div>
-                <div className="text-xs text-white/50">
-                  {RELATION_LABELS[p.relation] || p.relation} · {p.birthData.date} à {p.birthData.time}
+                <div className="flex-1 min-w-0">
+                  <p className="font-medium truncate">{p.name}</p>
+                  <div className="text-xs text-white/50">
+                    {RELATION_LABELS[p.relation] || p.relation} · {p.birthData.date} à {p.birthData.time}
+                  </div>
+                  <div className="text-xs text-white/40 mt-0.5 truncate">📍 {p.birthData.city}</div>
                 </div>
-                <div className="text-xs text-white/40 mt-0.5 truncate">📍 {p.birthData.city}</div>
               </div>
               <div className="flex flex-col gap-1.5">
                 {!p.isSelf && (
