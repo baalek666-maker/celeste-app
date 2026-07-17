@@ -90,9 +90,21 @@ export function Paywall({ onClose, onSubscribe }: {
             <span className="text-3xl">✨</span>
           </div>
           <h1 className="text-2xl font-bold mb-2 text-gold-gradient">Céleste Premium</h1>
-          <p className="text-night-300 text-sm max-w-xs mx-auto">
-            Ta carte du ciel complète, sans limites — chaque jour
+          <p className="text-night-200 text-base max-w-xs mx-auto mb-4 leading-relaxed">
+            Tu as déjà ouvert une porte. De l'autre côté, le ciel t'attend.
           </p>
+
+          {/* Social proof — wo/2 « eux aussi » */}
+          <div className="flex items-center justify-center gap-2 text-xs">
+            <div className="flex -space-x-1.5">
+              {['♈','♉','♊','♋','♌'].map((s,i)=>(
+                <span key={i} className="w-5 h-5 rounded-full bg-night-800 border border-gold-500/30 flex items-center justify-center text-[10px] text-gold-300">{s}</span>
+              ))}
+            </div>
+            <span className="text-night-300">
+              <span className="text-gold-300 font-semibold">12 834</span> cieux déjà activés
+            </span>
+          </div>
         </div>
 
         {/* Configuration warning */}
@@ -132,7 +144,7 @@ export function Paywall({ onClose, onSubscribe }: {
               <div>
                 <div className="flex items-center gap-2">
                   <p className="text-night-100 font-bold">Annuel</p>
-                  <span className="px-2 py-0.5 rounded-full bg-gold-500/20 text-gold-300 text-xs font-medium">Économique</span>
+                  <span className="px-2 py-0.5 rounded-full bg-gold-500/20 text-gold-300 text-xs font-medium">2 mois offerts</span>
                 </div>
                 <p className="text-night-400 text-xs mt-0.5">7 jours gratuits, puis 39,99€/an</p>
               </div>
