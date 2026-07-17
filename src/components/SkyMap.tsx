@@ -94,11 +94,14 @@ function computeTransitAspects(transits: Record<string, Transit>) {
   return out;
 }
 
-export default function SkyMap({ size = 340 }: SkyMapProps) {
+export default function SkyMap({ size = 360 }: SkyMapProps) {
   const [transits, setTransits] = useState<Record<string, Transit> | null>(null);
   const [loading, setLoading] = useState(true);
   const [err, setErr] = useState<string | null>(null);
-  const [rotating, setRotating] = useState(true);
+  // v13.1.2 — rotation désactivée par défaut pour éviter le débordement
+  // diagonal du cercle pendant l'animation. L'utilisateur peut l'activer
+  // manuellement via le bouton ▶ Animer si il le souhaite.
+  const [rotating, setRotating] = useState(false);
   const [containerW, setContainerW] = useState(0);
   const containerRef = useRef<HTMLDivElement>(null);
 
@@ -135,7 +138,8 @@ export default function SkyMap({ size = 340 }: SkyMapProps) {
       const padL = parseFloat(styles.paddingLeft) || 0;
       const padR = parseFloat(styles.paddingRight) || 0;
       const avail = parent.clientWidth - padL - padR;
-      setContainerW(Math.max(200, Math.min(avail, 360)));
+      // v13.1.2 — max 400 (au lieu de 360) pour mieux remplir les grands écrans
+      setContainerW(Math.max(200, Math.min(avail, 400)));
     };
     update();
     const ro = new ResizeObserver(update);
@@ -146,7 +150,8 @@ export default function SkyMap({ size = 340 }: SkyMapProps) {
     return () => { ro.disconnect(); window.removeEventListener('resize', update); };
   }, []);
 
-  const actualSize = size ?? Math.min(containerW || 320, 360);
+  // v13.1.2 — utilise containerW si connu (responsive), sinon fallback sur prop size
+  const actualSize = size ?? Math.min(containerW || 360, 400);
 
   if (loading) {
     return (
@@ -164,15 +169,19 @@ export default function SkyMap({ size = 340 }: SkyMapProps) {
     );
   }
 
-  // v13.1.1 — viewBox élargi (marge 18% de chaque côté) pour absorber le
-  // débordement pendant la rotation. Le centre géométrique reste à
-  // (actualSize/2, actualSize/2) car SVG preserveAspectRatio="xMidYMid meet"
-  // centre automatiquement le contenu dans le viewport.
+  // v13.1.2 — Cercle centré, taille maximale SANS rotation.
+  //
+  // On reprend le viewBox carré d'origine (0, 0, S, S) avec outerR = S/2 - 8
+  // qui fait que le cercle remplit quasi-totalement le cadre glass sans
+  // déborder. Le bug de débordement venait de l'animation skymap-spin qui
+  // faisait tourner le SVG, obligeant à élargir le viewBox pour absorber
+  // le débordement diagonal pendant la rotation — mais élargir le viewBox
+  // RÉDUIT la taille rendue du cercle. Compromice choisi : on garde la
+  // carte GRAND et CENTRÉE, et on garde l'animation mais en disable par
+  // défaut (l'utilisateur appuie sur ▶ Animer s'il veut — la rotation est
+  // purement décorative, pas fonctionnelle).
   const cx = actualSize / 2;
   const cy = actualSize / 2;
-  // On garde les rayons tels quels (cohérence avec le code existant),
-  // mais on s'assure que outerR + marge < actualSize/2 * 1.36 / 2 ≈ actualSize * 0.68
-  // → outerR = actualSize/2 - 8 ≈ 320 reste largement dans la zone visible.
   const outerR = actualSize / 2 - 8;
   const zodiacR = outerR - 18;
   const tickOuterR = zodiacR;
@@ -221,16 +230,15 @@ export default function SkyMap({ size = 340 }: SkyMapProps) {
         <svg
           width={actualSize}
           height={actualSize}
-          /* v13.1.1 — viewBox agrandi avec marge pour absorber le débordement
-             naturel des éléments SVG pendant la rotation (un cercle inscrit dans
-             un carré qui rotate peut sortir jusqu'à √2× son rayon du viewBox
-             d'origine). Sans marge, les planètes extrêmes (positions 0°/90°/
-             180°/270° notamment Saturne/Pluton) « piquent » hors du cadre glass
-             pendant l'animation skymap-spin. overflow-hidden sur le parent ne
-             suffit pas car le SVG lui-même est un élément HTML qui n'est pas
-             clippé par un parent overflow-hidden pendant un transform rotate
-             (les transforms sont appliqués après le clipping layout). */
-          viewBox={`-${actualSize * 0.18} -${actualSize * 0.18} ${actualSize * 1.36} ${actualSize * 1.36}`}
+          /* v13.1.2 — viewBox carré d'origine, cercle centré et grand.
+             La rotation (skymap-spin) cause un débordement diagonal √2 × R
+             impossible à clipper sans rétrécir le cercle rendu. On remet
+             le viewBox carré (0,0,S,S) avec outerR = S/2 - 8, qui remplit
+             quasi-totalement le cadre glass. La rotation reste activable
+             manuellement via le bouton ▶ Animer mais désactivée par défaut
+             (rotating=false initial state), pour éviter le débordement
+             tant que l'utilisateur ne l'a pas explicitement demandée. */
+          viewBox={`0 0 ${actualSize} ${actualSize}`}
           preserveAspectRatio="xMidYMid meet"
           className="overflow-hidden"
           style={rotating ? { animation: 'skymap-spin 240s linear infinite' } : undefined}
