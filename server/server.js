@@ -537,6 +537,17 @@ async function callLLMWithRetry(messages, maxRetries = 3, maxTokens = 4096, extr
 }
 
 // ─── FALLBACK horoscopes (par signe, pré-écrits) ─────────────────
+// ─── v11.2 — Garde-fous process : une ReferenceError async ne doit plus tuer le serveur. ───
+process.on('uncaughtException', (err) => {
+  console.error('[FATAL] uncaughtException:', err.name, err.message);
+  // On log, on n'arrête PAS le process. Les handlers HTTP peuvent continuer à servir les requêtes suivantes.
+  if (err.name === 'ReferenceError') {
+    console.error('[FATAL] ReferenceError — vérifiez qu\'une variable du bloc fallback est bien déclarée.');
+  }
+});
+process.on('unhandledRejection', (reason) => {
+  console.error('[FATAL] unhandledRejection:', String(reason).slice(0, 200));
+});
 // Utilisés si le LLM rate-limit ou panne. Garantit un horoscope TOUJOURS disponible.
 const FALLBACK_HOROSCOPES = {
   Aries: { general: "Le feu intérieur brûle fort aujourd'hui — agis, mais choisis ta bataille avec discernement.", amour: "Ta magnétise, mais l'autre a besoin d'être rassuré(e) autant qu'impressionné(e).", carriere: "Lance-toi sur le projet qui te trotte dans la tête depuis des semaines.", energie: 4, mood: "Combatif", luckyNumber: 7, luckyColor: "Rouge" },
@@ -1744,6 +1755,7 @@ Réponds UNIQUEMENT avec le JSON.`;
       return TAROT_DECK[id] || TAROT_DECK[0];
     })();
     const fbIsReversed = safeCard.id % 3 === 0;
+    const fbSun = typeof sunSign !== 'undefined' ? sunSign : 'inconnu';
     const fallbackResult = {
       cardName: safeCard.name,
       cardId: safeCard.id,
