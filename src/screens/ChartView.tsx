@@ -76,6 +76,62 @@ export function ChartView({ user }: { user: User }) {
         <NatalChart />
       </div>
 
+      {/* P2 — Mini légende « ? » : planètes + 12 maisons (wow onboarding sec) */}
+      <details className="glass rounded-2xl px-4 py-3 mb-6 group">
+        <summary className="flex items-center justify-between cursor-pointer text-night-300 text-xs">
+          <span className="flex items-center gap-2">
+            <span className="w-5 h-5 rounded-full bg-cosmic-500/20 text-cosmic-300 flex items-center justify-center font-bold">?</span>
+            <span>Comment lire ce thème ?</span>
+          </span>
+          <span className="text-cosmic-400 text-base group-open:rotate-180 transition-transform">▾</span>
+        </summary>
+
+        <div className="mt-4 space-y-4 text-xs leading-relaxed">
+          {/* Planètes */}
+          <div>
+            <p className="text-gold-300 font-semibold mb-2 uppercase tracking-wider">Planètes</p>
+            <div className="grid grid-cols-2 gap-x-3 gap-y-1.5 text-night-300">
+              {[
+                ['☉', 'Soleil', 'toi profond'],
+                ['☽', 'Lune', 'tes émotions'],
+                ['☿', 'Mercure', 'ta pensée'],
+                ['♀', 'Vénus', 'ton cœur'],
+                ['♂', 'Mars', 'ton élan'],
+                ['♃', 'Jupiter', 'ton expansion'],
+                ['♄', 'Saturne', 'ta structure'],
+                ['♅', 'Uranus', 'ta rébellion'],
+                ['♆', 'Neptune', 'ton intuition'],
+                ['♇', 'Pluton', 'ta mue'],
+              ].map(([g, n, hint]) => (
+                <div key={g} className="flex items-center gap-1.5">
+                  <span className="text-gold-400 w-4 text-center">{g}</span>
+                  <span className="text-night-100">{n}</span>
+                  <span className="text-night-500">· {hint}</span>
+                </div>
+              ))}
+            </div>
+          </div>
+
+          {/* Maisons */}
+          <div>
+            <p className="text-cosmic-300 font-semibold mb-2 uppercase tracking-wider">Maisons</p>
+            <p className="text-night-400 mb-2">12 secteurs de vie, dans l'ordre des aiguilles d'une montre (Maison 1 = Ascendant, à gauche).</p>
+            <div className="grid grid-cols-3 gap-x-2 gap-y-1 text-night-300">
+              {[
+                'Identité', 'Finances', 'Communication', 'Foyer',
+                'Amour', 'Travail', 'Associations', 'Intimité',
+                'Voyages', 'Carrière', 'Communauté', 'Spiritualité',
+              ].map((m, i) => (
+                <div key={i} className="flex items-center gap-1.5">
+                  <span className="text-cosmic-400 w-5 text-right tabular-nums">{i+1}</span>
+                  <span className="text-night-200">{m}</span>
+                </div>
+              ))}
+            </div>
+          </div>
+        </div>
+      </details>
+
       {/* Planet Details — clickable expandable cards */}
       <div className="space-y-3 mb-6">
         <p className="text-night-400 text-xs uppercase tracking-widest px-1">Tes planètes en détail</p>
