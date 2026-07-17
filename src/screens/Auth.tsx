@@ -115,6 +115,14 @@ export function Auth({ onSuccess }: { onSuccess: (user: any) => void }) {
               </span>
             ) : mode === 'register' ? 'Commencer ✦' : 'Se connecter'}
           </button>
+
+          {mode === 'register' && !loading && (
+            <p className="text-gold-300 text-xs text-center mt-3 animate-fade-in flex items-center justify-center gap-1.5">
+              <span>✨</span>
+              <span className="font-medium">7 jours gratuits Constellation</span>
+              <span className="text-night-500">· sans carte bancaire</span>
+            </p>
+          )}
         </form>
 
         <p className="text-night-500 text-xs text-center mt-6 animate-fade-in" style={{ animationDelay: '0.3s' }}>
