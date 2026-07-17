@@ -133,8 +133,15 @@ export function Explorer({ user, onNavigate }: { user: User; onNavigate: (s: Scr
       <div className="mb-6 animate-fade-in">
         <p className="text-night-400 text-xs uppercase tracking-widest mb-1">Approfondir</p>
         <h1 className="text-2xl font-bold text-gold-gradient mb-2">Explorer</h1>
-        <p className="text-night-300 text-sm">
-          Plonge plus profond dans ton ciel, tes liens et ton quotidien.
+        <p className="text-night-300 text-sm italic">
+          {[
+            "Le ciel ne livre rien en une seule fois. Prends ton temps.",
+            "Il y a toujours une couche de plus à découvrir.",
+            "L'astrologie récompense la patience. Et la deuxième gorgée.",
+            "Tu ne cherches pas une réponse, tu cherches la bonne question.",
+            "Chaque angle révèle une facette. Aucune n'est la seule.",
+            "Le portail s'ouvre à qui revient.",
+          ][new Date().getDate() % 6]}
         </p>
       </div>
 
