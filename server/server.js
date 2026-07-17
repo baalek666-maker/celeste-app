@@ -473,57 +473,67 @@ function getNatalPositions(birthData, full = false) {
 
 // ─── LLM Horoscope Generation ──────────────────────────────
 // Retry with exponential backoff on 429 (rate limit) and 5xx
+// ─── v11.1 — LLM Mutex : sérialise les appels (provider = 1 concurrent max par clé). ───
+let llmQueue = Promise.resolve();
+function withLLMMutex(fn) {
+  const next = llmQueue.then(() => fn(), () => fn());
+  llmQueue = next.catch(() => {}); // ne pas casser la chaîne si une requête échoue
+  return next;
+}
+
 async function callLLMWithRetry(messages, maxRetries = 3, maxTokens = 4096, extraBody = {}, timeoutMs = 45000) {
-  let lastErr;
-  for (let attempt = 0; attempt <= maxRetries; attempt++) {
-    const controller = new AbortController();
-    const timeout = setTimeout(() => controller.abort(), timeoutMs);
-    try {
-      const response = await fetch(LLM_API_URL, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${LLM_API_KEY}`,
-        },
-        body: JSON.stringify({
-          model: LLM_MODEL,
-          messages,
-          temperature: 0.85,
-          max_tokens: maxTokens,
-          ...extraBody,
-        }),
-        signal: controller.signal,
-      });
-      clearTimeout(timeout);
-      if (response.ok) return await response.json();
-      const errText = await response.text().catch(() => '');
-      lastErr = new Error(`LLM ${response.status}`);
-      if (response.status === 429 || response.status >= 500) {
-        if (attempt < maxRetries) {
-          const delayMs = 1000 * Math.pow(2, attempt); // 1s, 2s, 4s
-          console.warn(`[LLM] attempt ${attempt + 1} ${response.status}, retry in ${delayMs}ms`);
-          await new Promise(r => setTimeout(r, delayMs));
-          continue;
+  return withLLMMutex(async () => {
+    let lastErr;
+    for (let attempt = 0; attempt <= maxRetries; attempt++) {
+      const controller = new AbortController();
+      const timeout = setTimeout(() => controller.abort(), timeoutMs);
+      try {
+        const response = await fetch(LLM_API_URL, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'Authorization': `Bearer ${LLM_API_KEY}`,
+          },
+          body: JSON.stringify({
+            model: LLM_MODEL,
+            messages,
+            temperature: 0.85,
+            max_tokens: maxTokens,
+            ...extraBody,
+          }),
+          signal: controller.signal,
+        });
+        clearTimeout(timeout);
+        if (response.ok) return await response.json();
+        const errText = await response.text().catch(() => '');
+        lastErr = new Error(`LLM ${response.status}`);
+        if (response.status === 429 || response.status >= 500) {
+          if (attempt < maxRetries) {
+            const delayMs = 1000 * Math.pow(2, attempt); // 1s, 2s, 4s
+            console.warn(`[LLM] attempt ${attempt + 1} ${response.status}, retry in ${delayMs}ms`);
+            await new Promise(r => setTimeout(r, delayMs));
+            continue;
+          }
         }
-      }
-      console.error('[LLM] fatal:', response.status, errText.slice(0, 200));
-      throw lastErr;
-    } catch (e) {
-      clearTimeout(timeout);
-      if (e.name === 'AbortError') {
-        // P0 #10 — Log dynamique au lieu de "45s" hardcodé.
-        console.warn(`[LLM] attempt ${attempt + 1} timed out after ${Math.round(timeoutMs / 1000)}s`);
-        lastErr = new Error(`LLM timeout (${Math.round(timeoutMs / 1000)}s)`);
-        if (attempt < maxRetries) {
-          await new Promise(r => setTimeout(r, 1000));
-          continue;
-        }
+        console.error('[LLM] fatal:', response.status, errText.slice(0, 200));
         throw lastErr;
+      } catch (e) {
+        clearTimeout(timeout);
+        if (e.name === 'AbortError') {
+          // P0 #10 — Log dynamique au lieu de "45s" hardcodé.
+          console.warn(`[LLM] attempt ${attempt + 1} timed out after ${Math.round(timeoutMs / 1000)}s`);
+          lastErr = new Error(`LLM timeout (${Math.round(timeoutMs / 1000)}s)`);
+          if (attempt < maxRetries) {
+            await new Promise(r => setTimeout(r, 1000));
+            continue;
+          }
+          throw lastErr;
+        }
+        throw e;
       }
-      throw e;
     }
-  }
-  throw lastErr;
+    throw lastErr;
+  });
 }
 
 // ─── FALLBACK horoscopes (par signe, pré-écrits) ─────────────────
@@ -1646,10 +1656,11 @@ app.get('/api/tarot/daily', auth, llmLimiter, async (req, res) => {
     if (cached) return res.json(safeJsonParse(cached.content, null, 'tarot_cache'));
 
     // Deterministic daily card: hash of userId + date
-    const seed = (req.user.id * 9301 + today.split('-').reduce((a, p) => a + parseInt(p), 0) * 49297) % 233280;
-    const cardId = seed % 22;
-    const isReversed = seed % 3 === 0; // ~33% chance reversed
-    const card = TAROT_DECK[cardId];
+    // v11.1 — Math.abs + modulo sur longueur réelle du deck (pas 22 codé en dur)
+    const seedRaw = (req.user.id * 9301 + today.split('-').reduce((a, p) => a + parseInt(p), 0) * 49297) % 233280;
+    const cardId = Math.abs(seedRaw) % TAROT_DECK.length;
+    const isReversed = cardId % 3 === 0; // ~33% chance reversed
+    const card = TAROT_DECK[cardId] || TAROT_DECK[0];
 
     // Get user's sun sign for personalization
     if (user?.birth_data) {
@@ -1725,24 +1736,24 @@ Réponds UNIQUEMENT avec le JSON.`;
   } catch (err) {
     console.error('Tarot error:', err.message);
     // Fallback: return static card data so the app never crashes
-    const fbCardId = (() => {
+    // v11.1 — sécurisation double : (a) re-pioche un cardId valide, (b) re-pioche une carte existante dans le deck.
+    const safeCard = (() => {
       const u = db.prepare('SELECT birth_data FROM users WHERE id = ?').get(req.user.id);
-      const seed = u?.birth_data ? Array.from(u.birth_data + today).reduce((h, c) => ((h << 5) - h + c.charCodeAt(0)) | 0, 0) : Math.floor(Math.random() * 22);
-      return seed % 22;
+      const seed = u?.birth_data ? Array.from(u.birth_data + today).reduce((h, c) => ((h << 5) - h + c.charCodeAt(0)) | 0, 0) : 0;
+      const id = Math.abs(seed) % TAROT_DECK.length;
+      return TAROT_DECK[id] || TAROT_DECK[0];
     })();
-    const fbIsReversed = fbCardId % 3 === 0;
-    const fallbackCard = TAROT_DECK[fbCardId];
-    const fbSun = typeof sunSign !== 'undefined' ? sunSign : 'inconnu';
+    const fbIsReversed = safeCard.id % 3 === 0;
     const fallbackResult = {
-      cardName: fallbackCard.name,
-      cardId: fallbackCard.id,
-      roman: fallbackCard.roman,
-      emoji: fallbackCard.emoji,
+      cardName: safeCard.name,
+      cardId: safeCard.id,
+      roman: safeCard.roman,
+      emoji: safeCard.emoji,
       isReversed: fbIsReversed,
-      archetype: fallbackCard.archetype,
-      message: fbIsReversed ? fallbackCard.reversed : fallbackCard.upright,
+      archetype: safeCard.archetype,
+      message: fbIsReversed ? safeCard.reversed : safeCard.upright,
       question: 'Que te dit cette carte aujourd\'hui ?',
-      reading: `${fallbackCard.archetype}. ${fbIsReversed ? fallbackCard.reversed : fallbackCard.upright} En tant que ${fbSun}, cette énergie résonne avec ton chemin solaire. Les configurations planétaires du moment amplifient cette influence : laisse-la guider tes choix de la journée.`,
+      reading: `${safeCard.archetype}. ${fbIsReversed ? safeCard.reversed : safeCard.upright} En tant que ${fbSun}, cette énergie résonne avec ton chemin solaire. Les configurations planétaires du moment amplifient cette influence : laisse-la guider tes choix de la journée.`,
     };
     db.prepare('INSERT OR REPLACE INTO horoscope_cache (user_id, date, content) VALUES (?, ?, ?)')
       .run(req.user.id, `tarot:${today}`, JSON.stringify(fallbackResult));
