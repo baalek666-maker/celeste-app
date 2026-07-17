@@ -13,8 +13,26 @@ const MILESTONE_DATA: Record<number, { emoji: string; title: string; subtitle: s
 };
 
 /**
+ * v11 — Confetti doré : 24 particules tombantes avec 3 shapes (✦ ✧ ·) et 3 délais.
+ * Calcul déterministe (pas de Math.random dans le render pour stabilité SSR/React).
+ */
+function generateConfetti(count = 24): { left: number; delay: number; dur: number; symbol: string; size: number }[] {
+  const symbols = ['✦', '✧', '·', '✦', '✧'];
+  return Array.from({ length: count }).map((_, i) => ({
+    left: (i * 97 + 13) % 100,           // pseudo-aléatoire déterministe
+    delay: (i * 0.07) % 1.2,
+    dur: 2.4 + ((i * 0.13) % 1.6),
+    symbol: symbols[i % symbols.length],
+    size: 10 + ((i * 7) % 14),
+  }));
+}
+
+const CONFETTI = generateConfetti(28);
+
+/**
  * Shows a one-time celebratory overlay when the user hits a streak milestone.
  * Tracks which milestones have already been celebrated in localStorage.
+ * v11 — ajoute un layer de confetti doré (28 particules) pendant 2.5s.
  */
 export default function StreakCelebration({ streak }: { streak: number }) {
   const [showMilestone, setShowMilestone] = useState<number | null>(null);
@@ -48,7 +66,28 @@ export default function StreakCelebration({ streak }: { streak: number }) {
       style={{ background: 'rgba(5, 5, 5, 0.85)', backdropFilter: 'blur(8px)' }}
       onClick={() => setShowMilestone(null)}
     >
-      <div className="text-center px-8">
+      {/* v11 — Confetti doré (28 particules, chute 2.4-4s, 3 symboles ✦ ✧ ·) */}
+      <div className="absolute inset-0 pointer-events-none overflow-hidden">
+        {CONFETTI.map((p, i) => (
+          <span
+            key={i}
+            aria-hidden="true"
+            className="absolute text-gold-300"
+            style={{
+              left: `${p.left}%`,
+              top: '-5%',
+              fontSize: `${p.size}px`,
+              animation: `confetti-fall ${p.dur}s ${p.delay}s ease-in forwards`,
+              opacity: 0.85,
+              filter: 'drop-shadow(0 0 6px rgba(212,168,88,0.7))',
+            }}
+          >
+            {p.symbol}
+          </span>
+        ))}
+      </div>
+
+      <div className="text-center px-8 relative z-10">
         <div className="text-7xl mb-6 animate-float-slow">{data.emoji}</div>
         <h2 className="text-3xl font-bold text-gold-gradient mb-3">{data.title}</h2>
         <p className="text-night-300 text-sm leading-relaxed max-w-xs mx-auto mb-2">{data.subtitle}</p>

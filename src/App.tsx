@@ -38,26 +38,131 @@ function isNetworkError(err: unknown): boolean {
 // ─── Splash / loading screen — premium with animated logo ──
 function Splash({ stuckHint }: { stuckHint?: string }) {
   return (
-    <div className="cosmic-bg star-field min-h-screen text-night-100 flex items-center justify-center relative">
+    <div className="cosmic-bg star-field min-h-screen text-night-100 flex items-center justify-center relative overflow-hidden">
       <div className="fixed inset-0 aurora-bg pointer-events-none" />
+
+      {/* v11 — Cinématique d'ouverture : calligraphie signature + sparkle burst */}
+      {/* Anneau calligraphique qui se trace en 1.5s autour du logo */}
+      <svg
+        className="absolute inset-0 m-auto pointer-events-none splash-ring"
+        width="320"
+        height="320"
+        viewBox="0 0 320 320"
+        aria-hidden="true"
+      >
+        <defs>
+          <radialGradient id="splash-glow" cx="50%" cy="50%" r="50%">
+            <stop offset="0%" stopColor="#F4D27A" stopOpacity="0" />
+            <stop offset="60%" stopColor="#F4D27A" stopOpacity="0.25" />
+            <stop offset="100%" stopColor="#F4D27A" stopOpacity="0" />
+          </radialGradient>
+        </defs>
+        <circle cx="160" cy="160" r="140" fill="url(#splash-glow)" />
+        <circle
+          cx="160" cy="160" r="130"
+          fill="none" stroke="#F4D27A" strokeWidth="0.8"
+          strokeLinecap="round"
+          strokeDasharray="816"
+          strokeDashoffset="816"
+          className="splash-calligraphy"
+          style={{ transform: 'rotate(-90deg)', transformOrigin: '50% 50%' }}
+        />
+        {/* 4 sparkle stars aux 4 coins cardinaux, fade-in séquencé */}
+        {[0, 90, 180, 270].map((deg, i) => {
+          const [x, y] = (() => {
+            const a = ((deg - 90) * Math.PI) / 180;
+            return [160 + 130 * Math.cos(a), 160 + 130 * Math.sin(a)];
+          })();
+          return (
+            <text
+              key={deg}
+              x={x} y={y}
+              textAnchor="middle"
+              dominantBaseline="central"
+              fontSize="14"
+              fill="#F4D27A"
+              className="splash-sparkle"
+              style={{ animationDelay: `${1.2 + i * 0.15}s` }}
+            >✦</text>
+          );
+        })}
+      </svg>
+
       <div className="flex flex-col items-center relative z-10 animate-fade-in-scale">
         <div className="relative mb-8 animate-breathe">
           <div className="absolute inset-0 -m-6 rounded-full ripple-gold opacity-30" />
+          <div className="absolute inset-0 -m-10 rounded-full splash-aura pointer-events-none" />
           <CelesteLogo size={96} animated />
         </div>
-        <h1 className="text-3xl font-bold text-gold-gradient font-display tracking-[0.2em] mb-2">Céleste</h1>
-        <p className="text-night-500 text-[10px] uppercase tracking-[0.3em] mb-6 font-body">Astrologie Intuitive</p>
+
+        {/* v11 — Calligraphie du mot "Céleste" via stroke-width transition */}
+        <h1
+          className="text-3xl font-bold font-display tracking-[0.2em] mb-2 splash-calligraphy-text"
+          style={{ color: 'transparent', WebkitTextStroke: '0.5px #F4D27A' }}
+        >
+          Céleste
+        </h1>
+
+        <p className="text-night-500 text-[10px] uppercase tracking-[0.3em] mb-6 font-body splash-fadein" style={{ animationDelay: '1.4s' }}>
+          Astrologie Intuitive
+        </p>
         {stuckHint ? (
           <p className="text-night-400 text-xs leading-relaxed max-w-xs text-center font-body mb-4 px-4">
             {stuckHint}
           </p>
         ) : null}
-        <div className="flex gap-1.5">
+        <div className="flex gap-1.5 splash-fadein" style={{ animationDelay: '1.6s' }}>
           <span className="splash-dot" style={{ animationDelay: '0s' }} />
           <span className="splash-dot" style={{ animationDelay: '0.16s' }} />
           <span className="splash-dot" style={{ animationDelay: '0.32s' }} />
         </div>
       </div>
+
+      <style>{`
+        @keyframes splash-trace {
+          from { stroke-dashoffset: 816; }
+          to   { stroke-dashoffset: 0; }
+        }
+        @keyframes splash-calligraphy-fill {
+          0%   { -webkit-text-stroke-width: 0.5px; color: transparent; }
+          60%  { -webkit-text-stroke-width: 0.5px; color: transparent; }
+          100% { -webkit-text-stroke-width: 0px; color: #F4D27A; }
+        }
+        @keyframes splash-sparkle-pop {
+          0%   { opacity: 0; transform: scale(0.4); }
+          60%  { opacity: 1; transform: scale(1.3); }
+          100% { opacity: 0.6; transform: scale(1); }
+        }
+        @keyframes splash-aura-pulse {
+          0%, 100% { opacity: 0.3; transform: scale(1); }
+          50%      { opacity: 0.6; transform: scale(1.15); }
+        }
+        @keyframes splash-fade-in {
+          from { opacity: 0; transform: translateY(4px); }
+          to   { opacity: 1; transform: translateY(0); }
+        }
+        .splash-calligraphy {
+          animation: splash-trace 1.5s ease-out forwards;
+        }
+        .splash-calligraphy-text {
+          animation: splash-calligraphy-fill 1.8s ease-out forwards;
+        }
+        .splash-sparkle {
+          opacity: 0;
+          transform-origin: center;
+          transform-box: fill-box;
+          animation: splash-sparkle-pop 1.2s ease-out forwards;
+        }
+        .splash-aura {
+          animation: splash-aura-pulse 2.4s ease-in-out infinite;
+          background: radial-gradient(circle, rgba(244,210,122,0.3) 0%, rgba(244,210,122,0) 70%);
+          filter: blur(8px);
+        }
+        .splash-fadein {
+          opacity: 0;
+          animation: splash-fade-in 0.6s ease-out forwards;
+        }
+      `}</style>
     </div>
   );
 }

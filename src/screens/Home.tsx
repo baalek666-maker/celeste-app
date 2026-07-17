@@ -1,4 +1,4 @@
-import { useEffect } from 'react';
+import { useEffect, useMemo } from 'react';
 import type { User } from '../types';
 import type { Screen } from '../App';
 import StreakCelebration from '../components/StreakCelebration';
@@ -10,6 +10,31 @@ import { SignatureFooter } from '../components/SignatureFooter';
 import { HomeSecondary } from '../components/HomeSecondary';
 import { pushService } from '../lib/pushNotifications';
 import { getDailyDominantTransit, TRANSIT_INFO } from '../lib/dailyTransit';
+
+/**
+ * v11 — fond adaptatif total : cosmic-bg teinté par la couleur du transit dominant.
+ * Conversion hex → rgba pour alpha 0.06-0.14 sur les 4 ellipses du gradient,
+ * plus une base sombre légèrement teintée (différent du noir pur v10).
+ */
+function transitTints(transit: string): React.CSSProperties {
+  const t = TRANSIT_INFO[transit as keyof typeof TRANSIT_INFO];
+  if (!t) return {};
+  const hex2rgba = (hex: string, a: number) => {
+    const m = hex.replace('#', '').match(/.{2}/g);
+    if (!m) return `rgba(184,134,11,${a})`;
+    const [r, g, b] = m.map(s => parseInt(s, 16));
+    return `rgba(${r},${g},${b},${a})`;
+  };
+  const accent = t.accent;
+  const halo = t.halo;
+  return {
+    '--tint-a': hex2rgba(accent, 0.14),
+    '--tint-b': hex2rgba(halo,   0.10),
+    '--tint-c': hex2rgba(accent, 0.08),
+    '--tint-d': hex2rgba(halo,   0.06),
+    '--tint-base': '#0a0508',
+  } as React.CSSProperties;
+}
 
 export function Home({ user, onNavigate, isGuest }: { user: User; onNavigate: (s: Screen) => void; isGuest?: boolean }) {
   const streak = user.streak ?? 0;
@@ -60,24 +85,17 @@ export function Home({ user, onNavigate, isGuest }: { user: User; onNavigate: (s
   const chart = user.natalChart as NonNullable<User['natalChart']>;
   const firstName = (user.name?.split(' ')[0]) || (user.email?.split('@')[0]) || undefined;
 
-  // v10 — Fond adaptatif au transit dominant : un halo subtil qui teinte la Home
-  // selon la planète qui domine aujourd'hui. Le fond cosmic-bg reste, on ajoute
-  // juste un radial-gradient overlay en transition lente (4s) entre les transits.
-  const transit = getDailyDominantTransit();
-  const transitAccent = TRANSIT_INFO[transit].accent;
-  const transitHalo = TRANSIT_INFO[transit].halo;
+  // v11 — Fond adaptatif total : cosmic-bg-adapt teinté par la couleur du transit dominant.
+  // Le fond MOI-MÊME change de teinte (pas un overlay halo comme v10).
+  // Calcul mémorisé : getDailyDominantTransit a déjà son cache par jour UTC.
+  const transit = useMemo(() => {
+    try { return getDailyDominantTransit(); } catch { return 'mercury'; }
+  }, []);
+  const tintsStyle = transitTints(transit);
 
   return (
-    <div className="px-5 pt-12 pb-6 relative z-10">
-      {/* v10 — halo overlay adaptatif au transit (sous les blocs, au-dessus du fond) */}
-      <div
-        className="pointer-events-none fixed inset-0 -z-0 transition-all duration-[4000ms] ease-in-out"
-        style={{
-          background: `radial-gradient(ellipse at top, ${transitHalo}26 0%, ${transitAccent}14 30%, transparent 70%)`,
-        }}
-        aria-hidden="true"
-      />
-      <div className="relative z-10">
+    <div className="cosmic-bg-adapt star-field min-h-screen text-night-100 pb-24" style={tintsStyle}>
+      <div className="px-5 pt-12 pb-6 relative z-10">
       <StreakCelebration streak={streak} />
 
       {/* v8 — 4 BLOCS MAX DANS LE FLUX PRINCIPAL */}

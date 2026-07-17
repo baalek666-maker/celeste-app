@@ -12,9 +12,21 @@ type DailyEnergy = {
 };
 
 /**
- * DailyEnergy — 2 modes (v8 audit) :
+ * v11 — clé localStorage "expanded today" pour le bloc Énergie.
+ * On déplie 1× par jour calendaire locale (pas UTC).
+ */
+function getExpansionKey(): string {
+  const d = new Date();
+  return `celeste:expanded-energy:${d.getFullYear()}-${d.getMonth()}-${d.getDate()}`;
+}
+
+/**
+ * DailyEnergy — 3 modes :
  * - default : bloc complet (headline + bar + chips goodFor/avoid + réflexion)
  * - compact : 1-ligne résumé, pour éviter la redondance quand HeroPrediction a déjà affiché la headline
+ * - v11 expanded-once : si pas encore expanded today → afficher full pendant ~6s puis compact.
+ *   Sur la première visite du jour, l'utilisateur voit "transits en clair" (le bloc full avec headline + goodFor/avoid),
+ *   puis à la 2e visite ou au refresh, ça redevient compact.
  */
 export default function DailyEnergy({ compact = false }: { compact?: boolean } = {}) {
   const [data, setData] = useState<DailyEnergy | null>(null);
@@ -24,6 +36,17 @@ export default function DailyEnergy({ compact = false }: { compact?: boolean } =
   const [reflectionDraft, setReflectionDraft] = useState('');
   const [showReflectZone, setShowReflectZone] = useState(false);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
+
+  /**
+   * v11 — Si "compact" prop ET qu'on n'a pas encore vu le bloc aujourd'hui,
+   * on force l'expansion une fois (puis re-compact après 6s).
+   */
+  const [expandedOnce, setExpandedOnce] = useState(() => {
+    if (!compact) return false;
+    try {
+      return localStorage.getItem(getExpansionKey()) !== '1';
+    } catch { return false; }
+  });
 
   useEffect(() => {
     let alive = true;
@@ -40,6 +63,17 @@ export default function DailyEnergy({ compact = false }: { compact?: boolean } =
       .finally(() => { if (alive) setLoading(false); });
     return () => { alive = false; };
   }, []);
+
+  // v11 — quand on est en mode "expanded-once", on persiste le flag après 6s
+  // pour que la 2e visite soit en compact.
+  useEffect(() => {
+    if (!expandedOnce) return;
+    const t = setTimeout(() => {
+      try { localStorage.setItem(getExpansionKey(), '1'); } catch { /* private mode */ }
+      setExpandedOnce(false);
+    }, 6000);
+    return () => clearTimeout(t);
+  }, [expandedOnce]);
 
   const saveReflection = async () => {
     if (!reflectionDraft.trim()) return;
@@ -70,28 +104,32 @@ export default function DailyEnergy({ compact = false }: { compact?: boolean } =
 
   const e = data.energy;
 
-  // ─── MODE COMPACT (v8) : 1-ligne, évite la redondance avec HeroPrediction ─────
-  if (compact) {
-    return (
-      <div className="glass rounded-2xl p-3 mb-2 flex items-center gap-3 border border-gold-500/15 animate-fade-in">
-        <div className="text-xl flex-shrink-0">{e.emoji}</div>
-        <div className="flex-1 min-w-0">
-          <div className="flex items-center gap-2 mb-1">
-            <span className="text-[10px] text-gold-400 uppercase tracking-widest font-bold">Énergie du jour</span>
-            <span className="text-night-500 text-[10px]">{e.score}/10</span>
-          </div>
-          <div className="flex flex-wrap gap-1">
-            {data.goodFor.slice(0, 2).map((g, i) => (
-              <span key={i} className="text-emerald-300 text-[10px] bg-emerald-500/10 px-1.5 py-0.5 rounded-full">+ {g}</span>
-            ))}
-            {data.avoid.slice(0, 1).map((a, i) => (
-              <span key={i} className="text-orange-300 text-[10px] bg-orange-500/10 px-1.5 py-0.5 rounded-full">− {a}</span>
-            ))}
+  // ─── MODE COMPACT (v8) — 1-ligne. Mais v11 : si pas encore vu aujourd'hui, on force expanded. ──
+  // v11 — expandedOnce est true quand l'utilisateur n'a pas encore vu le bloc aujourd'hui.
+  // v11 — effectiveCompact = compact demandé ET pas en mode "first-view today".
+    // Si on est en first-view, on saute le mode compact et on affiche le bloc complet (transits en clair).
+    const effectiveCompact = compact && !expandedOnce;
+    if (effectiveCompact) {
+      return (
+        <div className="glass rounded-2xl p-3 mb-2 flex items-center gap-3 border border-gold-500/15 animate-fade-in">
+          <div className="text-xl flex-shrink-0">{e.emoji}</div>
+          <div className="flex-1 min-w-0">
+            <div className="flex items-center gap-2 mb-1">
+              <span className="text-[10px] text-gold-400 uppercase tracking-widest font-bold">Énergie du jour</span>
+              <span className="text-night-500 text-[10px]">{e.score}/10</span>
+            </div>
+            <div className="flex flex-wrap gap-1">
+              {data.goodFor.slice(0, 2).map((g, i) => (
+                <span key={i} className="text-emerald-300 text-[10px] bg-emerald-500/10 px-1.5 py-0.5 rounded-full">+ {g}</span>
+              ))}
+              {data.avoid.slice(0, 1).map((a, i) => (
+                <span key={i} className="text-orange-300 text-[10px] bg-orange-500/10 px-1.5 py-0.5 rounded-full">− {a}</span>
+              ))}
+            </div>
           </div>
         </div>
-      </div>
-    );
-  }
+      );
+    }
 
   return (
     <div className="glass rounded-3xl p-5 mb-5 stagger-card card-glow animate-fade-in overflow-hidden relative" style={{ animationDelay: '0.05s' }}>
