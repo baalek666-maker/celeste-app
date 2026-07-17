@@ -9,6 +9,9 @@ import SkyMap from '../components/SkyMap';
 import { toast } from '../components/Toast';
 import type { Screen } from '../App';
 import HoroscopeFeedback from '../components/HoroscopeFeedback';
+import { api as apiLib } from '../lib/api';
+import { pushService } from '../lib/pushNotifications';
+import { localISODate as localDate, markHoroscopeRead } from '../lib/storage';
 
 const LOADING_MESSAGES = [
   'Alignement des planètes...',
@@ -134,6 +137,52 @@ export function Horoscope({ user, onNavigate }: { user: User; onNavigate: (s: Sc
     return () => { cancelledRef.value = true; };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [today]);
+
+  // v13 — Le Rituel Quotidien : dès que l'horoscope est rendu (≥ 6s d'attention),
+  // on marque la quête "horoscope" comme faite côté serveur + on révèle une bannière
+  // d'opt-in push (zéro culpabilité : la valeur a été prouvée d'abord).
+  const readAt = useRef<number | null>(null);
+  const readMarked = useRef(false);
+  const [showPushOptin, setShowPushOptin] = useState(false);
+  const [pushDismissedToday, setPushDismissedToday] = useState(() => {
+    try { return localStorage.getItem('celeste_push_dismissed') === localDate(); }
+    catch { return false; }
+  });
+
+  useEffect(() => {
+    if (loading || !horoscope || readMarked.current) return;
+    if (readAt.current === null) readAt.current = Date.now();
+    const elapsed = Date.now() - readAt.current;
+    const delay = Math.max(0, 6000 - elapsed); // ≥ 6 secondes de lecture
+    const t = setTimeout(async () => {
+      if (readMarked.current) return;
+      readMarked.current = true;
+      markHoroscopeRead();
+      try {
+        const res = await apiLib.completeQuest('horoscope');
+        if (res?.xpAwarded > 0) {
+          toast.success(`✦ Rituel matinal +${res.xpAwarded} XP`);
+        }
+      } catch { /* silent — quest failure not blocking */ }
+      // push opt-in : seulement si push pas déjà activé + pas dismissed aujourd'hui
+      const enabled = pushService.isEnabled();
+      if (!enabled && !pushDismissedToday) {
+        setShowPushOptin(true);
+      }
+    }, delay);
+    return () => clearTimeout(t);
+  }, [loading, horoscope, pushDismissedToday]);
+
+  const handleAcceptPush = async () => {
+    const ok = await pushService.requestPermission();
+    setShowPushOptin(false);
+    if (ok) toast.success('✦ Rappels Céleste activés — à demain');
+  };
+  const handleDismissPush = () => {
+    setShowPushOptin(false);
+    try { localStorage.setItem('celeste_push_dismissed', localDate()); } catch {}
+    setPushDismissedToday(true);
+  };
 
   // Feature 2: load week strip after main horoscope is shown
   useEffect(() => {
@@ -299,6 +348,37 @@ export function Horoscope({ user, onNavigate }: { user: User; onNavigate: (s: Sc
       {isFallback && !isOfflineCache && (
         <div className="mb-4 px-3 py-1.5 rounded-xl border border-night-600/50 bg-night-800/40 inline-flex items-center gap-1.5 animate-fade-in">
           <span className="text-[10px] text-night-400">✦ Version simplifiée du jour</span>
+        </div>
+      )}
+
+      {/* v13 — Bannière opt-in push (après 1er horoscope, valeur prouvée d'abord) */}
+      {showPushOptin && (
+        <div className="glass-gold rounded-2xl p-4 mb-5 border border-gold-500/40 animate-fade-in">
+          <div className="flex items-start gap-3">
+            <span className="text-2xl flex-shrink-0">🔔</span>
+            <div className="flex-1 min-w-0">
+              <p className="text-gold-300 text-sm font-semibold mb-1">
+                Et si on faisait de ça un rituel ?
+              </p>
+              <p className="text-night-300 text-xs leading-relaxed mb-3">
+                Un rappel Céleste le matin — 30 secondes, juste assez pour t'aligner avant que la journée t'avale. Tu peux changer l'heure ou couper en un tap.
+              </p>
+              <div className="flex items-center gap-2">
+                <button
+                  onClick={handleAcceptPush}
+                  className="px-4 py-2 rounded-xl bg-gradient-to-r from-gold-400 to-gold-600 text-night-950 font-semibold text-xs transition-all hover:scale-[1.02] active:scale-[0.98] shadow-md shadow-gold-500/30"
+                >
+                  Activer
+                </button>
+                <button
+                  onClick={handleDismissPush}
+                  className="px-3 py-2 text-night-400 text-xs hover:text-night-200 transition-colors"
+                >
+                  Pas maintenant
+                </button>
+              </div>
+            </div>
+          </div>
         </div>
       )}
 

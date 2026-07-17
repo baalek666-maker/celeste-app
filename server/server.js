@@ -2875,12 +2875,16 @@ async function runDailyPushJob() {
 
       if (!hourMatches) continue;
 
-      // VMF voice: warm, specific, anti-generic. Varie le message selon le contexte.
+      // v13 — Le Rituel Quotidien. VMF : chaud, spécifique, anti-générique.
+      // 7 variantes = 1 semaine sans répétition déterministe (hash date).
       const pushVariants = [
-        'Les planètes ont bougé cette nuit. Un petit coup d\'œil ?',
-        'Ton ciel du jour est prêt. Pas de blabla — juste du vrai.',
-        'Nouveau transit aujourd\'hui. Viens voir ce que ça dit de toi.',
-        'Ton horoscope t\'attend. Pas le même qu\'hier — le ciel a tourné.',
+        'Ton ciel t\'attend. Trois minutes, le temps d\'un café.',
+        'Les planètes ont bougé cette nuit. Viens voir ce qu\'il dit de toi.',
+        'Le rituel du matin t\'ouvre. Horoscope → intention → silence.',
+        'Ton horoscope du jour est prêt. Pas le même qu\'hier — le ciel a tourné.',
+        'Sept respirations, puis ton horoscope. Le reste suivra.',
+        'Trois gestes, un rituel. Céleste t\'attend.',
+        'Nouveau transit aujourd\'hui. Une intention à poser ?',
       ];
       const dayOfYear = Math.floor((Date.now() - new Date(new Date().getFullYear(), 0, 0).getTime()) / 86400000);
       const body = pushVariants[dayOfYear % pushVariants.length];

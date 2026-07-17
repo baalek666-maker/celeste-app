@@ -8,12 +8,14 @@ import { CELESTE_VOICE, celesteSystemPrompt } from './celest-voice.js';
 
 // ─── Constants ──────────────────────────────────────────────────
 
+// v13 — Le Rituel Quotidien : 4 quêtes = 1 rituel matinal VMF-aligned.
+// Chaque quête = un geste du rituel (pas une "tâche" gamifiée isolée).
+// Cumul XP si toutes complétées = 65 XP. Streak dans DB déjà suivi côté server.js.
 const QUEST_DEFS = [
-  { key: 'horoscope', label: 'Consulter ton horoscope du jour', xp: 15 },
-  { key: 'tarot',     label: 'Tirer ta carte du Tarot',         xp: 15 },
-  { key: 'ritual',    label: 'Compléter ton rituel matinal',     xp: 10 },
-  { key: 'journal',   label: 'Écrire une note dans ton journal', xp: 20 },
-  { key: 'explore',   label: 'Explorer une section approfondie',   xp: 10 },
+  { key: 'horoscope', label: 'Lis ton horoscope du matin',          xp: 15 },
+  { key: 'tarot',     label: 'Tire ta carte du jour',               xp: 15 },
+  { key: 'journal',   label: 'Note ton ressenti dans le journal',   xp: 20 },
+  { key: 'intention', label: 'Pose ton intention du jour',          xp: 15 },
 ];
 
 const BADGE_DEFS = [

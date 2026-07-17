@@ -171,3 +171,26 @@ export function cacheHoroscope(date: string, horoscope: HoroscopeEntry): void {
     console.warn('[storage] Failed to cache horoscope:', err);
   }
 }
+
+// v13 — Le Rituel Quotidien : tracking de "l'horoscope a été lu" sans serveur.
+// Sert à cadencer les futures relances (ex : "tu n'as pas fini ton rituel hier")
+// et à ne pas re-déclencher la bannière push si déjà lue aujourd'hui.
+const READ_KEY = 'celeste_horoscope_read';
+export function markHoroscopeRead(date?: string): void {
+  try {
+    const today = date || localISODate();
+    localStorage.setItem(READ_KEY, JSON.stringify({ date: today, ts: Date.now() }));
+  } catch { /* ignore */ }
+}
+export function getLastRead(date: string): { ts: number } | null {
+  try {
+    const raw = localStorage.getItem(READ_KEY);
+    if (!raw) return null;
+    const parsed = JSON.parse(raw);
+    if (parsed?.date === date) return { ts: parsed.ts };
+  } catch { /* ignore */ }
+  return null;
+}
+export function wasReadToday(): boolean {
+  return getLastRead(localISODate()) !== null;
+}

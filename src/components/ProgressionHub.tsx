@@ -121,40 +121,59 @@ export default function ProgressionHub() {
         </div>
       </div>
 
-      {/* ── Daily Quests ──────────────────────── */}
-      <div className="glass rounded-3xl p-5 mb-4">
-        <div className="flex items-center justify-between mb-3">
-          <h3 className="text-night-100 font-bold text-sm">⚔️ Quêtes du jour</h3>
-          <span className="text-night-400 text-xs">{questsDone}/{gami.questsTotal}</span>
-        </div>
-        {gami.quests.length === 0 ? (
-          <p className="text-night-400 text-xs py-2">Reviens demain pour de nouvelles quêtes.</p>
-        ) : (
-          <div className="space-y-2">
-            {gami.quests.map(q => (
-              <button
-                key={q.quest_key}
-                disabled={q.completed || busyKey === q.quest_key}
-                onClick={() => completeQuest(q)}
-                className={`w-full flex items-center gap-3 p-3 rounded-xl text-left transition-all relative overflow-hidden ${
-                  q.completed
-                    ? 'bg-night-800/40 opacity-50'
-                    : 'glass hover:border-gold-500/30 border border-transparent'
-                }`}
-              >
-                <span className={`w-6 h-6 rounded-full flex items-center justify-center text-xs flex-shrink-0 ${
-                  q.completed ? 'bg-gold-500/20 text-gold-300' : 'border border-night-500'
-                }`}>
-                  {q.completed ? '✓' : ''}
-                </span>
-                <span className={`flex-1 text-xs ${q.completed ? 'text-night-400 line-through' : 'text-night-200'}`}>
-                  {q.quest_label}
-                </span>
-                <span className="text-gold-300/70 text-[10px] font-mono">+{q.xp_reward}</span>
-              </button>
-            ))}
+      {/* ── Le Rituel du Matin (v13) ─────────────────── */}
+      <div className="glass-gold rounded-3xl p-5 mb-4 overflow-hidden relative">
+        <div className="absolute inset-0 opacity-[0.04] pointer-events-none" style={{
+          background: 'radial-gradient(circle at 20% 0%, #f5d488 0%, transparent 60%)'
+        }} />
+        <div className="relative z-10">
+          <div className="flex items-center justify-between mb-1">
+            <h3 className="text-gold-200 font-bold text-sm flex items-center gap-2">
+              <span>✦</span> Le Rituel du Matin
+            </h3>
+            <span className="text-gold-300/70 text-xs font-mono">{questsDone}/{gami.questsTotal}</span>
           </div>
-        )}
+          <p className="text-night-400 text-xs italic mb-4 leading-relaxed">
+            Quatre gestes. Trois minutes. Pour commencer la journée de l'autre côté du miroir.
+          </p>
+          {gami.quests.length === 0 ? (
+            <p className="text-night-400 text-xs py-2">Reviens demain pour un nouveau rituel.</p>
+          ) : (
+            <div className="space-y-2">
+              {gami.quests.map((q, i) => (
+                <button
+                  key={q.quest_key}
+                  disabled={q.completed || busyKey === q.quest_key}
+                  onClick={() => completeQuest(q)}
+                  className={`w-full flex items-center gap-3 p-3 rounded-xl text-left transition-all relative overflow-hidden ${
+                    q.completed
+                      ? 'bg-night-900/60 opacity-60'
+                      : 'bg-night-800/30 hover:bg-night-800/60 border border-gold-500/15 hover:border-gold-500/40'
+                  }`}
+                >
+                  <span className={`w-7 h-7 rounded-full flex items-center justify-center text-xs flex-shrink-0 ${
+                    q.completed
+                      ? 'bg-gold-500/30 text-gold-200'
+                      : 'border border-gold-500/30 text-gold-400/70'
+                  }`}>
+                    {q.completed ? '✓' : ['✦','☾','✎','☉'][i % 4]}
+                  </span>
+                  <span className={`flex-1 text-xs leading-snug ${q.completed ? 'text-night-400 line-through' : 'text-night-100'}`}>
+                    {q.quest_label}
+                  </span>
+                  <span className={`text-[10px] font-mono flex-shrink-0 ${q.completed ? 'text-night-500' : 'text-gold-400/60'}`}>+{q.xp_reward}</span>
+                </button>
+              ))}
+            </div>
+          )}
+          {questsDone === gami.questsTotal && gami.questsTotal > 0 && (
+            <div className="mt-4 pt-3 border-t border-gold-500/20 text-center">
+              <p className="text-gold-300 text-xs italic">
+                Rituel accompli. Le ciel te reconnaît.
+              </p>
+            </div>
+          )}
+        </div>
       </div>
 
       {/* ── Weekly Challenge ──────────────────── */}
