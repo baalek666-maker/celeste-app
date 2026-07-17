@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import type { User, ZodiacSign, BirthData, CompatibilityResult } from '../types';
 import { api } from '../lib/api';
 import { ZODIAC_SIGNS, ZODIAC_ORDER } from '../data/zodiac';
@@ -42,6 +42,27 @@ export function Compatibility({ user }: { user: User }) {
   const [result, setResult] = useState<CompatibilityResult | null>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
+  const [animatedScore, setAnimatedScore] = useState(0);
+
+  // P2 — Animation score 0→N easeOut sur 2s quand result.score change
+  useEffect(() => {
+    if (!result) {
+      setAnimatedScore(0);
+      return;
+    }
+    const target = result.score;
+    const duration = 2000;
+    const start = Date.now();
+    const tick = () => {
+      const elapsed = Date.now() - start;
+      const t = Math.min(elapsed / duration, 1);
+      // easeOutCubic
+      const eased = 1 - Math.pow(1 - t, 3);
+      setAnimatedScore(Math.round(target * eased));
+      if (t < 1) requestAnimationFrame(tick);
+    };
+    requestAnimationFrame(tick);
+  }, [result]);
 
   const handleAnalyze = async () => {
     setLoading(true);
@@ -185,11 +206,13 @@ export function Compatibility({ user }: { user: User }) {
               <div className="grid grid-cols-3 gap-3">
                 {ZODIAC_ORDER.map((sign) => (
                   <button key={sign} onClick={() => setTheirSign(sign)}
-                    className={`py-3 rounded-xl border transition-all ${theirSign === sign ? 'glass border-cosmic-500' : 'glass border-transparent'}`}>
+                    className={`py-3 rounded-xl border transition-all duration-300 ${theirSign === sign ? 'glass-gold border-gold-500/60 scale-110 shadow-[0_0_18px_rgba(251,191,36,0.45)]' : 'glass border-transparent opacity-70 hover:opacity-100'}`}>
                     <span className="text-xl block" style={{ color: ZODIAC_SIGNS[sign].color }}>
                       {ZODIAC_SIGNS[sign].symbol}
                     </span>
-                    <span className="text-night-300 text-xs">{ZODIAC_SIGNS[sign].name}</span>
+                    <span className={`text-xs mt-0.5 block ${theirSign === sign ? 'text-gold-300 font-semibold' : 'text-night-300'}`}>
+                      {ZODIAC_SIGNS[sign].name}
+                    </span>
                   </button>
                 ))}
               </div>
@@ -250,8 +273,8 @@ export function Compatibility({ user }: { user: User }) {
                 </span>
                 <p className="text-night-400 text-xs mt-1">Toi</p>
               </div>
-              <div className="w-20 h-20 rounded-full glass border-2 border-gold-500/30 flex items-center justify-center">
-                <span className="text-3xl font-bold text-gold-gradient">{result.score}%</span>
+              <div className="w-20 h-20 rounded-full glass border-2 border-gold-500/30 flex items-center justify-center shadow-[0_0_24px_rgba(251,191,36,0.25)]">
+                <span className="text-3xl font-bold text-gold-gradient tabular-nums">{animatedScore}%</span>
               </div>
               <div className="text-center">
                 <span className="text-3xl block" style={{ color: ZODIAC_SIGNS[result.theirSun as ZodiacSign]?.color }}>
