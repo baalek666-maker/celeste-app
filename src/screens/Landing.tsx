@@ -105,6 +105,23 @@ export function Landing({ onStart, onLogin, onGuest }: LandingProps) {
         <p className="text-night-300 text-base max-w-md mx-auto mb-10 font-body leading-relaxed animate-fade-in-up" style={{ animationDelay: '0.35s' }}>
           Une carte du ciel calculée aux données astronomiques NASA. Des lectures qui parlent de toi, pas d'un signe générique. L'astrologie comme elle aurait dû être.
         </p>
+
+        {/* P1 — Aperçu horoscope inline avant le CTA (« wow instantané ») */}
+        <div className="max-w-xs mx-auto mb-8 animate-fade-in-up" style={{ animationDelay: '0.42s' }}>
+          <div className="glass rounded-2xl p-4 border border-gold-500/30 bg-gradient-to-br from-gold-500/10 to-cosmic-500/10 relative overflow-hidden">
+            <div className="absolute -top-6 -right-6 text-6xl opacity-10 select-none">✦</div>
+            <div className="flex items-center justify-between mb-2">
+              <span className="text-[10px] uppercase tracking-widest text-gold-400 font-semibold">Aperçu — Lion</span>
+              <span className="text-xs text-night-500">Aujourd'hui</span>
+            </div>
+            <p className="text-night-100 text-sm italic leading-relaxed">
+              « Ta lumière intérieure cherche un cadre pour s'exprimer —<br />
+              l'inspiration du jour se cache dans le silence, pas dans le mouvement. »
+            </p>
+            <p className="text-night-500 text-[11px] mt-3 italic">— Exemple de lecture personnalisée</p>
+          </div>
+        </div>
+
         <button
           onClick={onStart}
           className="group relative w-full max-w-xs mx-auto block py-4 rounded-2xl bg-gradient-to-r from-gold-400 to-gold-600 text-night-950 font-semibold font-display tracking-wide transition-all hover:scale-[1.02] active:scale-[0.98] shadow-lg shadow-gold-500/30 animate-fade-in-up overflow-hidden"
