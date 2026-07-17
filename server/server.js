@@ -1754,7 +1754,10 @@ Réponds UNIQUEMENT avec le JSON.`;
       const id = Math.abs(seed) % TAROT_DECK.length;
       return TAROT_DECK[id] || TAROT_DECK[0];
     })();
-    const fbIsReversed = safeCard.id % 3 === 0;
+    // v11.3 — isReversed = tirage divinatoire, PAS un fallback bug.
+    // Si on est passé par le fallback (LLM échoué), fbIsReversed était `id % 3 === 0`
+    // ce qui produisait 1/3 des cartes à l'envers systématiquement. Maintenant : false par défaut.
+    const fbIsReversed = false;
     const fbSun = typeof sunSign !== 'undefined' ? sunSign : 'inconnu';
     const fallbackResult = {
       cardName: safeCard.name,
