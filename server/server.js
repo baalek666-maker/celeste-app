@@ -1551,9 +1551,25 @@ app.post('/api/horoscope', auth, async (req, res) => {
       db.prepare('UPDATE users SET scans_remaining = scans_remaining - 1 WHERE id = ?').run(req.user.id);
     }
 
+    // Helper: extrait le summary (general+energie+mood+luckyColor) depuis le content JSON
+    function extractSummary(contentJson) {
+      try {
+        const c = JSON.parse(contentJson);
+        return {
+          general: String(c.general ?? '').slice(0, 600),
+          energie: Number(c.energie ?? 3),
+          mood: String(c.mood ?? '').slice(0, 60),
+          luckyColor: String(c.luckyColor ?? '').slice(0, 30),
+        };
+      } catch (e) {
+        return { general: '', energie: 3, mood: '', luckyColor: '' };
+      }
+    }
+
     // Per-user cache for fast subsequent loads
-    db.prepare('INSERT OR REPLACE INTO horoscope_cache (user_id, date, content) VALUES (?, ?, ?)')
-      .run(req.user.id, today, JSON.stringify(horoscope));
+    const summary = extractSummary(JSON.stringify(horoscope));
+    db.prepare('INSERT OR REPLACE INTO horoscope_cache (user_id, date, content, summary) VALUES (?, ?, ?, ?)')
+      .run(req.user.id, today, JSON.stringify(horoscope), JSON.stringify(summary));
 
     const streak = updateStreak(req.user.id, today);
     const remaining = isPremium ? null : Math.max(0, (user.scans_remaining ?? 0) - (personalCached ? 0 : 1));
@@ -1564,8 +1580,10 @@ app.post('/api/horoscope', auth, async (req, res) => {
   }
 });
 
-// ─── Horoscope Week (7-day summary view) ──────────────────
-// Premium: 7 days | Free: 3 days (J-1 to J+1)
+// ─── Horoscope History (J-7 → J) ────────────────────────────
+// Pivot v13.1 : au lieu de prédire les jours futurs (J-1..J+1 / J-3..J+3),
+// on retourne l'historique réel des 7 derniers jours — ce que le user a VRAIMENT lu.
+// Pas de génération fictive. Les jours non consultés s'affichent en état vide rituel.
 app.get('/api/horoscope/week', auth, async (req, res) => {
   try {
     const user = db.prepare('SELECT * FROM users WHERE id = ?').get(req.user.id);
@@ -1574,102 +1592,79 @@ app.get('/api/horoscope/week', auth, async (req, res) => {
     const now = Date.now();
     const isPremium = !!user.is_premium && (!user.premium_until || user.premium_until > now);
 
-    const days = isPremium ? 7 : 3; // Free gets J-1..J+1, Premium gets J-3..J+3
-    const offsetStart = isPremium ? -3 : -1;
-    const offsetEnd = isPremium ? 3 : 1;
-
-    const birthData = safeJsonParse(user.birth_data, null, 'weekly-horoscope birth_data');
-    if (!birthData) return res.status(400).json({ error: 'No valid birth data. Please update your profile.' });
-    const natalPositions = getNatalPositions(birthData);
-    const sunSign = natalPositions.sun.sign;
+    // Premium: 7 jours | Free: 3 jours — historique uniquement (J-N → J)
+    const days = isPremium ? 7 : 3;
+    const offsetStart = -(days - 1); // J-(days-1) → J
+    const offsetEnd = 0;
 
     const results = [];
     const today = new Date();
     today.setHours(0, 0, 0, 0);
 
-    // First, hydrate from cache for all requested days (one round-trip)
     for (let offset = offsetStart; offset <= offsetEnd; offset++) {
       const day = new Date(today);
       day.setDate(today.getDate() + offset);
       const isoDate = day.toISOString().split('T')[0];
 
-      // P0 #2 — Schéma corrigé : colonne 'content' (et non 'summary').
-      const cached = db.prepare('SELECT content FROM horoscope_cache WHERE user_id = ? AND date = ?').get(req.user.id, isoDate);
-      if (cached?.content) {
+      // Lecture cache : on a déjà tout dans horoscope_cache
+      const row = db.prepare('SELECT content, summary FROM horoscope_cache WHERE user_id = ? AND date = ?')
+        .get(req.user.id, isoDate);
+
+      if (row?.summary) {
+        const parsed = safeJsonParse(row.summary, null, 'horoscope_history_summary');
         results.push({
           date: isoDate,
           offset,
           weekday: day.toLocaleDateString('fr-FR', { weekday: 'short' }),
-          summary: safeJsonParse(cached.content, null, 'horoscope_daily_cache'),
-          cached: true,
+          weekdayLong: day.toLocaleDateString('fr-FR', { weekday: 'long' }),
+          summary: parsed,
+          consulted: true,
+        });
+      } else {
+        // Pas de cache : le user n'a pas ouvert son horoscope ce jour-là
+        results.push({
+          date: isoDate,
+          offset,
+          weekday: day.toLocaleDateString('fr-FR', { weekday: 'short' }),
+          weekdayLong: day.toLocaleDateString('fr-FR', { weekday: 'long' }),
+          summary: null,
+          consulted: false,
         });
       }
     }
 
-    // Compute which days still need generation
-    const haveDate = new Set(results.map(r => r.date));
-    const missing = [];
-    for (let offset = offsetStart; offset <= offsetEnd; offset++) {
-      const day = new Date(today);
-      day.setDate(today.getDate() + offset);
-      const isoDate = day.toISOString().split('T')[0];
-      if (!haveDate.has(isoDate)) missing.push({ offset, isoDate, day });
-    }
+    // Tri chronologique inversé : le plus récent en premier (J, J-1, J-2...)
+    results.sort((a, b) => b.offset - a.offset);
 
-    // Generate missing summaries sequentially (avoids 429 burst)
-    // Premium-only: free users must hit /api/horoscope first to start trial
-    if (missing.length > 0 && isPremium) {
-      for (const { offset, isoDate, day } of missing) {
-        try {
-          const transits = getTransits(day);
-          const dateLabel = day.toLocaleDateString('fr-FR', { weekday: 'long', day: 'numeric', month: 'long' });
-          const summary = await generateHoroscopeSummary(natalPositions, transits, sunSign, dateLabel);
-
-          // Save to cache (upsert: keep existing content if any)
-          const existing = db.prepare('SELECT content FROM horoscope_cache WHERE user_id = ? AND date = ?').get(req.user.id, isoDate);
-          if (existing) {
-            db.prepare('UPDATE horoscope_cache SET summary = ? WHERE user_id = ? AND date = ?')
-              .run(JSON.stringify(summary), req.user.id, isoDate);
-          } else {
-            db.prepare('INSERT INTO horoscope_cache (user_id, date, content, summary) VALUES (?, ?, ?, ?)')
-              .run(req.user.id, isoDate, '{}', JSON.stringify(summary));
-          }
-
-          results.push({
-            date: isoDate,
-            offset,
-            weekday: day.toLocaleDateString('fr-FR', { weekday: 'short' }),
-            summary,
-            cached: false,
-          });
-        } catch (err) {
-          console.warn(`[week] skip ${isoDate}: ${err.message}`);
-          results.push({
-            date: isoDate,
-            offset,
-            weekday: day.toLocaleDateString('fr-FR', { weekday: 'short' }),
-            summary: null,
-            cached: false,
-            error: err.message,
-          });
-        }
-      }
-    }
-
-    // Sort by date
-    results.sort((a, b) => a.offset - b.offset);
+    const consultedCount = results.filter(r => r.consulted).length;
 
     res.json({
       days: results,
       isPremium,
       rangeDays: days,
-      generated: missing.filter(m => !results.find(r => r.date === m.isoDate && r.error)).length,
+      consultedCount,
+      // computed streak = nombre de jours consécutifs consultés en remontant depuis aujourd'hui
+      streak: computedConsultedStreak(req.user.id, today),
     });
   } catch (err) {
-    console.error('Week horoscope error:', err.message);
-    res.status(500).json({ error: 'Failed to generate week', detail: err.message });
+    console.error('Horoscope history error:', err.message);
+    res.status(500).json({ error: 'Failed to load history', detail: err.message });
   }
 });
+
+// Helper : compte les jours consécutifs consultés depuis aujourd'hui
+function computedConsultedStreak(userId, today) {
+  let streak = 0;
+  const cursor = new Date(today);
+  while (true) {
+    const iso = cursor.toISOString().split('T')[0];
+    const row = db.prepare('SELECT 1 FROM horoscope_cache WHERE user_id = ? AND date = ?').get(userId, iso);
+    if (!row) break;
+    streak++;
+    cursor.setDate(cursor.getDate() - 1);
+  }
+  return streak;
+}
 
 // ─── Tarot — Daily Draw (LLM-powered, cached per day) ─────
 const TAROT_DECK = [

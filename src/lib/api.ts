@@ -303,25 +303,28 @@ export const api = {
       body: JSON.stringify({ partnerBirthData, context }),
     }),
 
-  // Week horoscope summary (3 or 7 days)
+  // Horoscope history (v13.1 — J-7 → J passé uniquement, pas de prédiction future)
   getWeekHoroscope: () =>
     apiCall<{
       days: Array<{
         date: string;
         offset: number;
         weekday: string;
+        weekdayLong?: string;
         summary: {
           general: string;
           energie: number;
           mood: string;
           luckyColor: string;
         } | null;
-        cached: boolean;
+        consulted: boolean;
+        cached?: boolean;
         error?: string;
       }>;
       isPremium: boolean;
       rangeDays: number;
-      generated: number;
+      consultedCount: number;
+      streak: number;
     }>('/horoscope/week', { method: 'GET' }),
 
   // Journal

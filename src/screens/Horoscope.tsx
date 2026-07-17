@@ -30,10 +30,21 @@ export function Horoscope({ user, onNavigate }: { user: User; onNavigate: (s: Sc
   const [loadingMsg, setLoadingMsg] = useState(LOADING_MESSAGES[0]);
   const [isFallback, setIsFallback] = useState(false);
   const [isOfflineCache, setIsOfflineCache] = useState(false);
-  // Week strip state (Feature 2)
+  // Week strip state (Feature 2 v13.1 — history feed)
   const [week, setWeek] = useState<any[] | null>(null);
   const [loadingWeek, setLoadingWeek] = useState(false);
   const [weekError, setWeekError] = useState('');
+  const [weekStreak, setWeekStreak] = useState(0);
+  const [consultedCount, setConsultedCount] = useState(0);
+  // État local : quels jours ont leur texte déplié
+  const [expandedDays, setExpandedDays] = useState<Set<string>>(new Set());
+  const toggleExpand = (date: string) => {
+    setExpandedDays(prev => {
+      const next = new Set(prev);
+      if (next.has(date)) next.delete(date); else next.add(date);
+      return next;
+    });
+  };
   const [activeSection, setActiveSection] = useState<'general' | 'love' | 'career'>('general');
   const [recentEntries, setRecentEntries] = useState<JournalEntry[]>([]);
   const today = localISODate();
@@ -184,15 +195,20 @@ export function Horoscope({ user, onNavigate }: { user: User; onNavigate: (s: Sc
     setPushDismissedToday(true);
   };
 
-  // Feature 2: load week strip after main horoscope is shown
+  // Feature 2 v13.1: load history feed after main horoscope is shown
   useEffect(() => {
     if (loading || !horoscope) return;
     let cancelled = false;
     setLoadingWeek(true);
     setWeekError('');
     api.getWeekHoroscope()
-      .then(data => { if (!cancelled) setWeek(data.days); })
-      .catch(err => { if (!cancelled) setWeekError(err?.message || 'Erreur chargement semaine'); })
+      .then(data => {
+        if (cancelled) return;
+        setWeek(data.days);
+        setWeekStreak(data.streak ?? 0);
+        setConsultedCount(data.consultedCount ?? 0);
+      })
+      .catch(err => { if (!cancelled) setWeekError(err?.message || 'Erreur chargement historique'); })
       .finally(() => { if (!cancelled) setLoadingWeek(false); });
     return () => { cancelled = true; };
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -578,23 +594,32 @@ export function Horoscope({ user, onNavigate }: { user: User; onNavigate: (s: Sc
         </div>
       </div>
 
-      {/* Feature 2: Week strip — 7-day summary */}
+      {/* Feature 2 v13.1: History feed — J-7 → J, lues réelles uniquement.
+          Pas de prédiction future. Chaque carte = un jour effectivement consulté.
+          État vide rituel pour les jours non consultés (pas culpabilisant). */}
       <div className="mt-8 mb-6">
         <div className="flex items-center justify-between mb-3 px-1">
           <h3 className="text-gold-300 text-sm uppercase tracking-widest font-semibold flex items-center gap-2">
-            <span className="text-base">📅</span> Cette semaine
+            <span className="text-base">📖</span> Tes dernières lectures
           </h3>
-          {!loadingWeek && week && (
-            <span className="text-night-500 text-xs">
-              {week.length} jour{week.length > 1 ? 's' : ''}
-            </span>
+          {!loadingWeek && week && week.length > 0 && (
+            <div className="flex items-center gap-3">
+              {weekStreak >= 2 && (
+                <span className="text-cosmic-300 text-xs flex items-center gap-1" title={`${weekStreak} jours d'affilée`}>
+                  🔥 {weekStreak}j
+                </span>
+              )}
+              <span className="text-night-500 text-xs">
+                {consultedCount}/{week.length} jour{week.length > 1 ? 's' : ''}
+              </span>
+            </div>
           )}
         </div>
 
         {loadingWeek && (
-          <div className="flex gap-3 overflow-x-auto pb-2 scrollbar-hide">
-            {[0, 1, 2, 3, 4].map(i => (
-              <div key={i} className="flex-shrink-0 w-28 h-32 glass rounded-2xl animate-pulse" />
+          <div className="space-y-3">
+            {[0, 1, 2].map(i => (
+              <div key={i} className="glass rounded-2xl p-4 animate-pulse h-24" />
             ))}
           </div>
         )}
@@ -603,45 +628,83 @@ export function Horoscope({ user, onNavigate }: { user: User; onNavigate: (s: Sc
           <div className="text-night-500 text-xs italic px-2">{weekError}</div>
         )}
 
+        {week && week.length === 0 && (
+          <div className="glass rounded-2xl p-6 text-center">
+            <p className="text-night-300 text-sm mb-1">Pas encore d'historique.</p>
+            <p className="text-night-500 text-xs italic">Demain, ton premier jour sera ici.</p>
+          </div>
+        )}
+
         {week && week.length > 0 && (
-          <div className="flex gap-3 overflow-x-auto pb-2 scrollbar-hide snap-x snap-mandatory">
+          <div className="space-y-3">
             {week.map((day) => {
               const isToday = day.offset === 0;
-              const hasError = !!day.error;
               const summary = day.summary;
               const energie = summary?.energie ?? 0;
+              const mood = summary?.mood ?? '';
+              const dateObj = new Date(day.date);
+              const dayNum = dateObj.getDate();
+              const monthShort = dateObj.toLocaleDateString('fr-FR', { month: 'short' });
+
               return (
                 <div
                   key={day.date}
-                  className={`flex-shrink-0 w-32 glass rounded-2xl p-3 snap-start border transition-all ${
-                    isToday ? 'border-gold-500/60 bg-gold-500/5' : 'border-night-700/30'
-                  } ${hasError ? 'opacity-50' : ''}`}
+                  className={`glass rounded-2xl p-4 border transition-all ${
+                    isToday
+                      ? 'border-gold-500/60 bg-gold-500/5 shadow-lg shadow-gold-500/10'
+                      : 'border-night-700/30'
+                  }`}
                 >
-                  <div className="text-center">
-                    <p className={`text-xs uppercase tracking-wider mb-1 ${isToday ? 'text-gold-400 font-semibold' : 'text-night-400'}`}>
-                      {isToday ? "Aujourd'hui" : day.weekday}
-                    </p>
-                    <p className={`text-xl font-bold mb-2 ${isToday ? 'text-gold-300' : 'text-cosmic-300'}`}>
-                      {new Date(day.date).getDate()}
-                    </p>
-                    {summary ? (
-                      <>
-                        <div className="flex justify-center gap-0.5 mb-2">
-                          {[1, 2, 3, 4, 5].map(n => (
-                            <span key={n} className={n <= energie ? 'text-gold-400 text-xs' : 'text-night-700 text-xs'}>●</span>
-                          ))}
-                        </div>
-                        <p className="text-night-300 text-[11px] leading-snug line-clamp-3">
-                          {summary.general}
-                        </p>
-                        <p className="text-night-500 text-[10px] mt-2 italic">
-                          {summary.mood}
-                        </p>
-                      </>
+                  {/* Header : date + état */}
+                  <div className="flex items-start justify-between mb-2">
+                    <div className="flex items-baseline gap-2">
+                      <p className={`text-xs uppercase tracking-wider ${isToday ? 'text-gold-400 font-semibold' : 'text-night-400'}`}>
+                        {isToday ? "Aujourd'hui" : day.weekdayLong || day.weekday}
+                      </p>
+                      <p className={`text-base font-bold ${isToday ? 'text-gold-300' : 'text-cosmic-300'}`}>
+                        {dayNum} {monthShort}
+                      </p>
+                    </div>
+                    {day.consulted ? (
+                      <span className="text-cosmic-400 text-[10px] uppercase tracking-wider">Consulté</span>
                     ) : (
-                      <p className="text-night-600 text-[10px] italic">Chargement...</p>
+                      <span className="text-night-600 text-[10px] uppercase tracking-wider italic">Non ouvert</span>
                     )}
                   </div>
+
+                  {summary ? (
+                    <>
+                      {/* Barre énergie 1-5 */}
+                      <div className="flex items-center gap-2 mb-2">
+                        <div className="flex gap-0.5">
+                          {[1, 2, 3, 4, 5].map(n => (
+                            <span key={n} className={n <= energie ? 'text-gold-400 text-[10px]' : 'text-night-700 text-[10px]'}>●</span>
+                          ))}
+                        </div>
+                        {mood && <span className="text-night-500 text-[10px] italic">{mood}</span>}
+                      </div>
+
+                      {/* Texte : PAS de troncature. line-clamp-2 replié, expand-on-tap */}
+                      <p className={`text-night-300 text-sm leading-relaxed ${expandedDays.has(day.date) ? '' : 'line-clamp-2'}`}>
+                        {summary.general}
+                      </p>
+
+                      {summary.general && summary.general.length > 100 && (
+                        <button
+                          onClick={() => toggleExpand(day.date)}
+                          className="text-cosmic-300 text-xs mt-1 hover:text-cosmic-200 transition-colors"
+                        >
+                          {expandedDays.has(day.date) ? '↴ Réduire' : '↳ Lire la suite'}
+                        </button>
+                      )}
+                    </>
+                  ) : (
+                    <p className="text-night-600 text-xs italic">
+                      {isToday
+                        ? 'Ouvre ton horoscope aujourd\'hui pour commencer ton journal.'
+                        : 'Ce jour-là n\'a pas été consulté.'}
+                    </p>
+                  )}
                 </div>
               );
             })}

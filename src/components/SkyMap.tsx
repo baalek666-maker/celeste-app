@@ -120,19 +120,33 @@ export default function SkyMap({ size = 340 }: SkyMapProps) {
     return () => { mounted = false; };
   }, []);
 
-  // Responsive sizing fallback
+  // Responsive sizing : on écoute la largeur du parent glass ET on retire
+  // le padding (p-4 = 16px chaque côté = 32px). Sans ça le SVG 340px déborde
+  // sur écrans étroits quand le parent a un padding intérieur.
   useEffect(() => {
     if (!containerRef.current) return;
-    const ro = new ResizeObserver(entries => {
-      for (const e of entries) {
-        setContainerW(e.contentRect.width);
-      }
-    });
-    ro.observe(containerRef.current);
-    return () => ro.disconnect();
+    const update = () => {
+      const el = containerRef.current;
+      if (!el) return;
+      // Largeur disponible = largeur du parent glass (qui contient le padding)
+      const parent = el.parentElement;
+      if (!parent) return;
+      const styles = window.getComputedStyle(parent);
+      const padL = parseFloat(styles.paddingLeft) || 0;
+      const padR = parseFloat(styles.paddingRight) || 0;
+      const avail = parent.clientWidth - padL - padR;
+      setContainerW(Math.max(200, Math.min(avail, 360)));
+    };
+    update();
+    const ro = new ResizeObserver(update);
+    if (containerRef.current?.parentElement) {
+      ro.observe(containerRef.current.parentElement);
+    }
+    window.addEventListener('resize', update);
+    return () => { ro.disconnect(); window.removeEventListener('resize', update); };
   }, []);
 
-  const actualSize = size ?? Math.min(containerW || 340, 340);
+  const actualSize = size ?? Math.min(containerW || 320, 360);
 
   if (loading) {
     return (
@@ -196,7 +210,7 @@ export default function SkyMap({ size = 340 }: SkyMapProps) {
         </div>
       </div>
 
-      <div ref={containerRef} className="relative mx-auto" style={{ width: actualSize, height: actualSize }}>
+      <div ref={containerRef} className="relative mx-auto overflow-hidden rounded-2xl" style={{ width: actualSize, height: actualSize }}>
         <svg
           width={actualSize}
           height={actualSize}
