@@ -164,8 +164,15 @@ export default function SkyMap({ size = 340 }: SkyMapProps) {
     );
   }
 
+  // v13.1.1 — viewBox élargi (marge 18% de chaque côté) pour absorber le
+  // débordement pendant la rotation. Le centre géométrique reste à
+  // (actualSize/2, actualSize/2) car SVG preserveAspectRatio="xMidYMid meet"
+  // centre automatiquement le contenu dans le viewport.
   const cx = actualSize / 2;
   const cy = actualSize / 2;
+  // On garde les rayons tels quels (cohérence avec le code existant),
+  // mais on s'assure que outerR + marge < actualSize/2 * 1.36 / 2 ≈ actualSize * 0.68
+  // → outerR = actualSize/2 - 8 ≈ 320 reste largement dans la zone visible.
   const outerR = actualSize / 2 - 8;
   const zodiacR = outerR - 18;
   const tickOuterR = zodiacR;
@@ -214,8 +221,18 @@ export default function SkyMap({ size = 340 }: SkyMapProps) {
         <svg
           width={actualSize}
           height={actualSize}
-          viewBox={`0 0 ${actualSize} ${actualSize}`}
-          className="overflow-visible"
+          /* v13.1.1 — viewBox agrandi avec marge pour absorber le débordement
+             naturel des éléments SVG pendant la rotation (un cercle inscrit dans
+             un carré qui rotate peut sortir jusqu'à √2× son rayon du viewBox
+             d'origine). Sans marge, les planètes extrêmes (positions 0°/90°/
+             180°/270° notamment Saturne/Pluton) « piquent » hors du cadre glass
+             pendant l'animation skymap-spin. overflow-hidden sur le parent ne
+             suffit pas car le SVG lui-même est un élément HTML qui n'est pas
+             clippé par un parent overflow-hidden pendant un transform rotate
+             (les transforms sont appliqués après le clipping layout). */
+          viewBox={`-${actualSize * 0.18} -${actualSize * 0.18} ${actualSize * 1.36} ${actualSize * 1.36}`}
+          preserveAspectRatio="xMidYMid meet"
+          className="overflow-hidden"
           style={rotating ? { animation: 'skymap-spin 240s linear infinite' } : undefined}
         >
           <defs>
