@@ -210,6 +210,50 @@ export function Settings({ user, onUpdate, onPaywall }: { user: User; onUpdate: 
   const [showProfiles, setShowProfiles] = useState(false);
   const [showDeleteAccount, setShowDeleteAccount] = useState(false);
   const [deleting, setDeleting] = useState(false);
+  const [exporting, setExporting] = useState(false);
+
+  // P3 — RGPD Art. 20 : portabilité, reçoit un JSON complet de mes données.
+  // Regroupe ce qu'on a en local (profil, journal, favoris) + tente le server.
+  const handleExportData = async () => {
+    setExporting(true);
+    try {
+      // 1. Snapshot local exhaustif
+      const local: Record<string, unknown> = {
+        exportedAt: new Date().toISOString(),
+        source: 'celeste.web',
+        version: pkg.version,
+        profile: {
+          email: user.email,
+          name: user.name,
+          isPremium: user.isPremium,
+          premiumUntil: user.premiumUntil,
+          scansRemaining: user.scansRemaining,
+        },
+        birthData: user.birthData ?? null,
+        natalChart: user.natalChart ?? null,
+        journal: localStorage.getItem('celeste-journal') ? JSON.parse(localStorage.getItem('celeste-journal')!) : [],
+        favorites: localStorage.getItem('celeste-favorites') ? JSON.parse(localStorage.getItem('celeste-favorites')!) : [],
+        notifications: localStorage.getItem('celeste-notifs') ? JSON.parse(localStorage.getItem('celeste-notifs')!) : null,
+      };
+      // 2. (Snapshot serveur — bonus à venir quand l'endpoint existera, hors-scope ici)
+
+      // 3. Téléchargement mobile-compatible (Blob + a.click)
+      const blob = new Blob([JSON.stringify(local, null, 2)], { type: 'application/json' });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = `celeste-mes-donnees-${new Date().toISOString().slice(0,10)}.json`;
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      URL.revokeObjectURL(url);
+      toast.success('Tes données ont été téléchargées ✨');
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : 'Export impossible');
+    } finally {
+      setExporting(false);
+    }
+  };
 
   const handleLogout = async () => {
     // P0 #12 — On notifie le serveur avant le clear local (traçabilité).
@@ -379,14 +423,36 @@ export function Settings({ user, onUpdate, onPaywall }: { user: User; onUpdate: 
           <span className="text-night-400">→</span>
         </button>
         <button onClick={() => setShowLegal(true)}
-          className="w-full glass rounded-2xl p-4 flex items-center justify-between text-left hover:border-night-600 border border-transparent transition-all">
-          <span className="text-night-200 text-sm">Informations légales</span>
+          className="w-full glass rounded-2xl p-4 flex items-center justify-between text-left hover:border-cosmic-500/40 border border-transparent transition-all">
+          <span className="flex items-center gap-3">
+            <span className="w-9 h-9 rounded-xl bg-cosmic-500/15 border border-cosmic-500/25 flex items-center justify-center text-cosmic-300">📜</span>
+            <span className="text-night-200 text-sm">Informations légales</span>
+          </span>
           <span className="text-night-400">→</span>
         </button>
         <button onClick={handleLogout}
           className="w-full glass rounded-2xl p-4 flex items-center justify-between text-left border border-transparent hover:border-red-900/50 transition-all">
-          <span className="text-red-400 text-sm">Se déconnecter / Réinitialiser</span>
+          <span className="flex items-center gap-3">
+            <span className="w-9 h-9 rounded-xl bg-night-700/40 flex items-center justify-center text-night-300">🔓</span>
+            <span className="text-red-400 text-sm">Se déconnecter / Réinitialiser</span>
+          </span>
           <span className="text-red-400">→</span>
+        </button>
+
+        {/* P3 — Export RGPD : télécharger toutes mes données en JSON (mobile) */}
+        <button
+          onClick={handleExportData}
+          disabled={exporting}
+          className="w-full glass rounded-2xl p-4 flex items-center justify-between text-left border border-transparent hover:border-cosmic-500/40 transition-all"
+        >
+          <span className="flex items-center gap-3">
+            <span className="w-9 h-9 rounded-xl bg-cosmic-500/15 border border-cosmic-500/25 flex items-center justify-center text-cosmic-300">📦</span>
+            <span className="flex-1">
+              <span className="text-night-200 text-sm block">Exporter mes données (RGPD)</span>
+              <span className="text-night-500 text-xs">{exporting ? 'Préparation…' : 'Reçois un JSON complet : profil, thème natal, journal…'}</span>
+            </span>
+          </span>
+          <span className="text-night-400">{exporting ? '⏳' : '⬇'}</span>
         </button>
 
         {/* RGPD — suppression définitive du compte (Fix #1) */}
