@@ -9,7 +9,7 @@
  *   STRIPE_SECRET_KEY=sk_test_... ou sk_live_...
  *   STRIPE_WEBHOOK_SECRET=whsec_...
  *   STRIPE_PRICE_ANNUAL=price_...
- *   STRIPE_PRICE_WEEKLY=price_...
+ *   STRIPE_PRICE_MONTHLY=price_...
  *
  * Sans ces vars, /api/billing/status renvoie {configured: false} et le
  * frontend affiche un message "paiements en cours de configuration".
@@ -21,18 +21,18 @@ import express from 'express';
 const STRIPE_SECRET_KEY = process.env.STRIPE_SECRET_KEY || '';
 const STRIPE_WEBHOOK_SECRET = process.env.STRIPE_WEBHOOK_SECRET || '';
 const STRIPE_PRICE_ANNUAL = process.env.STRIPE_PRICE_ANNUAL || '';
-const STRIPE_PRICE_WEEKLY = process.env.STRIPE_PRICE_WEEKLY || '';
+const STRIPE_PRICE_MONTHLY = process.env.STRIPE_PRICE_MONTHLY || '';
 
 // Client Stripe initialisé seulement si la clé est présente
 export const stripe = STRIPE_SECRET_KEY ? new Stripe(STRIPE_SECRET_KEY) : null;
 
 export function isStripeConfigured() {
-  return Boolean(stripe && STRIPE_WEBHOOK_SECRET && STRIPE_PRICE_ANNUAL && STRIPE_PRICE_WEEKLY);
+  return Boolean(stripe && STRIPE_WEBHOOK_SECRET && STRIPE_PRICE_ANNUAL && STRIPE_PRICE_MONTHLY);
 }
 
 export function getPriceIdForPlan(plan) {
   if (plan === 'yearly' || plan === 'annual') return STRIPE_PRICE_ANNUAL;
-  if (plan === 'weekly') return STRIPE_PRICE_WEEKLY;
+  if (plan === 'monthly') return STRIPE_PRICE_MONTHLY;
   return null;
 }
 
@@ -141,7 +141,7 @@ router.post('/restore', async (req, res) => {
 
 /**
  * POST /api/billing/create-checkout
- * Body : { plan: 'weekly' | 'yearly' }
+ * Body : { plan: 'monthly' | 'yearly' }
  * Crée une session Stripe Checkout (subscription) et renvoie l'URL de redirection.
  *
  * metadata : on stocke { userId, plan } pour que le webhook sache qui activer
@@ -278,7 +278,7 @@ export function stripeWebhookHandler(req, res, db) {
       case 'checkout.session.completed': {
         const session = event.data.object;
         const userId = Number(session.metadata?.userId);
-        const plan = session.metadata?.plan || 'weekly';
+        const plan = session.metadata?.plan || 'monthly';
         const customerId = session.customer;
         const subscriptionId = session.subscription;
         if (!userId) {
@@ -286,9 +286,10 @@ export function stripeWebhookHandler(req, res, db) {
           break;
         }
         const now = Date.now();
+        // P0#3 — monthly remplace weekly (30 jours au lieu de 7).
         const duration = plan === 'yearly' || plan === 'annual'
           ? 365 * 86400000
-          : 7 * 86400000;
+          : 30 * 86400000;
         const until = now + duration;
         db.prepare(`
           UPDATE users SET

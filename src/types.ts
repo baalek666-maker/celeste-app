@@ -52,6 +52,8 @@ export interface User {
   premiumUntil: number | null;
   createdAt: number;
   streak?: number;
+  // P0#6 — Email verification status.
+  emailVerified?: boolean;
 }
 
 export interface HoroscopeEntry {

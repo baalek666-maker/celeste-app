@@ -12,6 +12,8 @@ import HoroscopeFeedback from '../components/HoroscopeFeedback';
 import { api as apiLib } from '../lib/api';
 import { pushService } from '../lib/pushNotifications';
 import { localISODate as localDate, markHoroscopeRead } from '../lib/storage';
+import EmptyState from '../components/EmptyState';
+import WeeklyContentCard from '../components/WeeklyContentCard';
 
 const LOADING_MESSAGES = [
   'Alignement des planètes...',
@@ -314,12 +316,16 @@ export function Horoscope({ user, onNavigate }: { user: User; onNavigate: (s: Sc
 
   if (error) {
     return (
-      <div className="px-5 pt-12 flex flex-col items-center justify-center min-h-[60vh] relative z-10">
-        <p className="text-red-400 text-sm mb-4">{error}</p>
-        <button onClick={() => { setLoading(true); setError(''); window.location.reload(); }}
-          className="px-6 py-3 rounded-2xl glass border border-night-600 text-night-200 hover:border-cosmic-500/50 transition-colors">
-          Réessayer
-        </button>
+      <div className="px-5 pt-12 min-h-[60vh] relative z-10">
+        <EmptyState
+          icon="🌌"
+          title="Les étoiles se dissimulent"
+          subtitle={error}
+          ctaLabel="Réessayer"
+          onCta={() => { setLoading(true); setError(''); fetchHoroscope(true); }}
+          secondaryCtaLabel="Revenir à l'accueil"
+          onSecondaryCta={() => window.location.hash = '#home'}
+        />
       </div>
     );
   }
@@ -330,6 +336,9 @@ export function Horoscope({ user, onNavigate }: { user: User; onNavigate: (s: Sc
 
   return (
     <div className="px-5 pt-12 pb-4 relative z-10">
+      {/* P2#19 — Contenu hebdomadaire curated (silencieux si vide) */}
+      <WeeklyContentCard />
+
       {/* Streak banner */}
       {streak >= 1 && (
         <div className="glass-gold rounded-2xl px-4 py-2.5 mb-5 flex items-center justify-between border border-gold-500/30 animate-fade-in">

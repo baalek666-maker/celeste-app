@@ -11,11 +11,15 @@ import { CELESTE_VOICE, celesteSystemPrompt } from './celest-voice.js';
 // v13 — Le Rituel Quotidien : 4 quêtes = 1 rituel matinal VMF-aligned.
 // Chaque quête = un geste du rituel (pas une "tâche" gamifiée isolée).
 // Cumul XP si toutes complétées = 65 XP. Streak dans DB déjà suivi côté server.js.
+//
+// P1#10 — Quête 'intention' remplacée par 'rune'. L'intention était en overlap
+// conceptuel avec le LunarCycle (intentions lunaires). Les runes (RuneOracle)
+// sont un tirage distinct du tarot, donc la quête a sa propre identité.
 const QUEST_DEFS = [
   { key: 'horoscope', label: 'Lis ton horoscope du matin',          xp: 15 },
   { key: 'tarot',     label: 'Tire ta carte du jour',               xp: 15 },
   { key: 'journal',   label: 'Note ton ressenti dans le journal',   xp: 20 },
-  { key: 'intention', label: 'Pose ton intention du jour',          xp: 15 },
+  { key: 'rune',      label: 'Consulte ta rune du jour',            xp: 15 },
 ];
 
 const BADGE_DEFS = [
@@ -39,9 +43,25 @@ const LEVEL_TITLES = [
 ];
 
 // ─── XP / Level Math ────────────────────────────────────────────
-
+//
+// P1#9 — Front-loading : courbe adoucie aux bas niveaux pour réduire le drop-off
+// post-onboarding. Ancienne formule : 50 * level * (level - 1) → lvl 2=100, lvl 3=300.
+// Nouvelle formule progressive :
+//   - Niveaux 1-5  : +40 XP par niveau (early wins rapides, "aha moment")
+//   - Niveaux 6-10 : +70 XP par niveau (mid-game engagement)
+//   - Niveaux 11+  : +120 XP par niveau (long-term chase pour badge "Maître céleste")
+//
+// Détail cumulatif (seuil d'XP total pour atteindre le niveau) :
+//   L2: 40   L3: 80   L4: 120  L5: 160   (early)
+//   L6: 230  L7: 300  L8: 370  L9: 440  L10: 510  (mid)
+//   L11: 630 L12: 750 L13: 870 ...               (late)
+//
+// Avant : L5 nécessitait 1000 XP. Maintenant : 160 XP. Le joueur sent son agent de rétention s'activer dès le J+1.
 function xpForLevel(level) {
-  return 50 * level * (level - 1);
+  if (level <= 1) return 0;
+  if (level <= 5) return (level - 1) * 40;
+  if (level <= 10) return 160 + (level - 5) * 70;
+  return 510 + (level - 10) * 120;
 }
 
 function levelFromXp(xp) {

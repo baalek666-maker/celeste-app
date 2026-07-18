@@ -7,6 +7,7 @@ import {
   RUNE_SPREADS,
   type RuneData,
 } from "../data/runes";
+import { unlockAudio, playClick, playRuneReveal, playChime } from "../lib/feedback";
 
 interface DrawnRune {
   rune: RuneData;
@@ -32,6 +33,8 @@ export default function RuneOracle() {
   const runeOfDay = getRuneOfDay();
 
   const startDraw = useCallback((spreadIdx: number) => {
+    unlockAudio();
+    playClick();
     setSelectedSpread(spreadIdx);
     const spread = RUNE_SPREADS[spreadIdx];
     const runes = drawRunes(spread.count).map((r, i) => ({
@@ -44,11 +47,15 @@ export default function RuneOracle() {
   }, []);
 
   const revealRune = (idx: number) => {
+    playRuneReveal();
     setRevealed((prev) => {
       const next = [...prev];
       next[idx] = true;
       if (next.every(Boolean)) {
-        const t = window.setTimeout(() => setMode("result"), 800);
+        const t = window.setTimeout(() => {
+          playChime();
+          setMode("result");
+        }, 800);
         // Cleanup if component unmounts within 800ms
         cleanupTimers.current.add(t);
       }

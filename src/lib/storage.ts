@@ -67,7 +67,7 @@ export function setBirthData(birth: BirthData, chart: NatalChart): User {
 // is no longer functional. Premium is now 100% server-side via Stripe webhook.
 // Kept as a stub that returns the current user (for any stray imports) but
 // does NOT modify any premium state.
-export function activatePremium(_plan: 'weekly' | 'yearly'): User {
+export function activatePremium(_plan: 'monthly' | 'yearly'): User {
   console.warn('[storage] activatePremium() is deprecated and no longer has any effect. Use Stripe checkout.');
   return getUser();
 }

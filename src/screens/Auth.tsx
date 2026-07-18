@@ -1,5 +1,6 @@
 import { useState } from 'react';
 import { api, errMsg } from '../lib/api';
+import { getStoredReferralCode, clearStoredReferralCode } from '../lib/referral-storage';
 
 export function Auth({ onSuccess }: { onSuccess: (user: any) => void }) {
   const [mode, setMode] = useState<'login' | 'register'>('register');
@@ -14,8 +15,10 @@ export function Auth({ onSuccess }: { onSuccess: (user: any) => void }) {
     setLoading(true);
     try {
       const res = mode === 'register'
-        ? await api.register(email, password)
+        ? await api.register(email, password, getStoredReferralCode() ?? undefined)
         : await api.login(email, password);
+      // Réinitialise le code parrain après usage (une seule fois).
+      if (mode === 'register') clearStoredReferralCode();
       onSuccess(res.user);
     } catch (err: unknown) {
       // Friendlier, localized error messages

@@ -1,5 +1,6 @@
 import { useEffect, useState, useCallback } from 'react';
 import { api } from '../lib/api';
+import { unlockAudio, playClick, playQuestComplete, playError } from '../lib/feedback';
 
 type Quest = { quest_key: string; quest_label: string; xp_reward: number; completed: boolean };
 type XpToast = { id: number; key: string; xp: number };
@@ -40,12 +41,15 @@ export default function DailyQuests({ onQuestCompleted }: DailyQuestsProps) {
 
   const handleComplete = async (q: Quest) => {
     if (q.completed || busyKey) return;
+    unlockAudio();
+    playClick();
     let alive = true;
     setBusyKey(q.quest_key);
     try {
       const res = await api.completeQuest(q.quest_key);
       if (!alive) return;
       if (res.ok) {
+        playQuestComplete();
         setQuests((qs) => qs.map((x) => (x.quest_key === q.quest_key ? { ...x, completed: true } : x)));
         showToast(q.quest_key, res.xpAwarded || q.xp_reward);
         if (res.leveledUp) {
@@ -57,6 +61,7 @@ export default function DailyQuests({ onQuestCompleted }: DailyQuestsProps) {
         onQuestCompleted?.(res.xpAwarded, res.leveledUp);
       }
     } catch (e) {
+      playError();
       console.error('completeQuest:', e);
     } finally {
       if (alive) setBusyKey(null);

@@ -1,7 +1,12 @@
 import React, { useState, useEffect, useRef } from 'react';
 import type { ZodiacSign, Planet } from '../types';
 import { api } from '../lib/api';
-import { PLANET_DATA, ZODIAC_SIGNS } from '../data/zodiac';
+import { PLANET_DATA, ZODIAC_SIGNS, ZODIAC_ORDER } from '../data/zodiac';
+import { useExpertMode, degreeInSign, formatDegrees } from '../lib/expert-mode';
+
+/** Index des signes dans l'ordre zodiacal (aries=0 ... pisces=11). */
+const ZODIAC_ORDER_INDEX: Record<string, number> = {};
+ZODIAC_ORDER.forEach((s, i) => { ZODIAC_ORDER_INDEX[s] = i; });
 
 interface Props {
   planet: Planet;
@@ -36,12 +41,16 @@ export const PlanetDetailCard = React.memo(function PlanetDetailCard({ planet, s
   const [error, setError] = useState<string | null>(null);
   const bodyRef = useRef<HTMLDivElement>(null);
   const fetchedRef = useRef(false);
+  const [expert] = useExpertMode();
 
   const planetData = PLANET_DATA[planet];
   const signInfo = ZODIAC_SIGNS[sign];
   const signName = signInfo?.name || sign;
   const deg = Math.floor(degree);
   const min = Math.floor((degree - deg) * 60);
+  // Pour mode expert : longitude absolue déduite (signe + degree)
+  const signOffset = signInfo ? (ZODIAC_ORDER_INDEX[sign] ?? 0) * 30 : 0;
+  const absoluteLon = signOffset + degree;
 
   useEffect(() => {
     if (expanded && !fetchedRef.current && !data) {
@@ -76,7 +85,7 @@ export const PlanetDetailCard = React.memo(function PlanetDetailCard({ planet, s
           </div>
           <p className="text-night-400 text-sm">
             <span className="text-night-200">{signName}</span>
-            {signInfo && ` ${signInfo.symbol}`} · {deg}°{String(min).padStart(2,'0')}' · M{house}
+            {signInfo && ` ${signInfo.symbol}`} · {expert ? degreeInSign(absoluteLon) : `${deg}°${String(min).padStart(2,'0')}’`} · M{house}
           </p>
         </div>
         <span className={`text-night-500 transition-transform duration-300 ${expanded ? 'rotate-90' : ''}`}>

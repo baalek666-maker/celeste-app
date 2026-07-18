@@ -8,7 +8,11 @@ export function Paywall({ onClose, onSubscribe }: {
   onClose: () => void;
   onSubscribe: (u: User) => void;
 }) {
-  const [plan, setPlan] = useState<'weekly' | 'yearly'>('yearly');
+  // P0#3 — Ancien plan hebdomadaire (6,99€/sem = 363€/an, ratio ×9 annuel)
+  // retiré : dark pattern anchoring. Remplacé par un plan mensuel défendable
+  // (2,99€/mois ≈ 36€/an, ratio ×1,1 annuel). L'utilisateur peut comparer sans
+  // être manipulé. App Store/Play acceptent ; Apple Guideline 3.1.1 respectée.
+  const [plan, setPlan] = useState<'monthly' | 'yearly'>('yearly');
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState('');
   const [configured, setConfigured] = useState<boolean | null>(null);
@@ -94,15 +98,16 @@ export function Paywall({ onClose, onSubscribe }: {
             Tu as déjà ouvert une porte. De l'autre côté, le ciel t'attend.
           </p>
 
-          {/* Social proof — wo/2 « eux aussi » */}
+          {/* P0#1 — Proof sociale sans chiffre fabriqué. On invite au mouvement
+              plutôt qu'à une fausse masse. VMF-aligned : chaleureux, pas persuasif. */}
           <div className="flex items-center justify-center gap-2 text-xs">
-            <div className="flex -space-x-1.5">
+            <div className="flex -space-x-1.5" aria-hidden="true">
               {['♈','♉','♊','♋','♌'].map((s,i)=>(
                 <span key={i} className="w-5 h-5 rounded-full bg-night-800 border border-gold-500/30 flex items-center justify-center text-[10px] text-gold-300">{s}</span>
               ))}
             </div>
-            <span className="text-night-300">
-              <span className="text-gold-300 font-semibold">12 834</span> cieux déjà activés
+            <span className="text-night-300 italic">
+              Rejoins celles qui ont choisi de regarder le ciel autrement
             </span>
           </div>
         </div>
@@ -155,14 +160,17 @@ export function Paywall({ onClose, onSubscribe }: {
             </div>
           </button>
 
-          <button onClick={() => setPlan('weekly')}
-            className={`w-full p-4 rounded-2xl border-2 transition-all duration-300 text-left ${plan === 'weekly' ? 'border-cosmic-500/60 glass' : 'border-night-700/50 glass'}`}>
+          <button onClick={() => setPlan('monthly')}
+            className={`w-full p-4 rounded-2xl border-2 transition-all duration-300 text-left ${plan === 'monthly' ? 'border-cosmic-500/60 glass' : 'border-night-700/50 glass'}`}>
             <div className="flex items-center justify-between">
               <div>
-                <p className="text-night-100 font-bold">Hebdomadaire</p>
-                <p className="text-night-400 text-xs mt-0.5">6,99€/semaine</p>
+                <p className="text-night-100 font-bold">Mensuel</p>
+                <p className="text-night-400 text-xs mt-0.5">Sans engagement</p>
               </div>
-              <p className="text-night-100 text-lg font-bold">6,99€</p>
+              <div className="text-right">
+                <p className="text-night-100 text-lg font-bold">2,99€</p>
+                <p className="text-night-400 text-xs">/mois</p>
+              </div>
             </div>
           </button>
         </div>
@@ -177,7 +185,7 @@ export function Paywall({ onClose, onSubscribe }: {
               ? 'Indisponible'
               : plan === 'yearly'
                 ? 'Démarrer mon essai gratuit'
-                : 'Activer maintenant'}
+                : "S'abonner pour 2,99€/mois"}
         </button>
 
         {error && (
@@ -187,7 +195,7 @@ export function Paywall({ onClose, onSubscribe }: {
         <p className="text-night-500 text-xs text-center mt-4">
           {plan === 'yearly'
             ? '7 jours gratuits puis 39,99€/an. Annule à tout moment. Rappel avant prélèvement.'
-            : '6,99€/semaine. Annule à tout moment.'}
+            : '2,99€/mois. Annule à tout moment.'}
         </p>
 
         {/* Restore Purchases (Fix #2 — obligatoire App Store Guideline 3.1.5) */}

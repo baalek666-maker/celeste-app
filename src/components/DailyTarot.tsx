@@ -4,6 +4,7 @@ import { toast } from './Toast';
 import { getTarotImage } from '../data/tarotImages';
 import { localISODate } from '../lib/storage';
 import { ContextualCTA } from './ContextualCTA';
+import { unlockAudio, playClick, playCardReveal, playError } from '../lib/feedback';
 
 interface TarotCard {
   cardName: string;
@@ -73,6 +74,8 @@ export default function DailyTarot() {
   const [showHistory, setShowHistory] = useState(false);
 
   const draw = async () => {
+    unlockAudio();
+    playClick();
     setLoading(true);
     setPhase('summoning');
     try {
@@ -83,6 +86,7 @@ export default function DailyTarot() {
       // After summon animation, show face-down card
       setTimeout(() => setPhase('facedown'), 1400);
     } catch {
+      playError();
       toast.error('Les cartes sont momentanément indisponibles. Réessaie dans un instant.');
       setPhase('idle');
     } finally {
@@ -91,7 +95,10 @@ export default function DailyTarot() {
   };
 
   const reveal = () => {
-    if (phase === 'facedown') setPhase('revealed');
+    if (phase === 'facedown') {
+      playCardReveal();
+      setPhase('revealed');
+    }
   };
 
   // P2.4 — Share tarot draw
@@ -411,11 +418,20 @@ export default function DailyTarot() {
                   </p>
                 </div>
 
-                {/* Footer */}
-                <div className="mt-4 pt-3 border-t border-gold-500/15">
-                  <p className="text-night-500 text-[10px] text-center italic">
-                    {flipSide === 'recto' ? '👆 Touche pour la lecture détaillée' : '👆 Touche pour revoir la carte'}
-                  </p>
+                {/* Footer — bouton CTA clair (vs ancien text-[10px] invisible) */}
+                <div className="mt-4 pt-3 border-t border-gold-500/30">
+                  <button
+                    type="button"
+                    onClick={toggleFlip}
+                    className="w-full flex items-center justify-center gap-2 py-2 px-3 rounded-xl bg-gold-500/10 hover:bg-gold-500/20 border border-gold-500/30 hover:border-gold-500/50 transition-all active:scale-[0.98] animate-pulse-slow"
+                    aria-label={flipSide === 'verso' ? 'Revenir à la carte' : 'Voir la lecture détaillée'}
+                  >
+                    <span className="text-base">👆</span>
+                    <span className="text-gold-300 text-sm font-semibold tracking-wide">
+                      {flipSide === 'verso' ? 'Touche pour revoir la carte' : 'Touche pour ta lecture détaillée'}
+                    </span>
+                    <span className="text-gold-400 text-base">↻</span>
+                  </button>
                 </div>
               </div>
             </div>
@@ -474,10 +490,14 @@ export default function DailyTarot() {
           </div>
         )}
 
-        {/* Hint below card */}
-        <p className="text-night-400 text-[10px] text-center mt-3 animate-pulse">
-          {flipSide === 'recto' ? '👆 Touche la carte pour ta lecture astrale' : '👆 Touche pour revoir la carte'}
-        </p>
+        {/* Hint sous la carte — encadré doré visible (vs ancien text-[10px] gris invisible) */}
+        <div className="flex items-center justify-center gap-2 mt-4 mx-auto px-4 py-2 rounded-full bg-gold-500/10 border border-gold-500/30 animate-pulse-slow">
+          <span className="text-base">👆</span>
+          <span className="text-gold-200 text-sm font-semibold">
+            {flipSide === 'recto' ? 'Touche la carte pour ta lecture astrale' : 'Touche pour revoir la carte'}
+          </span>
+          <span className="text-gold-400 text-base">↻</span>
+        </div>
       </div>
     );
   }

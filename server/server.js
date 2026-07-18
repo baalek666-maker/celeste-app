@@ -53,6 +53,8 @@ const allowedOrigins = process.env.CORS_ORIGIN
 
 // ─── Web Push (VAPID) setup ────────────────────────────────
 import webpush from 'web-push';
+import { sendVerificationEmail, generateToken, isEmailConfigured } from './email.js';
+import { runAstroEventsJob } from './cron-events.js';
 const VAPID_PUBLIC_KEY = process.env.VAPID_PUBLIC_KEY;
 const VAPID_PRIVATE_KEY = process.env.VAPID_PRIVATE_KEY;
 const VAPID_SUBJECT = process.env.VAPID_SUBJECT || 'mailto:admin@example.com';
@@ -148,6 +150,117 @@ if (!hasCol('streak_count')) {
 }
 if (!hasCol('streak_last_date')) {
   db.exec('ALTER TABLE users ADD COLUMN streak_last_date TEXT');
+}
+// P0#4 — Streak freeze (1 gratuit/sem + IAP 0,99€) + grace 24h.
+// streak_freezes = nombre de jetons "freeze" disponibles (default 1).
+// streak_freeze_used_this_week = date ISO du dernier freeze consommé (reset hebdo).
+if (!hasCol('streak_freezes')) {
+  db.exec('ALTER TABLE users ADD COLUMN streak_freezes INTEGER DEFAULT 1');
+}
+if (!hasCol('streak_freeze_used_this_week')) {
+  db.exec('ALTER TABLE users ADD COLUMN streak_freeze_used_this_week TEXT');
+}
+// P0#4 — Date ISO du dernier push "streak reminder" (anti-spam, 1/jour max)
+if (!hasCol('last_streak_reminder')) {
+  db.exec('ALTER TABLE users ADD COLUMN last_streak_reminder TEXT');
+}
+// P1#8 — Date du dernier push "événement astronomique" (anti-spam, 1/jour max).
+if (!hasCol('last_astro_event_push')) {
+  db.exec('ALTER TABLE users ADD COLUMN last_astro_event_push TEXT');
+}
+// P1#12 — Timestamp (epoch secondes) de la dernière activité connue de l'user.
+// Mis à jour à chaque appel API authentifié (middleware global).
+if (!hasCol('last_activity_at')) {
+  db.exec('ALTER TABLE users ADD COLUMN last_activity_at INTEGER');
+}
+// P1#12 — Date ISO du dernier push "early re-engagement" (H+12/J+1/J+2) — anti-spam.
+if (!hasCol('last_early_reengagement_date')) {
+  db.exec('ALTER TABLE users ADD COLUMN last_early_reengagement_date TEXT');
+}
+// P0#6 — Vérification email (Resend). email_verified=0 par défaut, 1 après clic.
+// email_verify_token = token opaque 32 bytes (hex), expiré après vérification.
+if (!hasCol('email_verified')) {
+  db.exec('ALTER TABLE users ADD COLUMN email_verified INTEGER DEFAULT 0');
+}
+if (!hasCol('email_verify_token')) {
+  db.exec('ALTER TABLE users ADD COLUMN email_verify_token TEXT');
+}
+
+// P1#7 — Système de parrainage. Chaque user a un code court dérivé de son id.
+// referral_code stocke "CEL-XXXXXX" (jamais vide après premier /referrals/code).
+// referrals: log des filleuls (referral relationnel). reward_given=1 quand premium crédité.
+if (!hasCol('referral_code')) {
+  db.exec('ALTER TABLE users ADD COLUMN referral_code TEXT');
+}
+if (!db.prepare("SELECT name FROM sqlite_master WHERE type='table' AND name='referrals'").get()) {
+  db.exec(`
+    CREATE TABLE referrals (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      referrer_id INTEGER NOT NULL,
+      referred_id INTEGER NOT NULL UNIQUE,
+      code TEXT NOT NULL,
+      created_at INTEGER DEFAULT (strftime('%s', 'now')),
+      reward_given INTEGER DEFAULT 0,
+      FOREIGN KEY (referrer_id) REFERENCES users(id) ON DELETE CASCADE,
+      FOREIGN KEY (referred_id) REFERENCES users(id) ON DELETE CASCADE
+    );
+    CREATE INDEX idx_referrals_referrer ON referrals(referrer_id);
+  `);
+  console.log('🎁 Migration: referrals table created');
+}
+
+// ─── P2#19 — weekly_content : contenu éditorial curated hebdomadaire ───
+// Chaque semaine, un contenu thématique est publié (new/pleine lune, saison,
+// rétrograde, etc.). Éditable manuellement via /api/admin/weekly-content.
+if (!db.prepare("SELECT name FROM sqlite_master WHERE type='table' AND name='weekly_content'").get()) {
+  db.exec(`
+    CREATE TABLE weekly_content (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      week_start TEXT NOT NULL UNIQUE,         -- ISO date (lundi)
+      theme TEXT NOT NULL,                      -- ex: "Pleine lune en Capricorne"
+      emoji TEXT NOT NULL,                       -- emoji principal
+      headline TEXT NOT NULL,                    -- accroche courte
+      body TEXT NOT NULL,                        -- corps éditorial (markdown léger)
+      ritual TEXT,                               -- rituel associé (optionnel)
+      reflection TEXT,                           -- question de réflexion
+      published_at INTEGER,                      -- NULL = brouillon, epoch = publié
+      created_at INTEGER DEFAULT (strftime('%s', 'now'))
+    );
+    CREATE INDEX idx_weekly_published ON weekly_content(published_at);
+  `);
+  console.log('📰 Migration: weekly_content table created');
+}
+
+// ─── P2#20 — transit_comments : commentaires communautaires sur transits ──
+if (!db.prepare("SELECT name FROM sqlite_master WHERE type='table' AND name='transit_comments'").get()) {
+  db.exec(`
+    CREATE TABLE transit_comments (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      transit_date TEXT NOT NULL,             -- ISO date du transit
+      transit_key TEXT NOT NULL,              -- ex: "full-moon-capricorn" ou "venus-mars-trine"
+      user_id INTEGER NOT NULL,
+      display_name TEXT NOT NULL,             -- pseudo affiché (pas email)
+      content TEXT NOT NULL,                  -- 1-500 caractères
+      likes_count INTEGER DEFAULT 0,
+      created_at INTEGER DEFAULT (strftime('%s', 'now')),
+      FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
+    );
+    CREATE INDEX idx_transit_comments ON transit_comments(transit_date, transit_key);
+    CREATE TABLE transit_comment_likes (
+      comment_id INTEGER NOT NULL,
+      user_id INTEGER NOT NULL,
+      PRIMARY KEY(comment_id, user_id),
+      FOREIGN KEY (comment_id) REFERENCES transit_comments(id) ON DELETE CASCADE,
+      FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
+    );
+  `);
+  console.log('💬 Migration: transit_comments table created');
+}
+
+// P2#20 — add display_name column to users (pour les commentaires communautaires)
+if (!db.prepare("PRAGMA table_info(users)").all().find(c => c.name === 'display_name')) {
+  db.exec("ALTER TABLE users ADD COLUMN display_name TEXT");
+  console.log('💬 Migration: users.display_name column added');
 }
 
 // horoscope_cache migration — add summary column (per-day short version for week view)
@@ -302,21 +415,91 @@ function yesterdayISODate() {
   return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
 }
 
-// Update streak for user after they viewed today's horoscope.
-// Rules:
-//  - If streak_last_date == today  → no-op (already counted today)
-//  - If streak_last_date == yesterday → streak_count + 1
-//  - Otherwise (gap or null) → streak_count = 1
-// Returns the new streak count.
+// ═══════════════════════════════════════════════════════════════════════════
+// P0#4 — Streak freeze + grace period 24h.
+//
+// updateStreak rules (améliorées) :
+//  - streak_last_date == today     → no-op (déjà compté aujourd'hui)
+//  - streak_last_date == yesterday → streak_count + 1
+//  - gap == 2 jours (avant-hier)   → GRACE 24h : +1 (on pardonne 1 jour manqué)
+//  - gap >= 2 jours                → si freeze dispo, consommer 1 freeze (streak conservé)
+//  - sinon                         → reset à 1
+//
+// Retourne { count, freezeConsumed, graceApplied }.
+// ═══════════════════════════════════════════════════════════════════════════
 function updateStreak(userId, today) {
-  const u = db.prepare('SELECT streak_count, streak_last_date FROM users WHERE id = ?').get(userId);
-  if (!u) return 0;
-  if (u.streak_last_date === today) return u.streak_count ?? 0;
+  const u = db.prepare(
+    'SELECT streak_count, streak_last_date, streak_freezes, streak_freeze_used_this_week FROM users WHERE id = ?'
+  ).get(userId);
+  if (!u) return { count: 0, freezeConsumed: false, graceApplied: false };
+
+  // Déjà compté aujourd'hui
+  if (u.streak_last_date === today) {
+    return { count: u.streak_count ?? 0, freezeConsumed: false, graceApplied: false };
+  }
+
   const yesterday = yesterdayISODate();
-  const newCount = u.streak_last_date === yesterday ? (u.streak_count ?? 0) + 1 : 1;
+  const lastDate = u.streak_last_date;
+
+  // Cas nominal : suite logique (+1)
+  if (lastDate === yesterday) {
+    const newCount = (u.streak_count ?? 0) + 1;
+    db.prepare('UPDATE users SET streak_count = ?, streak_last_date = ? WHERE id = ?')
+      .run(newCount, today, userId);
+    return { count: newCount, freezeConsumed: false, graceApplied: false };
+  }
+
+  // Calcul du gap en jours
+  const gapDays = lastDate ? daysBetween(lastDate, today) : null;
+
+  // P0#4 — Grace 24h : gap == 2 (1 jour manqué) → on pardonne et +1
+  if (gapDays === 2) {
+    const newCount = (u.streak_count ?? 0) + 1;
+    db.prepare('UPDATE users SET streak_count = ?, streak_last_date = ? WHERE id = ?')
+      .run(newCount, today, userId);
+    return { count: newCount, freezeConsumed: false, graceApplied: true };
+  }
+
+  // P0#4 — Freeze : gap >= 3 et l'user a un jeton freeze disponible
+  // Reset hebdo du freeze : si streak_freeze_used_this_week est > 7 jours, on reset à 1.
+  const lastFreeze = u.streak_freeze_used_this_week;
+  let freezesAvailable = u.streak_freezes ?? 1;
+  if (lastFreeze && daysBetween(lastFreeze, today) > 7) {
+    freezesAvailable = 1; // reset hebdo du free freeze
+  }
+
+  if (gapDays !== null && gapDays >= 3 && freezesAvailable > 0) {
+    // Consommer 1 freeze : streak conservé, on décale streak_last_date à yesterday
+    // pour simuler la continuité, puis le +1 normal se fera au prochain appel.
+    const newCount = (u.streak_count ?? 0) + 1;
+    db.prepare(
+      `UPDATE users
+         SET streak_count = ?,
+             streak_last_date = ?,
+             streak_freezes = ?,
+             streak_freeze_used_this_week = ?
+       WHERE id = ?`
+    ).run(
+      newCount,
+      today,
+      Math.max(0, freezesAvailable - 1),
+      today,
+      userId
+    );
+    return { count: newCount, freezeConsumed: true, graceApplied: false };
+  }
+
+  // Aucune protection : reset
   db.prepare('UPDATE users SET streak_count = ?, streak_last_date = ? WHERE id = ?')
-    .run(newCount, today, userId);
-  return newCount;
+    .run(1, today, userId);
+  return { count: 1, freezeConsumed: false, graceApplied: false };
+}
+
+/** Différence en jours entre deux dates ISO (YYYY-MM-DD). */
+function daysBetween(isoA, isoB) {
+  const a = new Date(isoA + 'T00:00:00Z');
+  const b = new Date(isoB + 'T00:00:00Z');
+  return Math.round((b.getTime() - a.getTime()) / 86400000);
 }
 
 // ─── Ephemeris (server-side, astronomy-engine) ─────────────
@@ -774,6 +957,12 @@ function auth(req, res, next) {
       const u = db.prepare('SELECT is_premium, premium_until FROM users WHERE id = ?').get(decoded.id);
       const now = Math.floor(Date.now() / 1000);
       req.user.isPremium = !!u?.is_premium && (!u?.premium_until || u.premium_until > now);
+    } catch { /* non-fatal */ }
+    // P1#12 — Update last_activity_at (fire-and-forget, non-bloquant).
+    // Mis à jour à chaque appel authentifié pour tracker l'inactivité précise.
+    try {
+      const _now = Math.floor(Date.now() / 1000);
+      db.prepare('UPDATE users SET last_activity_at = ? WHERE id = ?').run(_now, decoded.id);
     } catch { /* non-fatal */ }
     next();
   } catch {
@@ -1263,7 +1452,7 @@ app.get('/api/astro/moon-phase', (req, res) => {
 
 // ─── Auth: Register ────────────────────────────────────────
 app.post('/api/auth/register', authLimiter, async (req, res) => {
-  const { email, password } = req.body || {};
+  const { email, password, ref } = req.body || {};
   if (typeof email !== 'string' || typeof password !== 'string') {
     return res.status(400).json({ error: 'Email et mot de passe requis' });
   }
@@ -1279,10 +1468,327 @@ app.post('/api/auth/register', authLimiter, async (req, res) => {
   if (existing) return res.status(409).json({ error: 'Email déjà utilisé' });
 
   const hash = bcrypt.hashSync(password, 10);
-  const result = db.prepare('INSERT INTO users (email, password_hash) VALUES (?, ?)').run(emailLower, hash);
+  // P0#6 — Email verification : génère un token, l'enregistre, envoie l'email.
+  const verifyToken = generateToken();
+  const result = db.prepare(
+    'INSERT INTO users (email, password_hash, email_verify_token) VALUES (?, ?, ?)'
+  ).run(emailLower, hash, verifyToken);
   const user = { id: result.lastInsertRowid, email: emailLower };
   const { access, refresh } = issueTokenPair(db, user);
-  res.json({ token: access, refreshToken: refresh, user: { id: user.id, email: emailLower, isPremium: false, scansRemaining: 3 } });
+
+  // Async send — ne bloque pas la réponse. En mode dev sans Resend, logge en console.
+  sendVerificationEmail(emailLower, verifyToken).then(r => {
+    if (r.ok) console.log(`[auth] email de vérification envoyé à ${emailLower}`);
+    else console.error(`[auth] échec envoi vérif ${emailLower}:`, r.error);
+  }).catch(e => console.error('[auth] sendVerificationEmail exception:', e.message));
+
+  // P1#7 — Parrainage : valide le code `ref` si fourni.
+  // Le code est de la forme "CEL-XXXXXX". On cherche le parrain par referral_code.
+  let refReward = 0;
+  if (typeof ref === 'string' && ref.trim()) {
+    const refCode = ref.trim().toUpperCase();
+    // Accepte avec ou sans le préfixe CEL-.
+    const normalized = refCode.startsWith('CEL-') ? refCode : 'CEL-' + refCode;
+    const referrer = db.prepare(
+      'SELECT id, email FROM users WHERE referral_code = ?'
+    ).get(normalized);
+    if (referrer && referrer.id !== user.id) {
+      // Anti-fraud : pas de self-referral.
+      // Crée la row de parrainage (idempotente grâce à UNIQUE(referred_id)).
+      const already = db.prepare('SELECT id FROM referrals WHERE referred_id = ?').get(user.id);
+      if (!already) {
+        const nowSec = Math.floor(Date.now() / 1000);
+        const tx = db.transaction(() => {
+          db.prepare(
+            'INSERT INTO referrals (referrer_id, referred_id, code, reward_given) VALUES (?, ?, ?, 1)'
+          ).run(referrer.id, user.id, normalized);
+          // Crédite +7j premium aux deux. premium_until en epoch seconds.
+          for (const uid of [user.id, referrer.id]) {
+            const r = db.prepare(
+              'SELECT is_premium, premium_until FROM users WHERE id = ?'
+            ).get(uid);
+            const cur = r.premium_until && r.premium_until > nowSec ? r.premium_until : nowSec;
+            db.prepare(
+              'UPDATE users SET is_premium = 1, premium_until = ? WHERE id = ?'
+            ).run(cur + 7 * 86400, uid);
+          }
+        });
+        try { tx(); refReward = 7; } catch (e) { console.warn('[referral] tx failed:', e.message); }
+      }
+    } else {
+      console.log(`[auth] ref code "${normalized}" non trouvé ou self-ref`);
+    }
+  }
+
+  res.json({
+    token: access,
+    refreshToken: refresh,
+    user: {
+      id: user.id,
+      email: emailLower,
+      isPremium: refReward > 0,
+      scansRemaining: 3,
+      emailVerified: false,
+      refRewardDays: refReward || undefined,
+    },
+  });
+});
+
+// ─── P0#6 — Verify email (clic sur le lien) ───────────────
+app.get('/api/auth/verify-email', (req, res) => {
+  const { token } = req.query || {};
+  if (typeof token !== 'string' || token.length !== 64) {
+    return res.status(400).json({ error: 'Token invalide' });
+  }
+
+  const user = db.prepare(
+    'SELECT id, email, email_verified, email_verify_token FROM users WHERE email_verify_token = ?'
+  ).get(token);
+
+  if (!user) {
+    return res.status(404).json({ error: 'Token inconnu ou déjà utilisé' });
+  }
+  if (user.email_verified === 1) {
+    // Idempotent — déjà vérifié. Retourne succès sans rien faire.
+    return res.json({ ok: true, alreadyVerified: true, email: user.email });
+  }
+
+  db.prepare(
+    'UPDATE users SET email_verified = 1, email_verify_token = NULL WHERE id = ?'
+  ).run(user.id);
+
+  console.log(`[auth] email vérifié pour user_id=${user.id} (${user.email})`);
+  // Redirige vers l'app avec un flag succès (le frontend affiche un message de bienvenue).
+  const redirectUrl = (process.env.APP_PUBLIC_URL || '/').replace(/\/$/, '') + '/?emailVerified=1';
+  res.redirect(302, redirectUrl);
+});
+
+// ─── P0#6 — Renvoyer l'email de vérification (auth requis) ──
+app.post('/api/auth/resend-verification', auth, authLimiter, (req, res) => {
+  const user = db.prepare(
+    'SELECT id, email, email_verified, email_verify_token FROM users WHERE id = ?'
+  ).get(req.user.id);
+
+  if (!user) return res.status(404).json({ error: 'Compte introuvable' });
+  if (user.email_verified === 1) {
+    return res.status(400).json({ error: 'Cet email est déjà vérifié' });
+  }
+
+  const verifyToken = generateToken();
+  db.prepare('UPDATE users SET email_verify_token = ? WHERE id = ?').run(verifyToken, user.id);
+
+  sendVerificationEmail(user.email, verifyToken).then(r => {
+    if (!r.ok) console.error(`[auth] resend échoué pour ${user.email}:`, r.error);
+  }).catch(e => console.error('[auth] resend exception:', e.message));
+
+  res.json({ ok: true });
+});
+
+// ─── P0#6 — Status email vérifié (auth requis) ─────────────
+app.get('/api/auth/email-status', auth, (req, res) => {
+  const user = db.prepare('SELECT email_verified FROM users WHERE id = ?').get(req.user.id);
+  if (!user) return res.status(404).json({ error: 'Compte introuvable' });
+  res.json({ emailVerified: user.email_verified === 1, isEmailConfigured });
+});
+
+// ─── P1#7 — Système de parrainage ──────────────────────────
+// Code court "CEL-XXXXXX" dérivé du user id (6 chars base32, rejetté les
+// caractères ambigus 0/O/1/I). Déterministe → le code ne change pas tant
+// que l'id user reste le même. On l'écrit dans users.referral_code à la
+// première lecture pour pouvoir le retrouver sans recalcul.
+const REFERRAL_ALPHABET = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789'; // 32 chars, sans 0/1/O/I
+function referralCodeFor(userId) {
+  // base32 big-endian sur 32 bits → 6 chars. Complétion par 'A' pour les ids courts.
+  let n = Number(userId) || 0;
+  let out = '';
+  for (let i = 0; i < 6; i++) {
+    out = REFERRAL_ALPHABET[n & 31] + out;
+    n = Math.floor(n / 32);
+  }
+  return 'CEL-' + out;
+}
+
+// P1#7 — GET /api/referrals/code (auth) : retourne le code + stats parrain.
+app.get('/api/referrals/code', auth, (req, res) => {
+  const user = db.prepare('SELECT id, referral_code FROM users WHERE id = ?').get(req.user.id);
+  if (!user) return res.status(404).json({ error: 'Compte introuvable' });
+
+  let code = user.referral_code;
+  if (!code) {
+    code = referralCodeFor(user.id);
+    db.prepare('UPDATE users SET referral_code = ? WHERE id = ?').run(code, user.id);
+  }
+
+  const referred = db.prepare(
+    'SELECT COUNT(*) AS n FROM referrals WHERE referrer_id = ?'
+  ).get(user.id);
+  const rewarded = db.prepare(
+    'SELECT COUNT(*) AS n FROM referrals WHERE referrer_id = ? AND reward_given = 1'
+  ).get(user.id);
+  const daysEarned = rewarded.n * 7;
+
+  res.json({
+    code,
+    referralsCount: referred.n,
+    daysEarned,
+    rewardPerReferral: 7,
+  });
+});
+
+// ─── P2#19 — GET /api/weekly-content (public) ───────────────
+// Retourne le contenu publié pour la semaine courante (ou week_start ISO fourni).
+// Pas d'auth : le contenu curated est public pour SEO/partage.
+function isoWeekStart(date = new Date()) {
+  const d = new Date(Date.UTC(date.getUTCFullYear(), date.getUTCMonth(), date.getUTCDate()));
+  const day = d.getUTCDay() || 7; // 0 = dimanche → 7
+  d.setUTCDate(d.getUTCDate() - day + 1); // lundi
+  return d.toISOString().slice(0, 10);
+}
+
+app.get('/api/weekly-content', (req, res) => {
+  const weekStart = req.query.week || isoWeekStart();
+  const row = db.prepare(
+    `SELECT week_start, theme, emoji, headline, body, ritual, reflection, published_at
+     FROM weekly_content
+     WHERE week_start = ? AND published_at IS NOT NULL`
+  ).get(weekStart);
+  if (!row) return res.status(404).json({ error: 'Aucun contenu pour cette semaine' });
+  res.json(row);
+});
+
+// ─── P2#19 — Admin CRUD /api/admin/weekly-content ────────────
+// Auth via header X-Admin-Token: <ADMIN_TOKEN env>. Édition manuelle
+// par l'équipe éditoriale.
+function adminAuth(req, res, next) {
+  const token = req.headers['x-admin-token'];
+  const expected = process.env.ADMIN_TOKEN;
+  if (!expected) return res.status(503).json({ error: 'ADMIN_TOKEN non configuré' });
+  if (token !== expected) return res.status(401).json({ error: 'Token admin invalide' });
+  next();
+}
+
+app.post('/api/admin/weekly-content', adminAuth, (req, res) => {
+  const { week_start, theme, emoji, headline, body, ritual, reflection, publish } = req.body || {};
+  if (!week_start || !theme || !headline || !body) {
+    return res.status(400).json({ error: 'Champs requis: week_start, theme, headline, body' });
+  }
+  const publishedAt = publish ? Math.floor(Date.now() / 1000) : null;
+  db.prepare(`
+    INSERT INTO weekly_content (week_start, theme, emoji, headline, body, ritual, reflection, published_at)
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+    ON CONFLICT(week_start) DO UPDATE SET
+      theme = excluded.theme,
+      emoji = excluded.emoji,
+      headline = excluded.headline,
+      body = excluded.body,
+      ritual = excluded.ritual,
+      reflection = excluded.reflection,
+      published_at = CASE WHEN ? = 1 THEN excluded.published_at ELSE published_at END
+  `).run(week_start, theme, emoji || '✨', headline, body, ritual || null, reflection || null, publishedAt, publish ? 1 : 0);
+  res.json({ ok: true, week_start });
+});
+
+app.post('/api/admin/weekly-content/publish', adminAuth, (req, res) => {
+  const { week_start } = req.body || {};
+  if (!week_start) return res.status(400).json({ error: 'week_start requis' });
+  const now = Math.floor(Date.now() / 1000);
+  const r = db.prepare('UPDATE weekly_content SET published_at = ? WHERE week_start = ?').run(now, week_start);
+  if (r.changes === 0) return res.status(404).json({ error: 'Entrée introuvable' });
+  res.json({ ok: true, published_at: now });
+});
+
+app.get('/api/admin/weekly-content', adminAuth, (req, res) => {
+  const rows = db.prepare(
+    'SELECT * FROM weekly_content ORDER BY week_start DESC LIMIT 50'
+  ).all();
+  res.json(rows);
+});
+
+// ─── P2#20 — Transit comments (communauté) ──────────────────
+// List comments for a given transit (date + key). Public read.
+app.get('/api/transit-comments', (req, res) => {
+  const { date, key } = req.query;
+  if (!date || !key) return res.status(400).json({ error: 'date et key requis' });
+  const rows = db.prepare(
+    `SELECT c.id, c.display_name, c.content, c.likes_count, c.created_at,
+       EXISTS(SELECT 1 FROM transit_comment_likes l WHERE l.comment_id = c.id AND l.user_id = ?) AS liked
+     FROM transit_comments c
+     WHERE c.transit_date = ? AND c.transit_key = ?
+     ORDER BY c.likes_count DESC, c.created_at DESC
+     LIMIT 200`
+  ).all(req.user?.id || 0, date, key);
+  res.json(rows);
+});
+
+// Post a comment (auth required). display_name stored on users table.
+app.post('/api/transit-comments', auth, (req, res) => {
+  const { date, key, content } = req.body || {};
+  if (!date || !key || !content?.trim()) {
+    return res.status(400).json({ error: 'Champs requis: date, key, content' });
+  }
+  if (content.length > 500) {
+    return res.status(400).json({ error: 'Commentaire trop long (500 caractères max)' });
+  }
+  // Resolve / set display_name
+  let displayName = db.prepare('SELECT display_name FROM users WHERE id = ?').get(req.user.id)?.display_name;
+  if (!displayName) {
+    const email = db.prepare('SELECT email FROM users WHERE id = ?').get(req.user.id)?.email || 'etoile';
+    displayName = email.split('@')[0].slice(0, 20);
+    db.prepare('UPDATE users SET display_name = ? WHERE id = ?').run(displayName, req.user.id);
+  }
+  const r = db.prepare(
+    `INSERT INTO transit_comments (transit_date, transit_key, user_id, display_name, content)
+     VALUES (?, ?, ?, ?, ?)`
+  ).run(date, key, req.user.id, displayName, content.trim());
+  res.json({
+    id: r.lastInsertRowid,
+    display_name: displayName,
+    content: content.trim(),
+    likes_count: 0,
+    created_at: Math.floor(Date.now() / 1000),
+    liked: 0,
+  });
+});
+
+// Delete own comment
+app.delete('/api/transit-comments/:id', auth, (req, res) => {
+  const row = db.prepare('SELECT user_id FROM transit_comments WHERE id = ?').get(req.params.id);
+  if (!row) return res.status(404).json({ error: 'Commentaire introuvable' });
+  if (row.user_id !== req.user.id) return res.status(403).json({ error: 'Non autorisé' });
+  db.prepare('DELETE FROM transit_comments WHERE id = ?').run(req.params.id);
+  res.json({ ok: true });
+});
+
+// Toggle like (auth required)
+app.post('/api/transit-comments/:id/like', auth, (req, res) => {
+  const comment = db.prepare('SELECT id FROM transit_comments WHERE id = ?').get(req.params.id);
+  if (!comment) return res.status(404).json({ error: 'Commentaire introuvable' });
+  const existing = db.prepare(
+    'SELECT 1 FROM transit_comment_likes WHERE comment_id = ? AND user_id = ?'
+  ).get(req.params.id, req.user.id);
+  if (existing) {
+    db.prepare('DELETE FROM transit_comment_likes WHERE comment_id = ? AND user_id = ?')
+      .run(req.params.id, req.user.id);
+    db.prepare('UPDATE transit_comments SET likes_count = MAX(0, likes_count - 1) WHERE id = ?')
+      .run(req.params.id);
+    return res.json({ liked: false });
+  }
+  db.prepare('INSERT INTO transit_comment_likes (comment_id, user_id) VALUES (?, ?)')
+    .run(req.params.id, req.user.id);
+  db.prepare('UPDATE transit_comments SET likes_count = likes_count + 1 WHERE id = ?')
+    .run(req.params.id);
+  res.json({ liked: true });
+});
+
+// Update display_name
+app.post('/api/account/display-name', auth, (req, res) => {
+  const { display_name } = req.body || {};
+  if (!display_name?.trim() || display_name.length > 24) {
+    return res.status(400).json({ error: 'Pseudo invalide (1-24 caractères)' });
+  }
+  db.prepare('UPDATE users SET display_name = ? WHERE id = ?')
+    .run(display_name.trim(), req.user.id);
+  res.json({ ok: true, display_name: display_name.trim() });
 });
 
 // ─── Auth: Logout ───────────────────────────────────────────
@@ -1462,6 +1968,116 @@ app.get('/api/profile', auth, (req, res) => {
 // Returns all user data as JSON. User can download and import elsewhere.
 app.use('/api/account', createAccountRouter({ db, auth }));
 
+// ─── P2#15 — Yearly Recap ─────────────────────────────────
+// GET /api/yearly-recap?year=YYYY
+// Agrège les données d'une année civile pour produire "Ton année céleste".
+// Source : user_xp, xp_log, daily_quests, journal_entries, user_badges, horoscope_feedback.
+app.get('/api/yearly-recap', auth, (req, res) => {
+  const userId = req.user.id;
+  const year = parseInt(String(req.query.year || ''), 10) || new Date().getFullYear();
+  const yearStart = Math.floor(new Date(year, 0, 1).getTime() / 1000);
+  const yearEnd = Math.floor(new Date(year + 1, 0, 1).getTime() / 1000);
+  const isoYearStart = `${year}-01-01`;
+  const isoYearEnd = `${year}-12-31`;
+
+  try {
+    // 1. XP gagnée sur l'année (somme des logs dans la fenêtre)
+    const xpRow = db.prepare(
+      `SELECT COALESCE(SUM(amount), 0) AS total FROM xp_log
+       WHERE user_id = ? AND created_at >= ? AND created_at < ?`
+    ).get(userId, yearStart, yearEnd);
+    const xpEarned = xpRow?.total || 0;
+
+    // 2. Quêtes accomplies (daily_quests completed dans la fenêtre ISO)
+    const questsRow = db.prepare(
+      `SELECT COUNT(*) AS n FROM daily_quests
+       WHERE user_id = ? AND completed = 1 AND date >= ? AND date <= ?`
+    ).get(userId, isoYearStart, isoYearEnd);
+    const questsCompleted = questsRow?.n || 0;
+
+    // 3. Entrées de journal (journal_entries)
+    const journalRow = db.prepare(
+      `SELECT COUNT(*) AS n FROM journal_entries
+       WHERE user_id = ? AND date >= ? AND date <= ?`
+    ).get(userId, isoYearStart, isoYearEnd);
+    const journalEntries = journalRow?.n || 0;
+
+    // 4. Cartes / Runes tirées — pas de table dédiée, on infère depuis xp_log.
+    // Les raisons "tarot_draw" et "rune_draw" sont créditées à chaque tirage.
+    const drawsRow = db.prepare(
+      `SELECT
+         COALESCE(SUM(CASE WHEN reason = 'tarot_draw' THEN 1 ELSE 0 END), 0) AS cards,
+         COALESCE(SUM(CASE WHEN reason = 'rune_draw' THEN 1 ELSE 0 END), 0) AS runes
+       FROM xp_log
+       WHERE user_id = ? AND created_at >= ? AND created_at < ?`
+    ).get(userId, yearStart, yearEnd);
+    const cardsDrawn = drawsRow?.cards || 0;
+    const runesDrawn = drawsRow?.runes || 0;
+
+    // 5. Plus longue série (streak max observé cette année).
+    //    On prend le streak_count actuel comme approximation conservative
+    //    (tracker précis non persisté historiquement — à améliorer si besoin).
+    const userRow = db.prepare('SELECT streak_count, created_at FROM users WHERE id = ?').get(userId);
+    const longestStreak = Math.max(0, userRow?.streak_count ?? 0);
+
+    // 6. Badges débloqués cette année
+    const badgesRow = db.prepare(
+      `SELECT COUNT(*) AS n FROM user_badges
+       WHERE user_id = ? AND earned_at >= ? AND earned_at < ?`
+    ).get(userId, yearStart, yearEnd);
+    const badgesUnlocked = badgesRow?.n || 0;
+
+    // 7. Mood dominant (mot le plus fréquent dans les entrées de journal)
+    let moodWord = null;
+    try {
+      const entries = db.prepare(
+        `SELECT content FROM journal_entries
+         WHERE user_id = ? AND date >= ? AND date <= ? AND content IS NOT NULL`
+      ).all(userId, isoYearStart, isoYearEnd);
+      const wordCounts = new Map();
+      const STOPWORDS = new Set([
+        'le', 'la', 'les', 'un', 'une', 'des', 'de', 'du', 'et', 'en', 'à', 'au', 'aux',
+        'que', 'qui', 'je', 'tu', 'il', 'elle', 'on', 'nous', 'vous', 'ils', 'elles',
+        'pas', 'ne', 'plus', 'pour', 'par', 'dans', 'sur', 'avec', 'sans', 'ce', 'cette',
+        'mon', 'ma', 'mes', 'son', 'sa', 'ses', 'mais', 'ou', 'donc', 'car', 'se', 'se',
+        'est', 'sont', 'ai', 'as', 'av', 'faut', 'bien', 'tout', 'tous', 'très', 'peux',
+        'the', 'and', 'for', 'with',
+      ]);
+      for (const e of entries) {
+        const words = (e.content || '').toLowerCase().match(/[a-zàâäéèêëïîôöùûüç]{4,}/g) || [];
+        for (const w of words) {
+          if (STOPWORDS.has(w)) continue;
+          wordCounts.set(w, (wordCounts.get(w) || 0) + 1);
+        }
+      }
+      // Top mot (seulement si ≥ 3 occurrences)
+      let topWord = '', topCount = 0;
+      for (const [w, c] of wordCounts) {
+        if (c > topCount) { topWord = w; topCount = c; }
+      }
+      if (topCount >= 3) moodWord = topWord;
+    } catch { /* non bloquant */ }
+
+    res.json({
+      year,
+      questsCompleted,
+      xpEarned,
+      journalEntries,
+      cardsDrawn,
+      runesDrawn,
+      longestStreak,
+      badgesUnlocked,
+      moodWord,
+      joinedDate: userRow?.created_at
+        ? new Date(userRow.created_at * 1000).toISOString()
+        : new Date().toISOString(),
+    });
+  } catch (err) {
+    console.error('[yearly-recap]', err);
+    res.status(500).json({ error: 'Récap indisponible' });
+  }
+});
+
 // ─── Multi-profile CRUD (Feature 8) ────────────────────────
 // List all profiles (own natal + saved family/friends)
 app.use('/api/profiles', createProfilesRouter({ db, auth, safeJsonParse }));
@@ -1483,8 +2099,13 @@ app.post('/api/horoscope', auth, async (req, res) => {
     // Per-user cache hit (legacy horoscope_cache table)
     const userCached = db.prepare('SELECT content FROM horoscope_cache WHERE user_id = ? AND date = ?').get(req.user.id, today);
     if (userCached) {
-      const streak = updateStreak(req.user.id, today);
-      return res.json({ ...safeJsonParse(userCached.content, {}, 'horoscope_cache.content'), streak });
+      // P0#4 — updateStreak retourne désormais { count, freezeConsumed, graceApplied }
+      const streakInfo = updateStreak(req.user.id, today);
+      return res.json({
+        ...safeJsonParse(userCached.content, {}, 'horoscope_cache.content'),
+        streak: streakInfo.count, // rétro-compat : le frontend attend un number
+        streakInfo, // bonus : flags pour UX (banner "freeze utilisé")
+      });
     }
 
     const birthData = safeJsonParse(user.birth_data, null, 'horoscope birth_data');
@@ -1571,9 +2192,15 @@ app.post('/api/horoscope', auth, async (req, res) => {
     db.prepare('INSERT OR REPLACE INTO horoscope_cache (user_id, date, content, summary) VALUES (?, ?, ?, ?)')
       .run(req.user.id, today, JSON.stringify(horoscope), JSON.stringify(summary));
 
-    const streak = updateStreak(req.user.id, today);
+    // P0#4 — streak étendu : { count, freezeConsumed, graceApplied }
+    const streakInfo = updateStreak(req.user.id, today);
     const remaining = isPremium ? null : Math.max(0, (user.scans_remaining ?? 0) - (personalCached ? 0 : 1));
-    res.json({ ...horoscope, scansRemaining: remaining, streak });
+    res.json({
+      ...horoscope,
+      scansRemaining: remaining,
+      streak: streakInfo.count, // rétro-compat frontend
+      streakInfo,
+    });
   } catch (err) {
     console.error('Horoscope error:', err.message);
     res.status(500).json({ error: 'Failed to generate horoscope', detail: err.message });
@@ -1924,6 +2551,55 @@ app.post('/api/premium/activate', auth, (req, res) => {
 // /create-checkout, /portal, /verify-session sont protégés par auth (dans le router)
 app.get('/api/billing/status', (req, res) => res.json({ configured: isStripeConfigured() }));
 app.use('/api/billing', auth, billingRouter);
+
+// ═══════════════════════════════════════════════════════════════════════════
+// P0#4 — Streak freeze : endpoints.
+//   GET  /api/streak          → { count, freezesAvailable, lastDate, graceApplied }
+//   POST /api/streak/freeze   → { ok, freezesAvailable } (appelé après IAP 0,99€)
+// ═══════════════════════════════════════════════════════════════════════════
+app.get('/api/streak', auth, (req, res) => {
+  try {
+    const u = db.prepare(
+      'SELECT streak_count, streak_last_date, streak_freezes, streak_freeze_used_this_week FROM users WHERE id = ?'
+    ).get(req.user.id);
+    if (!u) return res.status(404).json({ error: 'user not found' });
+
+    const today = new Date().toISOString().slice(0, 10);
+    let freezesAvailable = u.streak_freezes ?? 1;
+    // Reset hebdo du freeze gratuit
+    if (u.streak_freeze_used_this_week && daysBetween(u.streak_freeze_used_this_week, today) > 7) {
+      freezesAvailable = 1;
+      db.prepare('UPDATE users SET streak_freezes = 1, streak_freeze_used_this_week = NULL WHERE id = ?').run(req.user.id);
+    }
+
+    res.json({
+      count: u.streak_count ?? 0,
+      lastDate: u.streak_last_date,
+      freezesAvailable,
+      nextFreeReset: u.streak_freeze_used_this_week,
+    });
+  } catch (err) {
+    console.error('[streak/status] error:', err.message);
+    res.status(500).json({ error: 'streak lookup failed' });
+  }
+});
+
+// Recharge un jeton freeze (IAP 0,99€ / unité).
+// Le client doit d'abord valider l'achat Stripe/Store avant d'appeler cet endpoint.
+app.post('/api/streak/freeze', auth, (req, res) => {
+  try {
+    const qty = Math.max(1, Math.min(10, Number(req.body?.quantity) || 1));
+    const u = db.prepare('SELECT streak_freezes FROM users WHERE id = ?').get(req.user.id);
+    if (!u) return res.status(404).json({ error: 'user not found' });
+    const newCount = (u.streak_freezes ?? 0) + qty;
+    db.prepare('UPDATE users SET streak_freezes = ? WHERE id = ?').run(newCount, req.user.id);
+    console.log(`[streak/freeze] user ${req.user.id} +${qty} freeze(s) → total ${newCount}`);
+    res.json({ ok: true, freezesAvailable: newCount });
+  } catch (err) {
+    console.error('[streak/freeze] error:', err.message);
+    res.status(500).json({ error: 'freeze purchase failed' });
+  }
+});
 
 // ─── Web Push endpoints ────────────────────────────────────
 app.use('/api/notifications', createNotificationsRouter({ db, auth, webpush, vapidPublicKey: VAPID_PUBLIC_KEY }));
@@ -2984,9 +3660,180 @@ async function runReengagementJob() {
   }
 }
 
+// ═══════════════════════════════════════════════════════════════════════════
+// P0#4 — Streak reminder job : push préventif J+1 à 21h locale.
+//
+// Pour chaque user qui :
+//   - a un streak actif (count >= 3) ET
+//   - n'a PAS consulté aujourd'hui (streak_last_date != today) ET
+//   - est dans la fenêtre 21h-22h locale
+// On envoie un push "ne perds pas ton streak de N jours".
+//
+// Si l'user a un freeze disponible, on le mentionne ("un jeton te protège").
+// ═══════════════════════════════════════════════════════════════════════════
+async function runStreakReminderJob() {
+  try {
+    const now = new Date();
+    const utcHour = now.getUTCHours();
+    const utcMinute = now.getUTCMinutes();
+    const today = now.toISOString().split('T')[0];
+
+    // Users avec streak >= 3 qui n'ont pas consulté aujourd'hui
+    const users = db.prepare(`
+      SELECT u.id, u.email, u.streak_count, u.streak_last_date,
+             u.streak_freezes, u.notification_timezone, u.last_streak_reminder
+      FROM users u
+      JOIN push_subscriptions ps ON ps.user_id = u.id
+      WHERE u.streak_count >= 3
+        AND u.streak_last_date IS NOT NULL
+        AND u.streak_last_date != ?
+        AND (u.last_streak_reminder IS NULL OR u.last_streak_reminder != ?)
+    `).all(today, today);
+
+    if (users.length === 0) return;
+
+    let sent = 0;
+    for (const user of users) {
+      const tz = Number(user.notification_timezone ?? 0);
+      const localHour = (utcHour - Math.floor(tz) + 24) % 24;
+      // Fenêtre 21h-22h locale (le cron tourne à :00 et :30)
+      const hourMatches = localHour === 21
+        || (localHour === 22 && utcMinute === 0);
+      if (!hourMatches) continue;
+
+      const hasFreeze = (user.streak_freezes ?? 0) > 0;
+      const body = hasFreeze
+        ? ` 🔥 Ton streak de ${user.streak_count} jours est actif. Un jeton freeze te protège si tu craques.`
+        : `🔥 Plus que quelques heures pour garder ton streak de ${user.streak_count} jours. Ton ciel t'attend.`;
+      const payload = {
+        title: '✨ Céleste',
+        body,
+        icon: '/icon-192.png',
+        badge: '/badge-72.png',
+        tag: 'celeste-streak-reminder',
+        url: '/?screen=horoscope',
+        data: { type: 'streak-reminder', userId: user.id, streak: user.streak_count },
+      };
+      const result = await sendPushToUser(user.id, payload);
+      if (result.sent > 0) {
+        // Marquer pour ne pas repousser aujourd'hui
+        db.prepare('UPDATE users SET last_streak_reminder = ? WHERE id = ?').run(today, user.id);
+        sent++;
+      }
+    }
+
+    if (sent > 0) {
+      console.log(`[cron:streak-reminder] ${sent} user(s) notifiés (push préventif J+1 21h)`);
+    }
+  } catch (err) {
+    console.error('[cron:streak-reminder] error:', err.message);
+  }
+}
+
 // Start scheduler: check every 30 minutes
 const CRON_INTERVAL_MS = 30 * 60 * 1000;
+// ═══════════════════════════════════════════════════════════════════════════
+// P1#12 — Early re-engagement job : H+12 / J+1 / J+2.
+//
+// Les 48h après la dernière activité sont critiques pour la rétention.
+// Le job existant `runReengagementJob` couvre J+3/J+7 ; on ajoute les paliers
+// plus serrés AVANT que l'user ne churne vraiment.
+//
+// Logique :
+//   H+12 (12h d'inactivité) : push très léger ("Ton horoscope du soir t'attend")
+//   J+1  (24h)              : push doux ("Un jour sans consulter les étoiles ?")
+//   J+2  (48h)              : push engageant ("Tarot du jour + rune t'attendent")
+//
+// Anti-spam : max 1 push / jour / user (colonne last_early_reengagement_date).
+// Cible : users avec push subscription, premium OU essai, première semaine post-inscription.
+// ═══════════════════════════════════════════════════════════════════════════
+async function runEarlyReengagementJob() {
+  try {
+    const now = Math.floor(Date.now() / 1000);
+    const today = new Date().toISOString().split('T')[0];
+
+    const H12 = 12 * 3600;
+    const J1  = 24 * 3600;
+    const J2  = 48 * 3600;
+
+    // Users avec push et pas encore notifiés aujourd'hui
+    const users = db.prepare(`
+      SELECT u.id, u.last_activity_at, u.created_at, u.last_early_reengagement_date
+      FROM users u
+      JOIN push_subscriptions ps ON ps.user_id = u.id
+      WHERE u.last_early_reengagement_date IS NULL
+         OR u.last_early_reengagement_date != ?
+    `).all(today);
+
+    let sent12 = 0, sent1 = 0, sent2 = 0;
+
+    for (const user of users) {
+      // Si pas encore d'activité enregistrée, on skip (user fraîchement inscrit)
+      if (!user.last_activity_at) continue;
+
+      const inactiveFor = now - user.last_activity_at;
+      let payload = null;
+
+      // H+12 : push du soir léger (uniquement entre 18h et 22h heure local du serveur)
+      const hourLocal = new Date().getHours();
+      if (inactiveFor >= H12 && inactiveFor < J1 && hourLocal >= 18 && hourLocal <= 22) {
+        payload = {
+          title: '✨ Ton horoscope du soir',
+          body: "Le ciel de ce soir t'attend. Un dernier regard avant de dormir ?",
+          icon: '/icon-192.png',
+          badge: '/badge-72.png',
+          tag: 'celeste-early-h12',
+          url: '/?screen=horoscope',
+          data: { type: 'early-reengage-h12', userId: user.id },
+        };
+        sent12++;
+      }
+      // J+1
+      else if (inactiveFor >= J1 && inactiveFor < J2) {
+        payload = {
+          title: '🌙 Un jour sans les étoiles',
+          body: 'Ton tirage du jour est prêt. Carte, rune, horoscope — à toi de choisir.',
+          icon: '/icon-192.png',
+          badge: '/badge-72.png',
+          tag: 'celeste-early-j1',
+          url: '/?screen=home',
+          data: { type: 'early-reengage-j1', userId: user.id },
+        };
+        sent1++;
+      }
+      // J+2
+      else if (inactiveFor >= J2 && inactiveFor < 3 * 24 * 3600) {
+        payload = {
+          title: '🔮 Les étoiles bougent sans toi',
+          body: "2 jours d'absence. Ta carte du jour t'attend, ainsi qu'un message spécial.",
+          icon: '/icon-192.png',
+          badge: '/badge-72.png',
+          tag: 'celeste-early-j2',
+          url: '/?screen=home',
+          data: { type: 'early-reengage-j2', userId: user.id },
+        };
+        sent2++;
+      }
+
+      if (payload) {
+        const result = await sendPushToUser(user.id, payload);
+        if (result.sent > 0) {
+          db.prepare('UPDATE users SET last_early_reengagement_date = ? WHERE id = ?').run(today, user.id);
+        }
+      }
+    }
+
+    if (sent12 + sent1 + sent2 > 0) {
+      console.log(`[cron:early-reengagement] H+12: ${sent12}, J+1: ${sent1}, J+2: ${sent2} users notified`);
+    }
+  } catch (err) {
+    console.error('[cron:early-reengagement] error:', err.message);
+  }
+}
+
 let cronInterval = null;
+let astroEventsLastRun = 0;
+const ASTRO_EVENTS_INTERVAL_MS = 6 * 3600_000; // P1#8 — check events astro toutes les 6h
 
 function startCronScheduler() {
   if (cronInterval) return;
@@ -2995,11 +3842,25 @@ function startCronScheduler() {
   setTimeout(() => {
     runDailyPushJob();
     runReengagementJob();
+    runStreakReminderJob();
+    runEarlyReengagementJob(); // P1#12
+    // P1#8 — events astro au démarrage (après 90s pour ne pas tout saturer)
+    setTimeout(() => {
+      runAstroEventsJob(db, sendPushToUser);
+      astroEventsLastRun = Date.now();
+    }, 90_000);
   }, 60_000);
   // Then every 30 min
   cronInterval = setInterval(() => {
     runDailyPushJob();
     runReengagementJob();
+    runStreakReminderJob();
+    runEarlyReengagementJob(); // P1#12
+    // P1#8 — events astro : check toutes les 6h (la granularité d'un événement astro est de l'heure, pas besoin de 30min)
+    if (Date.now() - astroEventsLastRun >= ASTRO_EVENTS_INTERVAL_MS) {
+      runAstroEventsJob(db, sendPushToUser);
+      astroEventsLastRun = Date.now();
+    }
   }, CRON_INTERVAL_MS);
 }
 

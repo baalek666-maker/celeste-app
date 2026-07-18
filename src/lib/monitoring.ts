@@ -121,3 +121,69 @@ export function identifyUser(userId: string | number, traits?: Record<string, un
 export function resetUser() {
   if (_posthog) _posthog.reset();
 }
+
+// ─── P1#11 — Feature flags + A/B testing (PostHog native) ───────
+//
+// PostHog Feature Flags permettent de déployer progressivement des features
+// (ex: nouveau paywall à 10% des users) et de mesurer leur impact.
+// Docs: https://posthog.com/docs/feature-flags
+//
+// Flags actuellement actifs dans Celeste :
+//   - 'new-paywall-copy'    : nouvelle copie du Paywall (rollout progressif)
+//   - 'expert-mode'         : toggle du mode expert (P2#18)
+//   - 'community-comments'  : commentaires sur transits du jour (P2#20)
+//   - 'daily-quests-v2'     : nouveau design des quêtes (P1#9)
+//
+// Ajoutez vos flags dans PostHog → Feature Flags → créer avec key cohérente.
+
+/**
+ * Retourne la valeur d'un feature flag.
+ * @param key - clé du flag dans PostHog (ex: 'new-paywall-copy')
+ * @param fallback - valeur par défaut si PostHog désactivé ou flag inconnu
+ */
+export function getFeatureFlag(key: string, fallback: boolean | string = false): boolean | string {
+  if (!_posthog) return fallback;
+  try {
+    const value = _posthog.getFeatureFlag(key);
+    return value === undefined ? fallback : value;
+  } catch {
+    return fallback;
+  }
+}
+
+/**
+ * Vérifie si un flag booléen est actif (raccourci).
+ * Usage : if (isFeatureEnabled('expert-mode')) { ... }
+ */
+export function isFeatureEnabled(key: string, fallback = false): boolean {
+  const value = getFeatureFlag(key, fallback);
+  if (typeof value === 'boolean') return value;
+  if (typeof value === 'string') return value === 'true' || value === 'on' || value === '1';
+  return Boolean(value);
+}
+
+/**
+ * Hook React : réévalue le flag quand il change (ex: déclenché par le serveur PostHog).
+ * Pour des raisons de simplicité, on réévalue toutes les 60s.
+ */
+import { useState, useEffect } from 'react';
+export function useFeatureFlag(key: string, fallback: boolean | string = false): boolean | string {
+  const [value, setValue] = useState<boolean | string>(() => getFeatureFlag(key, fallback));
+  useEffect(() => {
+    setValue(getFeatureFlag(key, fallback));
+    // PostHog peut recharger les flags côté serveur ; on poll toutes les 60s
+    const id = setInterval(() => setValue(getFeatureFlag(key, fallback)), 60_000);
+    return () => clearInterval(id);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [key]);
+  return value;
+}
+
+/**
+ * Force le rechargement de tous les flags depuis PostHog (ex: après login).
+ */
+export function reloadFeatureFlags() {
+  if (_posthog && typeof _posthog.reloadFeatureFlags === 'function') {
+    _posthog.reloadFeatureFlags();
+  }
+}

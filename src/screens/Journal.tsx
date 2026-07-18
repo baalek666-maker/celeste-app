@@ -3,6 +3,7 @@ import type { User, JournalEntry } from '../types';
 import { getJournal, addJournalEntry, localISODate } from '../lib/storage';
 import { api, getToken } from '../lib/api';
 import MoodCheckin from '../components/MoodCheckin';
+import EmptyState from '../components/EmptyState';
 
 function calcStreak(entries: JournalEntry[]): number {
   if (entries.length === 0) return 0;
@@ -244,10 +245,11 @@ export function Journal({ user }: { user: User }) {
       })()}
 
       {entries.length === 0 && (
-        <div className="text-center py-12">
-          <p className="text-night-500 text-sm">Aucune entrée pour le moment.</p>
-          <p className="text-night-600 text-xs mt-1">Commence ton journal aujourd'hui ☾</p>
-        </div>
+        <EmptyState
+          icon="📖"
+          title="Ton journal t'attend"
+          subtitle="Écris ce que tu ressens juste au-dessus. Observe les motifs qui reviennent. Personne ne lira — c'est ton espace."
+        />
       )}
     </div>
   );

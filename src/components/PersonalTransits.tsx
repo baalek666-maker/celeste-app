@@ -1,5 +1,6 @@
 import React, { useEffect, useState } from 'react';
 import { api } from '../lib/api';
+import TransitComments from './TransitComments';
 
 type Aspect = {
   transitPlanet: string;
@@ -149,6 +150,11 @@ export default function PersonalTransits() {
           );
         })}
       </div>
+
+      {/* P2#20 — Espace de partage communautaire */}
+      {data.date && (
+        <TransitComments date={data.date} transitKey={`personal-${data.date}`} />
+      )}
     </div>
   );
 }

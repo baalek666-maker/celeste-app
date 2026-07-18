@@ -1,6 +1,8 @@
 import { useEffect, useState, useRef } from 'react';
 import { api } from '../lib/api';
 import { ZODIAC_ORDER, ZODIAC_SIGNS, PLANET_DATA } from '../data/zodiac';
+import SkyMapShare from './SkyMapShare';
+import { useExpertMode, degreeInSign, formatDegrees } from '../lib/expert-mode';
 
 interface Transit {
   sign: string;
@@ -94,16 +96,18 @@ function computeTransitAspects(transits: Record<string, Transit>) {
   return out;
 }
 
-export default function SkyMap({ size = 360 }: SkyMapProps) {
+export default function SkyMap({ size }: SkyMapProps) {
   const [transits, setTransits] = useState<Record<string, Transit> | null>(null);
   const [loading, setLoading] = useState(true);
   const [err, setErr] = useState<string | null>(null);
+  const [expert] = useExpertMode();
   // v13.1.2 — rotation désactivée par défaut pour éviter le débordement
   // diagonal du cercle pendant l'animation. L'utilisateur peut l'activer
   // manuellement via le bouton ▶ Animer si il le souhaite.
   const [rotating, setRotating] = useState(false);
   const [containerW, setContainerW] = useState(0);
   const containerRef = useRef<HTMLDivElement>(null);
+  const svgRef = useRef<SVGSVGElement>(null);
 
   useEffect(() => {
     let mounted = true;
@@ -138,8 +142,10 @@ export default function SkyMap({ size = 360 }: SkyMapProps) {
       const padL = parseFloat(styles.paddingLeft) || 0;
       const padR = parseFloat(styles.paddingRight) || 0;
       const avail = parent.clientWidth - padL - padR;
-      // v13.1.2 — max 400 (au lieu de 360) pour mieux remplir les grands écrans
-      setContainerW(Math.max(200, Math.min(avail, 400)));
+      // v13.1.3 — cap 300 (au lieu de 400). Le SVG doit tenir dans le cadre glass
+      // p-4 (padding 16px chaque côté = 32px en tout). Sur écran 360px, avail = 328px
+      // → on prend 300 pour laisser une petite marge visuelle en plus.
+      setContainerW(Math.max(220, Math.min(avail, 300)));
     };
     update();
     const ro = new ResizeObserver(update);
@@ -150,8 +156,10 @@ export default function SkyMap({ size = 360 }: SkyMapProps) {
     return () => { ro.disconnect(); window.removeEventListener('resize', update); };
   }, []);
 
-  // v13.1.2 — utilise containerW si connu (responsive), sinon fallback sur prop size
-  const actualSize = size ?? Math.min(containerW || 360, 400);
+  // v13.1.3 — size prop : si non fourni, utilise containerW (responsive réel),
+  // avec fallback 280 (au lieu de 360 qui faisait déborder sur petits écrans).
+  // Cap supérieur 320 pour éviter tout débordement du cadre glass.
+  const actualSize = size ?? Math.min(containerW || 280, 320);
 
   if (loading) {
     return (
@@ -180,9 +188,11 @@ export default function SkyMap({ size = 360 }: SkyMapProps) {
   // carte GRAND et CENTRÉE, et on garde l'animation mais en disable par
   // défaut (l'utilisateur appuie sur ▶ Animer s'il veut — la rotation est
   // purement décorative, pas fonctionnelle).
+  // v13.1.3 — outerR réduit pour garantir que le cercle reste dans le cadre
+  // glass + padding interne. Marge 16px (au lieu de 8) pour respirer visuellement.
   const cx = actualSize / 2;
   const cy = actualSize / 2;
-  const outerR = actualSize / 2 - 8;
+  const outerR = actualSize / 2 - 16;
   const zodiacR = outerR - 18;
   const tickOuterR = zodiacR;
   const tickInnerR = zodiacR - 12;
@@ -223,11 +233,16 @@ export default function SkyMap({ size = 360 }: SkyMapProps) {
           >
             {rotating ? '⏸ Pause' : '▶ Animer'}
           </button>
+          <SkyMapShare
+            svgRef={svgRef}
+            dateLabel={new Date().toLocaleDateString('fr-FR', { day: 'numeric', month: 'long', year: 'numeric' })}
+          />
         </div>
       </div>
 
       <div ref={containerRef} className="relative mx-auto overflow-hidden rounded-2xl" style={{ width: actualSize, height: actualSize }}>
         <svg
+          ref={svgRef}
           width={actualSize}
           height={actualSize}
           /* v13.1.2 — viewBox carré d'origine, cercle centré et grand.
@@ -353,8 +368,8 @@ export default function SkyMap({ size = 360 }: SkyMapProps) {
                 </text>
                 {/* degree label */}
                 <text x={x} y={y + 15} textAnchor="middle" dominantBaseline="middle"
-                  fontSize="6" fill="#94a3b8" opacity="0.7">
-                  {Math.floor(transits[p.key].degree)}°
+                  fontSize={expert ? "5.5" : "6"} fill="#94a3b8" opacity={expert ? "0.95" : "0.7"}>
+                  {expert ? formatDegrees(transits[p.key].longitude) : `${Math.floor(transits[p.key].degree)}°`}
                 </text>
                 {/* retrograde */}
                 {transits[p.key].retrograde && (
@@ -413,7 +428,7 @@ export default function SkyMap({ size = 360 }: SkyMapProps) {
             <div key={p} className="flex items-center gap-1 text-night-300">
               <span style={{ color: planet.color }} className="text-sm leading-none">{planet.symbol}</span>
               <span className="truncate">
-                {sign.symbol} {Math.floor(t.degree)}°
+                {expert ? degreeInSign(t.longitude) : `${sign.symbol} ${Math.floor(t.degree)}°`}
                 {t.retrograde && <span className="text-rose-400 ml-0.5">℞</span>}
               </span>
             </div>

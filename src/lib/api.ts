@@ -215,10 +215,12 @@ export type LunarIntention = {
 export const api = {
   // Auth — CRITIQUES : bypassOfflineQueue. Si offline, on échoue bruyamment
   // (l'utilisateur ne doit pas croire qu'il est loggué alors que la requête attend).
-  register: async (email: string, password: string) => {
-    const res = await apiCall<AuthResponse>('/auth/register', {
+  register: async (email: string, password: string, ref?: string) => {
+    const body: Record<string, string> = { email, password };
+    if (ref) body.ref = ref;
+    const res = await apiCall<AuthResponse & { refRewardDays?: number }>('/auth/register', {
       method: 'POST',
-      body: JSON.stringify({ email, password }),
+      body: JSON.stringify(body),
     }, DEFAULT_TIMEOUT_MS, { bypassOfflineQueue: true });
     setToken(res.token);
     setRefreshToken(res.refreshToken);
@@ -339,7 +341,7 @@ export const api = {
 
   // Premium — DEPRECATED. Use payment.startCheckout() instead.
   // This endpoint now returns 402 (Payment Required) on the server.
-  activatePremium: (plan: 'weekly' | 'annual') =>
+  activatePremium: (plan: 'monthly' | 'annual') =>
     apiCall<{ isPremium: boolean; premiumUntil: number }>('/premium/activate', {
       method: 'POST',
       body: JSON.stringify({ plan }),
@@ -547,7 +549,7 @@ export const api = {
   }>('/premium/status'),
 
   // ─── Billing (Stripe) ─────────────────────────────
-  startCheckout: (plan: 'weekly' | 'yearly') => apiCall<{ url: string; sessionId: string }>('/billing/create-checkout', {
+  startCheckout: (plan: 'monthly' | 'yearly') => apiCall<{ url: string; sessionId: string }>('/billing/create-checkout', {
     method: 'POST',
     body: JSON.stringify({ plan }),
   }, 30_000),
@@ -570,6 +572,37 @@ export const api = {
 
   // Fix #2 — expose Stripe-configured au client pour afficher le bon message dans le Paywall
   getBillingStatus: () => apiCall<{ configured: boolean }>('/billing/status', {}, 5_000),
+
+  // ─── P0#6 — Email verification (Resend) ─────────────────
+  getEmailStatus: () => apiCall<{
+    emailVerified: boolean;
+    isEmailConfigured: boolean;
+  }>('/auth/email-status', {}, 5_000),
+  resendVerification: () => apiCall<{ ok: true }>('/auth/resend-verification', {
+    method: 'POST',
+    body: '{}',
+  }, 10_000),
+
+  // ─── P1#7 — Referral program ─────────────────────────────
+  getReferralCode: () => apiCall<{
+    code: string;
+    referralsCount: number;
+    daysEarned: number;
+    rewardPerReferral: number;
+  }>('/referrals/code', {}, 5_000),
+
+  // ─── P0#4 — Streak freeze (IAP) ───────────────────────
+  getStreakStatus: () => apiCall<{
+    count: number;
+    lastDate: string | null;
+    freezesAvailable: number;
+    nextFreeReset: string | null;
+  }>('/streak', {}, 5_000),
+  buyStreakFreeze: (quantity = 1) => apiCall<{ ok: true; freezesAvailable: number }>(
+    '/streak/freeze',
+    { method: 'POST', body: JSON.stringify({ quantity }) },
+    15_000
+  ),
 
   // Fix #1 — RGPD Art. 17 (droit à l'effacement)
   deleteAccount: () => apiCall<{ ok: true; deletedAt: string }>('/account', {
@@ -757,6 +790,67 @@ export const api = {
     wordCount: number;
     cached: boolean;
   }>('/natal-chart/portrait'),
+
+  // P2#15 — Yearly Recap
+  getYearlyRecap: (year?: number) => apiCall<{
+    year: number;
+    questsCompleted: number;
+    xpEarned: number;
+    journalEntries: number;
+    cardsDrawn: number;
+    runesDrawn: number;
+    longestStreak: number;
+    badgesUnlocked: number;
+    moodWord?: string;
+    joinedDate: string;
+  }>(`/yearly-recap${year ? `?year=${year}` : ''}`),
+
+  // P2#19 — Contenu curated hebdomadaire
+  getWeeklyContent: () => apiCall<{
+    week_start: string;
+    theme: string;
+    emoji: string;
+    headline: string;
+    body: string;
+    ritual: string | null;
+    reflection: string | null;
+    published_at: number;
+  }>('/weekly-content'),
+
+  // P2#20 — Transit comments (communauté)
+  getTransitComments: (date: string, key: string) => apiCall<Array<{
+    id: number;
+    display_name: string;
+    content: string;
+    likes_count: number;
+    created_at: number;
+    liked: number;
+  }>>(`/transit-comments?date=${encodeURIComponent(date)}&key=${encodeURIComponent(key)}`),
+
+  postTransitComment: (date: string, key: string, content: string) => apiCall<{
+    id: number;
+    display_name: string;
+    content: string;
+    likes_count: number;
+    created_at: number;
+    liked: number;
+  }>('/transit-comments', {
+    method: 'POST',
+    body: JSON.stringify({ date, key, content }),
+  }),
+
+  deleteTransitComment: (id: number) => apiCall<{ ok: boolean }>(`/transit-comments/${id}`, {
+    method: 'DELETE',
+  }),
+
+  toggleCommentLike: (id: number) => apiCall<{ liked: boolean }>(`/transit-comments/${id}/like`, {
+    method: 'POST',
+  }),
+
+  updateDisplayName: (display_name: string) => apiCall<{ ok: boolean; display_name: string }>(
+    '/account/display-name',
+    { method: 'POST', body: JSON.stringify({ display_name }) }
+  ),
 
   // ─── Horoscope Feedback ───────────────────────────────────
   submitHoroscopeFeedback: (rating: number, note?: string) => apiCall<{ ok: boolean }>('/horoscope/feedback', {

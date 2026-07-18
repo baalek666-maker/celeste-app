@@ -14,6 +14,11 @@ import { initSentry, initPostHog, captureError } from './lib/monitoring';
 initSentry();
 initPostHog();
 
+// P1#7 — Capture ?ref=CEL-XXXXXX dès le chargement (avant toute navigation).
+// Le code est stocké en localStorage puis envoyé au /register.
+import { captureReferralFromURL } from './lib/referral-storage';
+captureReferralFromURL();
+
 // Catch uncaught errors that escape React's ErrorBoundary
 window.addEventListener('error', (e) => captureError(e.error ?? e.message));
 window.addEventListener('unhandledrejection', (e) => captureError(e.reason));

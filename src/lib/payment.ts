@@ -16,7 +16,7 @@ function getToken(): string | null {
   return localStorage.getItem(TOKEN_KEY);
 }
 
-export type Plan = 'weekly' | 'yearly';
+export type Plan = 'monthly' | 'yearly';
 
 export interface CheckoutResult {
   success: boolean;
