@@ -10,10 +10,11 @@
  */
 
 import { useEffect, useState, useCallback } from 'react';
-import { api } from '../lib/api';
+import { api, getCurrentUserId } from '../lib/api';
 
 interface Comment {
   id: number;
+  user_id: number;
   display_name: string;
   content: string;
   likes_count: number;
@@ -43,6 +44,7 @@ export default function TransitComments({ date, transitKey }: { date: string; tr
   const [posting, setPosting] = useState(false);
   const [open, setOpen] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const myUserId = getCurrentUserId(); // décodé une fois au mount
 
   const load = useCallback(async () => {
     try {
@@ -104,8 +106,6 @@ export default function TransitComments({ date, transitKey }: { date: string; tr
     }
   };
 
-  const myName = comments.find(c => c.liked !== undefined)?.display_name; // placeholder, real own detection via auth state not available here
-
   return (
     <div className="mt-5 pt-4 border-t border-white/[0.06]">
       <button
@@ -159,7 +159,7 @@ export default function TransitComments({ date, transitKey }: { date: string; tr
           ) : (
             <div className="space-y-2">
               {comments.map(c => {
-                const isMine = c.display_name === myName; // weak heuristic
+                const isMine = myUserId !== null && c.user_id === myUserId;
                 return (
                   <div key={c.id} className="rounded-2xl bg-celeste-bg/40 border border-white/[0.04] p-3">
                     <div className="flex items-center gap-2 mb-1.5">

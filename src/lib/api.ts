@@ -40,6 +40,24 @@ export function setRefreshToken(token: string): void {
   localStorage.setItem(REFRESH_TOKEN_KEY, token);
 }
 
+/**
+ * Decode the current user id from the access token in localStorage.
+ * Returns null if missing/invalid/expired. Used by UI to detect ownership
+ * (e.g. "delete my comment") without a round-trip.
+ */
+export function getCurrentUserId(): number | null {
+  const token = getToken();
+  if (!token) return null;
+  try {
+    const payload = token.split('.')[1];
+    if (!payload) return null;
+    const decoded = JSON.parse(atob(payload));
+    return typeof decoded.id === 'number' ? decoded.id : null;
+  } catch {
+    return null;
+  }
+}
+
 // ─── Token refresh (singleton to avoid parallel refresh races) ──
 let refreshPromise: Promise<string> | null = null;
 
@@ -820,6 +838,7 @@ export const api = {
   // P2#20 — Transit comments (communauté)
   getTransitComments: (date: string, key: string) => apiCall<Array<{
     id: number;
+    user_id: number;
     display_name: string;
     content: string;
     likes_count: number;
@@ -829,6 +848,7 @@ export const api = {
 
   postTransitComment: (date: string, key: string, content: string) => apiCall<{
     id: number;
+    user_id: number;
     display_name: string;
     content: string;
     likes_count: number;

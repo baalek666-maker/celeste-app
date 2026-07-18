@@ -1705,12 +1705,23 @@ app.get('/api/admin/weekly-content', adminAuth, (req, res) => {
 });
 
 // ─── P2#20 — Transit comments (communauté) ──────────────────
+// Best-effort decode: si un Authorization header est présent, tente de
+// résoudre req.user sans bloquer la requête. Permet au GET public de
+// renvoyer le bon flag `liked` et le bon user_id pour détection "mine".
+function softAuth(req, _res, next) {
+  const token = req.headers.authorization?.replace('Bearer ', '');
+  if (token) {
+    try { req.user = verifyAccessToken(token); } catch { /* ignore */ }
+  }
+  next();
+}
+
 // List comments for a given transit (date + key). Public read.
-app.get('/api/transit-comments', (req, res) => {
+app.get('/api/transit-comments', softAuth, (req, res) => {
   const { date, key } = req.query;
   if (!date || !key) return res.status(400).json({ error: 'date et key requis' });
   const rows = db.prepare(
-    `SELECT c.id, c.display_name, c.content, c.likes_count, c.created_at,
+    `SELECT c.id, c.user_id, c.display_name, c.content, c.likes_count, c.created_at,
        EXISTS(SELECT 1 FROM transit_comment_likes l WHERE l.comment_id = c.id AND l.user_id = ?) AS liked
      FROM transit_comments c
      WHERE c.transit_date = ? AND c.transit_key = ?
@@ -1742,6 +1753,7 @@ app.post('/api/transit-comments', auth, (req, res) => {
   ).run(date, key, req.user.id, displayName, content.trim());
   res.json({
     id: r.lastInsertRowid,
+    user_id: req.user.id,
     display_name: displayName,
     content: content.trim(),
     likes_count: 0,
