@@ -6,21 +6,27 @@
  * Si l'utilisateur est en trial (premiumUntil > now) ET qu'il n'a pas d'abonnement
  * Stripe actif (trialStartedAt != null = utilisé le trial), on affiche le bandeau.
  *
- * Apparition : au-dessus du premier bloc des écrans premium (Horoscope, Explorer, Home).
+ * Apparition : au-dessus du premier bloc des écrans premium (Home, Horoscope, Explorer).
  * Disparaît automatiquement quand premiumUntil est dépassé (gratuit) ou quand
  * l'utilisateur passe à un abonnement payant (trialStartedAt inchangé mais
  * `isPremium` reste à true → masqué par le check final).
+ *
+ * Navigation : reçoit `onNavigate` du parent (pattern App.tsx), PAS useNavigate
+ * (l'app n'est pas sous BrowserRouter — crash garanti).
  *
  * Copy VMF-aligned : chaleureux, jamais anxiogène. On remercie d'avance.
  */
 
 import { useMemo } from 'react';
-import { useNavigate } from 'react-router-dom';
 import type { User } from '../types';
 
-export function TrialBanner({ user, onSubscribe }: { user: User; onSubscribe?: (u: User) => void }) {
-  const navigate = useNavigate();
-
+export function TrialBanner({
+  user,
+  onNavigate,
+}: {
+  user: User;
+  onNavigate?: (screen: string) => void;
+}) {
   const info = useMemo(() => {
     if (!user?.trialStartedAt) return null;
     // trialStartedAt est en secondes (timestamp Unix) côté backend
@@ -33,7 +39,7 @@ export function TrialBanner({ user, onSubscribe }: { user: User; onSubscribe?: (
 
     // Le bandeau s'affiche uniquement pendant les 7 jours du trial
     if (daysLeft <= 0 || daysLeft > 7) return null;
-    return { daysLeft, hoursLeft: Math.max(0, 7 * 24 - Math.floor((now - start) / 3600)) };
+    return { daysLeft };
   }, [user?.trialStartedAt]);
 
   if (!info) return null;
@@ -53,9 +59,15 @@ export function TrialBanner({ user, onSubscribe }: { user: User; onSubscribe?: (
   const isLastDay = info.daysLeft === 1;
   const isLast3Days = info.daysLeft <= 3;
 
+  const handleClick = () => {
+    if (onNavigate) {
+      onNavigate('paywall');
+    }
+  };
+
   return (
     <button
-      onClick={() => navigate('/paywall')}
+      onClick={handleClick}
       className={`w-full mb-4 rounded-2xl p-4 text-left transition-all duration-300 hover:scale-[1.01] active:scale-[0.99] animate-fade-in ${
         isLastDay
           ? 'bg-gradient-to-r from-amber-500/15 to-rose-500/10 border border-amber-400/40 glass'

@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo } from 'react';
 import type { User } from '../types';
 import type { Screen } from '../App';
 import StreakCelebration from '../components/StreakCelebration';
@@ -43,30 +43,12 @@ function transitTints(transit: string): React.CSSProperties {
   } as React.CSSProperties;
 }
 
-const STORAGE_KEY = 'celeste:home-mode';
-type HomeMode = 'focus' | 'full';
-
-function getInitialMode(): HomeMode {
-  try {
-    const saved = localStorage.getItem(STORAGE_KEY);
-    if (saved === 'focus' || saved === 'full') return saved;
-  } catch { /* SSR ou localStorage bloqué */ }
-  return 'focus';
-}
-
 export function Home({ user, onNavigate, isGuest }: { user: User; onNavigate: (s: Screen) => void; isGuest?: boolean }) {
   const streak = user.streak ?? 0;
-  // P0-Fix-3 — Mode Focus (défaut) vs Full. Préserve l'intégralité du visuel existant :
-  // Mode Focus montre 4 blocs vitaux ; Mode Full (toggle "Voir tous les rituels")
-  // affiche l'intégralité de l'expérience v11. Aucun composant n'est modifié,
-  // on ne fait que les monter ou démonter via React.
-  const [mode, setMode] = useState<HomeMode>(getInitialMode);
-  const isFull = mode === 'full';
 
   useEffect(() => {
     pushService.init();
-    try { localStorage.setItem(STORAGE_KEY, mode); } catch { /* non-fatal */ }
-  }, [mode]);
+  }, []);
 
   // v11 — Fond adaptatif total : cosmic-bg-adapt teinté par la couleur du transit dominant.
   // Le fond MOI-MÊME change de teinte (pas un overlay halo comme v10).
@@ -126,41 +108,39 @@ export function Home({ user, onNavigate, isGuest }: { user: User; onNavigate: (s
       <div className="px-5 pt-12 pb-6 relative z-10">
       {/* P2-Fix-5 — Bandeau trial "X jours restants". Apparition conditionnelle,
           ne s'affiche PAS quand l'utilisateur a un vrai abonnement payant (>30j). */}
-      <TrialBanner user={user} />
+      <TrialBanner user={user} onNavigate={(s) => onNavigate(s as Screen)} />
 
-      {isFull && (
-        <>
-          <StreakCelebration streak={streak} />
-          <StreakShieldBadge streak={streak} onBuy={() => onNavigate('settings')} />
-        </>
-      )}
+      <StreakCelebration streak={streak} />
+      <StreakShieldBadge streak={streak} onBuy={() => onNavigate('settings')} />
 
-      {/* P0-Fix-3 — Toggle discret entre Focus (4 blocs vitaux) et Full (toute
-          l'expérience). Préserve le visuel existant en mode Full. */}
-      <div className="flex items-center justify-end mb-3 -mt-1">
-        <button
-          onClick={() => setMode(isFull ? 'focus' : 'full')}
-          aria-pressed={isFull}
-          className={`text-[11px] px-3 py-1.5 rounded-full transition-all border ${
-            isFull
-              ? 'glass-gold border-gold-500/40 text-gold-200'
-              : 'glass border-night-700/40 text-night-300 hover:text-night-100 hover:border-cosmic-500/40'
-          }`}
-        >
-          {isFull ? '◐ Mode focus' : '◐ Voir tous les rituels'}
-        </button>
-      </div>
-
-      {/* 1. HERO PREDICTION — phrase qui tue (40% écran, wow effect) — toujours visible */}
+      {/* 1. HERO PREDICTION — phrase qui tue (40% écran, wow effect) */}
       <HeroPrediction chart={chart} sunSignKey={chart.sun} firstName={firstName} streak={streak} />
 
-      {/* 2. DAILY ENERGY compact — toujours visible (essentiel et court) */}
-      <DailyEnergy compact />
+      {/* PISTE 3 — ÉPHÉMÉRIDES VIVANTES — bannière événement astro du jour */}
+      <LiveAstroBanner />
 
-      {/* 3. TAROT — différenciateur vs Co-Star — toujours visible */}
+      {/* VAL01 — Aujourd'hui en 10s : carrousel swipeable (énergie + lune + transits) */}
+      <TodayIn10s />
+
+      {/* v10 — INTENTION DU JOUR — geste rituel signature (cercle + phrase méditative) */}
+      <DailyIntention />
+
+      {/* 2. TAROT — différenciateur vs Co-Star */}
       <DailyTarot />
 
-      {/* 4. SIGNATURE FOOTER — astrolabe + CTA explorateur — toujours visible */}
+      {/* 2.b — Tarot premium (tirage en croix 3 cartes, 2,99€) */}
+      <TarotCross />
+
+      {/* 3. DAILY ENERGY — mode compact (résumé 1-ligne, pas de redondance avec Hero) */}
+      <DailyEnergy compact />
+
+      {/* VAL04 — RITUEL DU SOIR — sommeil + lune + journaling 3 lignes */}
+      <EveningRitualCard streak={streak} />
+
+      {/* PISTE 5 — MOOD FORECAST 14j (3j gratuit, 14j premium) */}
+      <MoodForecast />
+
+      {/* 4. SIGNATURE FOOTER — fusion astrolabe + CTA explorateur */}
       <SignatureFooter
         sunSignKey={chart.sun}
         moonSignKey={chart.moon}
@@ -168,34 +148,7 @@ export function Home({ user, onNavigate, isGuest }: { user: User; onNavigate: (s
         onNavigate={onNavigate}
       />
 
-      {/* ─── Mode Full : blocs additionnels repliables pour power users ─── */}
-      {isFull && (
-        <div className="mt-6 space-y-4 border-t border-night-800/40 pt-6 animate-fade-in">
-          <p className="text-night-500 text-[10px] uppercase tracking-widest text-center">
-            Tous les rituels du jour
-          </p>
-
-          {/* PISTE 3 — Éphémérides vivantes */}
-          <LiveAstroBanner />
-
-          {/* VAL01 — Aujourd'hui en 10s */}
-          <TodayIn10s />
-
-          {/* v10 — Intention du jour */}
-          <DailyIntention />
-
-          {/* 2.b — Tarot premium (tirage en croix 3 cartes, 2,99€) */}
-          <TarotCross />
-
-          {/* VAL04 — Rituel du soir */}
-          <EveningRitualCard streak={streak} />
-
-          {/* PISTE 5 — Mood Forecast 14j */}
-          <MoodForecast />
-        </div>
-      )}
-
-      {/* Panneau SECONDARY collapsable (reminder soir + optin push) */}
+      {/* Panneau SECONDARY collapsable (streak inline + reminder + optin push) */}
       <HomeSecondary streak={streak} onNavigate={onNavigate} />
       </div>
     </div>
