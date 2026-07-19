@@ -9,6 +9,20 @@ export default defineConfig({
   // Les console.log résiduels sont minimisés par la minification oxc.
   build: {
     minify: 'oxc',
+    // P0-1 — Manual chunks (function form for Vite 8 / rolldown compatibility).
+    // React/react-dom/scheduler changent rarement (1 fois par version mineure),
+    // les isoler permet un cache hit à chaque deploy du code app.
+    // Impact : réduit le chunk principal et améliore le cache hit ratio.
+    rollupOptions: {
+      output: {
+        manualChunks(id) {
+          if (id.includes('node_modules')) {
+            if (id.includes('/react-dom/') || id.includes('/scheduler/')) return 'vendor-react';
+            if (id.includes('/react/') && !id.includes('/react-dom/')) return 'vendor-react';
+          }
+        },
+      },
+    },
   },
   server: {
     host: '0.0.0.0',
