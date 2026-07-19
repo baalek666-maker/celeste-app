@@ -33,10 +33,10 @@ test.describe('Visual snapshots', () => {
   });
 
   test('tarot card interactive elements exist', async ({ page }) => {
-    // Navigate to home if not already
-    // Look for tarot-related content
-    const tarotText = await page.locator('text=/tarot|carte|tirage/i').first().textContent().catch(() => null);
-    // Not a hard requirement — just a smoke check
-    expect(true).toBe(true);
+    // Smoke check : la page d'accueil doit avoir des éléments interactifs,
+    // sans exiger qu'un texte "tarot" soit présent (le tarot est derrière paywall).
+    // On tolère un timeout rapide — l'objectif est juste que la page ne soit pas figée.
+    const buttonsCount = await page.locator('button').count();
+    expect(buttonsCount).toBeGreaterThan(0);
   });
 });

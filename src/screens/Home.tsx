@@ -49,6 +49,14 @@ export function Home({ user, onNavigate, isGuest }: { user: User; onNavigate: (s
     pushService.init();
   }, []);
 
+  // v11 — Fond adaptatif total : cosmic-bg-adapt teinté par la couleur du transit dominant.
+  // Le fond MOI-MÊME change de teinte (pas un overlay halo comme v10).
+  // Calcul mémorisé : getDailyDominantTransit a déjà son cache par jour UTC.
+  // NOTE : useMemo doit être appelé AVANT tout early return (règle des Hooks React).
+  const transit = useMemo(() => {
+    try { return getDailyDominantTransit(); } catch { return 'mercury'; }
+  }, []);
+
   // Guest mode
   if (!user.natalChart) {
     if (isGuest) {
@@ -91,12 +99,7 @@ export function Home({ user, onNavigate, isGuest }: { user: User; onNavigate: (s
   const chart = user.natalChart as NonNullable<User['natalChart']>;
   const firstName = (user.name?.split(' ')[0]) || (user.email?.split('@')[0]) || undefined;
 
-  // v11 — Fond adaptatif total : cosmic-bg-adapt teinté par la couleur du transit dominant.
-  // Le fond MOI-MÊME change de teinte (pas un overlay halo comme v10).
-  // Calcul mémorisé : getDailyDominantTransit a déjà son cache par jour UTC.
-  const transit = useMemo(() => {
-    try { return getDailyDominantTransit(); } catch { return 'mercury'; }
-  }, []);
+  // (transit calculé plus haut pour respecter l'ordre des hooks React)
   const tintsStyle = transitTints(transit);
 
   return (

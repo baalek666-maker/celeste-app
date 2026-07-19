@@ -12,7 +12,7 @@ export default defineConfig({
   workers: process.env.CI ? 1 : undefined,
   reporter: 'list',
   use: {
-    baseURL: process.env.BASE_URL || 'http://localhost:4173',
+    baseURL: process.env.BASE_URL || 'http://localhost:5173',
     trace: 'on-first-retry',
     locale: 'fr-FR',
   },
@@ -26,7 +26,7 @@ export default defineConfig({
     ? undefined
     : {
         command: 'npm run build && npm run preview',
-        url: 'http://localhost:4173',
+        url: 'http://localhost:5173',
         reuseExistingServer: !process.env.CI,
         timeout: 120_000,
       },

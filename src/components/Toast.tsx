@@ -112,7 +112,20 @@ function ToastHost() {
 export default ToastHost;
 
 // React hook version for components that want imperative calls
-export function useToast() {
-  const ref = useRef({ success: push.bind(null, 'success'), error: push.bind(null, 'error'), info: push.bind(null, 'info') });
-  return useCallback(() => ref.current, [])();
+type ToastApi = {
+  success: (message: string) => void;
+  error: (message: string) => void;
+  info: (message: string) => void;
+};
+
+export function useToast(): ToastApi {
+  const ref = useRef<ToastApi | null>(null);
+  if (ref.current === null) {
+    ref.current = {
+      success: push.bind(null, 'success'),
+      error: push.bind(null, 'error'),
+      info: push.bind(null, 'info'),
+    };
+  }
+  return ref.current;
 }
