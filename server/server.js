@@ -953,10 +953,13 @@ Génère un horoscope PERSONNALISÉ en JSON avec ce format exact:
 
 Réponds UNIQUEMENT avec le JSON, aucun texte avant ou après.`;
 
+  // P1-5 — Cap LLM latency at 15s total. Horoscope is non-critical content:
+  // the deterministic FALLBACK_HOROSCOPES is served instantly on timeout/failure.
+  // Before: 3 retries × 45s = ~150s worst case. Now: 15s single attempt.
   const data = await callLLMWithRetry([
     { role: 'system', content: systemPrompt },
     { role: 'user', content: userPrompt },
-  ], 3, 4096);
+  ], 0, 4096, {}, 15000);
   const msg = data.choices?.[0]?.message || {};
   // Try content first, then reasoning_content (some reasoning models put JSON there)
   let content = msg.content || msg.reasoning_content || '';
@@ -2347,6 +2350,9 @@ app.post('/api/horoscope', auth, async (req, res) => {
       console.log(`[horoscope] LLM miss (sun=${sunSign}, moon=${moonSign}, rising=${risingSign}, date=${today})`);
       let base;
       try {
+        // P1-5 — Cap LLM latency: 1 retry × 15s (instead of 3 × 45s default).
+        // Fallback is instant (FALLBACK_HOROSCOPES), so users never wait >15s.
+        // Worst case before fix: ~150s (45s × 4 attempts w/ backoff). Now: 15s max.
         base = await generateHoroscope(natalPositions, transits, sunSign);
       } catch (llmErr) {
         console.warn(`[horoscope] LLM failed (${llmErr.message}), using FALLBACK for sign=${sunSign}`);
