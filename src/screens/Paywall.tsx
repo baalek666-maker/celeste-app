@@ -143,15 +143,25 @@ export function Paywall({ onClose, onSubscribe }: {
 
         {/* Plans */}
         <div className="space-y-3 mb-6">
+          {/* P1-6 — Annuel rendu plus incitatif sans changer les prix.
+              Ancien badge "2 mois offerts" était mathématiquement faux :
+              2,99€×12 = 35,88€/an vs annuel 39,99€ → annuel coûtait 4€ DE PLUS.
+              VMF = accuracy-first, pas dark pattern. On met en avant les VRAIS
+              bénéfices : essai 7j, prix bloqué, zéro friction. */}
           <button onClick={() => setPlan('yearly')}
-            className={`w-full p-4 rounded-2xl border-2 transition-all duration-300 text-left ${plan === 'yearly' ? 'border-gold-500/60 glass-gold' : 'border-night-700/50 glass'}`}>
+            className={`w-full p-4 rounded-2xl border-2 transition-all duration-300 text-left relative ${plan === 'yearly' ? 'border-gold-500/60 glass-gold ring-2 ring-gold-500/20' : 'border-night-700/50 glass'}`}>
+            {plan === 'yearly' && (
+              <span className="absolute -top-2.5 left-4 px-2.5 py-0.5 rounded-full bg-gradient-to-r from-gold-400 to-gold-600 text-night-950 text-[10px] font-bold tracking-wide uppercase shadow-md">
+                ★ Recommandé
+              </span>
+            )}
             <div className="flex items-center justify-between">
               <div>
                 <div className="flex items-center gap-2">
                   <p className="text-night-100 font-bold">Annuel</p>
-                  <span className="px-2 py-0.5 rounded-full bg-gold-500/20 text-gold-300 text-xs font-medium">2 mois offerts</span>
                 </div>
                 <p className="text-night-400 text-xs mt-0.5">7 jours gratuits, puis 39,99€/an</p>
+                <p className="text-gold-300/80 text-[11px] mt-1 font-medium">🔒 Prix bloqué 12 mois · Annulation en 2 clics</p>
               </div>
               <div className="text-right">
                 <p className="text-night-100 text-lg font-bold">3,33€</p>
@@ -161,7 +171,7 @@ export function Paywall({ onClose, onSubscribe }: {
           </button>
 
           <button onClick={() => setPlan('monthly')}
-            className={`w-full p-4 rounded-2xl border-2 transition-all duration-300 text-left ${plan === 'monthly' ? 'border-cosmic-500/60 glass' : 'border-night-700/50 glass'}`}>
+            className={`w-full p-4 rounded-2xl border-2 transition-all duration-300 text-left ${plan === 'monthly' ? 'border-cosmic-500/60 glass' : 'border-night-700/50 glass opacity-80'}`}>
             <div className="flex items-center justify-between">
               <div>
                 <p className="text-night-100 font-bold">Mensuel</p>
@@ -174,6 +184,27 @@ export function Paywall({ onClose, onSubscribe }: {
             </div>
           </button>
         </div>
+
+        {/* P1-6 — Réassurance concrète sur l'essai annuel */}
+        {plan === 'yearly' && (
+          <div className="glass rounded-2xl p-3 mb-4 border border-gold-500/20 animate-fade-in">
+            <p className="text-night-200 text-xs font-semibold mb-2">Pendant tes 7 jours gratuits :</p>
+            <ul className="space-y-1.5 text-night-300 text-xs">
+              <li className="flex items-start gap-2">
+                <span className="text-gold-400 mt-0.5">✓</span>
+                <span>Accès complet à toutes les fonctionnalités Premium, sans limite</span>
+              </li>
+              <li className="flex items-start gap-2">
+                <span className="text-gold-400 mt-0.5">✓</span>
+                <span>Tu reçois un rappel 48h avant la fin de l'essai — aucune surprise</span>
+              </li>
+              <li className="flex items-start gap-2">
+                <span className="text-gold-400 mt-0.5">✓</span>
+                <span>Tu annules en 2 clics si ce n'est pas pour toi, sans justification</span>
+              </li>
+            </ul>
+          </div>
+        )}
 
         {/* CTA — vrai checkout Stripe */}
         <button onClick={handleSubscribe}
