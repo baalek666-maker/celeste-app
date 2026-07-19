@@ -2619,6 +2619,128 @@ Réponds UNIQUEMENT avec le JSON.`;
   }
 });
 
+// ─── Tarot Premium — Tirage en croix (3 cartes : Passé / Présent / Futur) ───
+// P2 MON02 — IAP 2,99€. Quota : gratuit pour premium, 1 achat = 1 tirage.
+// DB table: tarot_grants (user_id PK, paid_count, free_used, created_at)
+db.exec(`CREATE TABLE IF NOT EXISTS tarot_grants (
+  user_id INTEGER PRIMARY KEY,
+  free_used INTEGER DEFAULT 0,
+  paid_count INTEGER DEFAULT 0,
+  created_at INTEGER DEFAULT (strftime('%s','now')),
+  updated_at INTEGER DEFAULT (strftime('%s','now'))
+)`);
+
+// GET /api/tarot/cross/status — quota du user
+app.get('/api/tarot/cross/status', auth, (req, res) => {
+  const row = db.prepare('SELECT free_used, paid_count FROM tarot_grants WHERE user_id = ?').get(req.user.id);
+  const user = db.prepare('SELECT is_premium, premium_until FROM users WHERE id = ?').get(req.user.id);
+  const isPremium = !!user?.is_premium && (!user.premium_until || user.premium_until > Date.now());
+  if (!row) {
+    db.prepare('INSERT INTO tarot_grants (user_id) VALUES (?)').run(req.user.id);
+    return res.json({ freeUsed: 0, paidCount: 0, isPremium, canDraw: isPremium });
+  }
+  const canDraw = isPremium || row.paid_count > row.free_used;
+  res.json({ freeUsed: row.free_used, paidCount: row.paid_count, isPremium, canDraw });
+});
+
+// POST /api/tarot/cross/mark-paid — crédite 1 tirage après achat IAP
+app.post('/api/tarot/cross/mark-paid', auth, (req, res) => {
+  const iapSecret = req.header('x-celeste-iap-secret');
+  const expected = process.env.CELESTE_IAP_SECRET || 'DEV-IAP-SECRET';
+  if (iapSecret !== expected) return res.status(402).json({ error: 'iap_secret_invalid' });
+  const source = String(req.body?.source || 'unknown').slice(0, 16);
+  const row = db.prepare('SELECT paid_count FROM tarot_grants WHERE user_id = ?').get(req.user.id);
+  if (!row) {
+    db.prepare('INSERT INTO tarot_grants (user_id, paid_count) VALUES (?, 1)').run(req.user.id);
+  } else {
+    db.prepare('UPDATE tarot_grants SET paid_count = paid_count + 1, updated_at = strftime(\'%s\',\'now\') WHERE user_id = ?').run(req.user.id);
+  }
+  db.prepare('INSERT INTO pdf_purchases_log (user_id, source, created_at) VALUES (?, ?, strftime(\'%s\',\'now\'))')
+    .run(req.user.id, `tarot:${source}`);
+  res.json({ ok: true });
+});
+
+// POST /api/tarot/cross — tirage 3 cartes (Passé/Présent/Futur) + interprétation LLM
+app.post('/api/tarot/cross', auth, llmLimiter, async (req, res) => {
+  try {
+    const user = db.prepare('SELECT * FROM users WHERE id = ?').get(req.user.id);
+    if (!user) return res.status(404).json({ error: 'user_not_found' });
+    const isPremium = !!user.is_premium && (!user.premium_until || user.premium_until > Date.now());
+
+    // Quota check
+    const grant = db.prepare('SELECT free_used, paid_count FROM tarot_grants WHERE user_id = ?').get(req.user.id)
+      ?? { free_used: 0, paid_count: 0 };
+    const paidRemaining = grant.paid_count - grant.free_used;
+    if (!isPremium && paidRemaining <= 0) {
+      return res.status(402).json({ error: 'quota_exceeded', code: 'paywall_required', message: 'Achète un tirage en croix (2,99€)' });
+    }
+
+    // Question optionnelle
+    const question = String(req.body?.question || '').slice(0, 200);
+
+    // 3 cartes déterministes (seed: user + date + heure)
+    const now = new Date();
+    const seedBase = req.user.id * 9301 + now.getFullYear() * 49297 + (now.getMonth() + 1) * 7919 + now.getDate() * 31337 + now.getHours() * 104729;
+    const positions = ['past', 'present', 'future'];
+    const cards = positions.map((pos, i) => {
+      const cardId = Math.abs((seedBase + i * 4831) % TAROT_DECK.length);
+      const isReversed = Math.abs((seedBase + i * 1483) % 100) < 28;
+      return { position: pos, ...TAROT_DECK[cardId], isReversed };
+    });
+
+    // Récupère sun sign pour personnalisation
+    let sunSign = 'inconnu';
+    if (user?.birth_data) {
+      try {
+        const bd = safeJsonParse(user.birth_data, null, 'tarot-cross birth_data');
+        if (bd) {
+          const natal = getNatalPositions(bd);
+          sunSign = natal.sun?.sign || 'inconnu';
+        }
+      } catch (e) { /* fallback silencieux */ }
+    }
+
+    // LLM call (avec fallback si LLM down)
+    const prompt = `Tu es tarologue. Tire 3 cartes pour un(e) ${sunSign}.
+Question: "${question || 'guidance générale'}"
+Carte Passé: ${cards[0].name} ${cards[0].isReversed ? '(renversée)' : ''}
+Carte Présent: ${cards[1].name} ${cards[1].isReversed ? '(renversée)' : ''}
+Carte Futur: ${cards[2].name} ${cards[2].isReversed ? '(renversée)' : ''}
+Donne en JSON: {"past":"<50 mots>","present":"<50 mots>","future":"<50 mots>","synthesis":"<80 mots, le fil rouge>"}.
+Ton: bienveillant, sans jargon, images concrètes.`;
+
+    let reading = null;
+    try {
+      const llmResp = await callLLM(prompt, { json: true, maxTokens: 600 });
+      reading = typeof llmResp === 'string' ? safeJsonParse(llmResp, null, 'tarot-cross llm parse') : llmResp;
+    } catch (llmErr) {
+      console.warn('[tarot-cross] LLM failed, using deterministic:', llmErr.message);
+    }
+
+    // Fallback déterministe
+    if (!reading) {
+      reading = {
+        past: cards[0].isReversed ? cards[0].reversed : cards[0].upright,
+        present: cards[1].isReversed ? cards[1].reversed : cards[1].upright,
+        future: cards[2].isReversed ? cards[2].reversed : cards[2].upright,
+        synthesis: `${cards[0].archetype} → ${cards[1].archetype} → ${cards[2].archetype}. Le mouvement se fait de l'énergie ${cards[0].name} vers ${cards[2].name}.`,
+        _deterministic: true,
+      };
+    }
+
+    // Décrémente quota
+    if (!isPremium) {
+      db.prepare('UPDATE tarot_grants SET free_used = free_used + 1, updated_at = strftime(\'%s\',\'now\') WHERE user_id = ?')
+        .run(req.user.id);
+    }
+
+    res.json({ cards, reading, isPremiumDraw: isPremium, sunSign });
+  } catch (err) {
+    console.error('[tarot-cross] error:', err.message);
+    res.status(500).json({ error: 'tarot_cross_failed', message: err.message });
+  }
+});
+
 // ─── Compatibility (LLM-powered) ───────────────────────────
 app.post('/api/compatibility', auth, llmLimiter, async (req, res) => {
   try {
@@ -2925,9 +3047,21 @@ app.post('/api/streak/freeze', auth, (req, res) => {
     const qty = Math.max(1, Math.min(10, Number(req.body?.quantity) || 1));
     const u = db.prepare('SELECT streak_freezes FROM users WHERE id = ?').get(req.user.id);
     if (!u) return res.status(404).json({ error: 'user not found' });
-    const newCount = (u.streak_freezes ?? 0) + qty;
+
+    // MON01 — Gate IAP : le secret doit être fourni (iOS/Android/Stripe receipt validated client-side)
+    // Sauf si quantity est 0 (cas spécial : ajout gratuit via premium mensuel, admin, etc.)
+    const isFreeGrant = qty === 0;
+    if (!isFreeGrant) {
+      const iapSecret = req.header('x-celeste-iap-secret');
+      const expected = process.env.CELESTE_IAP_SECRET || 'DEV-IAP-SECRET';
+      if (iapSecret !== expected) return res.status(402).json({ error: 'iap_secret_invalid' });
+    }
+
+    // Free grant → +1 seulement (ne pas exploiter pour +10)
+    const addQty = isFreeGrant ? 1 : qty;
+    const newCount = (u.streak_freezes ?? 0) + addQty;
     db.prepare('UPDATE users SET streak_freezes = ? WHERE id = ?').run(newCount, req.user.id);
-    console.log(`[streak/freeze] user ${req.user.id} +${qty} freeze(s) → total ${newCount}`);
+    console.log(`[streak/freeze] user ${req.user.id} +${addQty} freeze(s) → total ${newCount}${isFreeGrant ? ' (free)' : ''}`);
     res.json({ ok: true, freezesAvailable: newCount });
   } catch (err) {
     console.error('[streak/freeze] error:', err.message);

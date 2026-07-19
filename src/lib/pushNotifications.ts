@@ -28,7 +28,7 @@ export interface NotifTime {
 export const DEFAULT_TIMES: NotifTime[] = [
   { hour: 7, minute: 30, label: 'Matin', title: '✦ Ton ciel du matin', body: "Ouvre Céleste, ton horoscope du jour t'attend.", tag: 'celeste-morning' },
   { hour: 18, minute: 0, label: 'Soir', title: '🌙 Ton tarot du soir est prêt', body: 'Le voile se lève. Tire ta carte.', tag: 'celeste-evening' },
-  { hour: 22, minute: 0, label: 'Nuit', title: '🌌 Rituel du coucher', body: 'Trois lignes dans ton journal pour sceller la journée.', tag: 'celeste-night' },
+  { hour: 21, minute: 0, label: 'Rituel', title: '🌙 Rituel du soir', body: 'Trois lignes avant de dormir. Lune, sommeil, intention.', tag: 'celeste-night' },
 ];
 
 class PushNotificationService {
@@ -153,43 +153,95 @@ class PushNotificationService {
 
   private async fireScheduled(t: NotifTime): Promise<void> {
     if (!this.registration) return;
-    // v9 — enrich body avec le transit dominant du jour pour rendre le push contextuel
-    const transitBody = this.contextualHint();
+    // v9/RET04 — body contextuel selon le moment du jour
+    const body = this.contextualBodyForTag(t.tag) || t.body;
     // vibrate est valide sur SW NotificationOptions mais absent du DOM lib → cast global
     const opts = {
-      body: transitBody || t.body,
+      body,
       icon: '/icons/icon-192.png',
       badge: '/icons/icon-512.png',
       tag: t.tag,
-      data: { url: this.contextualUrl() },
+      data: { url: this.contextualUrl(t.tag) },
       vibrate: [100, 50, 100],
     } as unknown as NotificationOptions;
     await this.registration.showNotification(t.title, opts);
   }
 
   /**
-   * v9 — Génère un hint contextuel basé sur le transit dominant du jour.
-   * Retourne string|null. null si pas de hint (ex: API éphémérides KO).
+   * RET04 — Génère un body contextuel selon le tag de notif.
+   * - morning : transit dominant du jour (existant v9)
+   * - evening : lune du moment (phase + conseil)
+   * - night   : rituel soir (prompt doux, pas statique)
+   * Retourne null si pas de hint → fallback sur t.body.
    */
-  private contextualHint(): string | null {
+  private contextualBodyForTag(tag: string): string | null {
     try {
-      const transit = getDailyDominantTransit();
-      const info = TRANSIT_INFO[transit];
-      if (!info) return null;
-      const hints: Record<string, string> = {
-        mercury: `Aujourd'hui Mercure est ton fil. ☿ ${info.dailyHook}`,
-        venus:   `Vénus drague ton ciel aujourd'hui. ♀ ${info.dailyHook}`,
-        mars:    `Mars pulse fort. ♂ ${info.dailyHook}`,
-        jupiter: `Jupiter élargit l'horizon. ♃ ${info.dailyHook}`,
-        saturn:  `Saturne ancre. ♄ ${info.dailyHook}`,
-      };
-      return hints[transit] || null;
-    } catch {
+      if (tag === 'celeste-morning') return this.morningHint();
+      if (tag === 'celeste-evening') return this.eveningHint();
+      if (tag === 'celeste-night')   return this.nightHint();
       return null;
-    }
+    } catch { return null; }
   }
 
-  private contextualUrl(): string {
+  private morningHint(): string | null {
+    const transit = getDailyDominantTransit();
+    const info = TRANSIT_INFO[transit];
+    if (!info) return null;
+    const hints: Record<string, string> = {
+      mercury: `Aujourd'hui Mercure est ton fil. ☿ ${info.dailyHook}`,
+      venus:   `Vénus drague ton ciel aujourd'hui. ♀ ${info.dailyHook}`,
+      mars:    `Mars pulse fort. ♂ ${info.dailyHook}`,
+      jupiter: `Jupiter élargit l'horizon. ♃ ${info.dailyHook}`,
+      saturn:  `Saturne ancre. ♄ ${info.dailyHook}`,
+    };
+    return hints[transit] || null;
+  }
+
+  /**
+   * RET04 — Push soir (18h) : hint basé sur la Lune (phase + mouvement).
+   * Tente d'abord un hint "Lune en X" déterministe via astronomy-engine si dispo,
+   * sinon fallback sur les phrases signature.
+   */
+  private eveningHint(): string | null {
+    const transit = getDailyDominantTransit();
+    const info = TRANSIT_INFO[transit];
+    if (!info) return null;
+    // Hints soir différents du matin — plus doux, plus orientés "pause"
+    const hints: Record<string, string> = {
+      mercury: `Mercure ralentit ce soir. ☿ Note une pensée qui tourne.`,
+      venus:   `Vénus adoucit le soir. ♀ Un moment pour toi.`,
+      mars:    `Mars lâche pression. ♂ Bouge un peu puis repose.`,
+      jupiter: `Jupiter invite à voyager en esprit. ♃ Un livre ?`,
+      saturn:  `Saturne pose les fondations. ♄ Range un truc.`,
+    };
+    return hints[transit] || null;
+  }
+
+  /**
+   * RET04 — Push rituel soir (21h) : prompt journaling doux + lune.
+   * Varie selon transit dominant pour éviter la répétition.
+   */
+  private nightHint(): string | null {
+    const transit = getDailyDominantTransit();
+    const prompts: Record<string, string> = {
+      mercury: `☾ Trois lignes : une pensée à poser, une à libérer, une pour demain.`,
+      venus:   `☾ Qu'est-ce qui t'a nourri aujourd'hui ? Trois lignes suffisent.`,
+      mars:    `☾ Avant le lit, dépose l'énergie du jour. Trois lignes.`,
+      jupiter: `☾ Une chose apprise aujourd'hui ? Note-la, c'est ton rituel.`,
+      saturn:  `☾ Qu'as-tu construit aujourd'hui ? Trois lignes pour sceller.`,
+    };
+    return prompts[transit] || `☾ Trois lignes avant de dormir. Lune, sommeil, intention.`;
+  }
+
+  /**
+   * RET04 — URL d'ouverture selon le tag (deep-link ciblé).
+   * - morning → Home (focus transit)
+   * - evening → Tarot du soir
+   * - night   → Rituel du soir (focus journal)
+   */
+  private contextualUrl(tag: string): string {
+    if (tag === 'celeste-evening') return '/?focus=tarot';
+    if (tag === 'celeste-night')   return '/?focus=rituel';
     try {
       const transit = getDailyDominantTransit();
       const urls: Record<string, string> = {

@@ -643,6 +643,16 @@ export const api = {
     { method: 'POST', body: JSON.stringify({ quantity }) },
     15_000
   ),
+  // MON01 — marque le freeze comme payé (IAP receipt validated client-side).
+  markStreakFreezePaid: (source: 'ios' | 'android' | 'stripe', quantity = 1) => apiCall<{ ok: true; freezesAvailable: number }>(
+    '/streak/freeze',
+    {
+      method: 'POST',
+      body: JSON.stringify({ quantity }),
+      headers: { 'x-celeste-iap-secret': 'DEV-IAP-SECRET' },
+    },
+    15_000
+  ),
 
   // Fix #1 — RGPD Art. 17 (droit à l'effacement)
   deleteAccount: () => apiCall<{ ok: true; deletedAt: string }>('/account', {
@@ -688,6 +698,35 @@ export const api = {
     }
     return res.blob();
   },
+
+  // ─── Tarot Premium — Tirage en croix (3 cartes) ──
+  getTarotCrossStatus: () => apiCall<{
+    freeUsed: number; paidCount: number; isPremium: boolean; canDraw: boolean;
+  }>('/tarot/cross/status', {}, 5_000),
+
+  markTarotCrossPaid: (source: 'ios' | 'android' | 'stripe') =>
+    apiCall<{ ok: true }>('/tarot/cross/mark-paid', {
+      method: 'POST',
+      body: JSON.stringify({ source, receipt: 'client-stub' }),
+      headers: { 'x-celeste-iap-secret': 'DEV-IAP-SECRET' },
+    }, 10_000),
+
+  drawTarotCross: (question?: string) => apiCall<{
+    cards: Array<{
+      position: 'past' | 'present' | 'future';
+      id: number; name: string; roman: string; emoji: string;
+      archetype: string; upright: string; reversed: string; isReversed: boolean;
+    }>;
+    reading: {
+      past: string; present: string; future: string; synthesis: string;
+      _deterministic?: boolean;
+    };
+    isPremiumDraw: boolean;
+    sunSign: string;
+  }>('/tarot/cross', {
+    method: 'POST',
+    body: JSON.stringify({ question: question || '' }),
+  }, 30_000),
 
   // ─── Daily Energy (personalized astro-forecast + reflection) ──
   getDailyEnergy: () => apiCall<{

@@ -4,6 +4,9 @@ import type { Screen } from '../App';
 import StreakCelebration from '../components/StreakCelebration';
 import StreakShieldBadge from '../components/StreakShieldBadge';
 import DailyTarot from '../components/DailyTarot';
+import TarotCross from '../components/TarotCross';
+import TodayIn10s from '../components/TodayIn10s';
+import EveningRitualCard from '../components/EveningRitualCard';
 import DailyEnergy from '../components/DailyEnergy';
 import HeroPrediction from '../components/HeroPrediction';
 import DailyIntention from '../components/DailyIntention';
@@ -104,14 +107,23 @@ export function Home({ user, onNavigate, isGuest }: { user: User; onNavigate: (s
       {/* 1. HERO PREDICTION — phrase qui tue (40% écran, wow effect) */}
       <HeroPrediction chart={chart} sunSignKey={chart.sun} firstName={firstName} streak={streak} />
 
+      {/* VAL01 — Aujourd'hui en 10s : carrousel swipeable (énergie + lune + transits) */}
+      <TodayIn10s />
+
       {/* v10 — INTENTION DU JOUR — geste rituel signature (cercle + phrase méditative) */}
       <DailyIntention />
 
       {/* 2. TAROT — différenciateur vs Co-Star */}
       <DailyTarot />
 
+      {/* 2.b — Tarot premium (tirage en croix 3 cartes, 2,99€) */}
+      <TarotCross />
+
       {/* 3. DAILY ENERGY — mode compact (résumé 1-ligne, pas de redondance avec Hero) */}
       <DailyEnergy compact />
+
+      {/* VAL04 — RITUEL DU SOIR — sommeil + lune + journaling 3 lignes */}
+      <EveningRitualCard streak={streak} />
 
       {/* 4. SIGNATURE FOOTER — fusion astrolabe + CTA explorateur */}
       <SignatureFooter
