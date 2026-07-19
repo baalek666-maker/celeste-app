@@ -28,6 +28,7 @@ export default defineConfig({
       use: { ...devices['Desktop Chrome'] },
     },
   ],
+  globalSetup: './tests/e2e/global-setup.ts',
   webServer: {
     command: 'npm run build && npm run preview',
     url: 'http://localhost:5173',
