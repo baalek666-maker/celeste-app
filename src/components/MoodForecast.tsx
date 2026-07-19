@@ -15,7 +15,6 @@
 import { useEffect, useState } from 'react';
 import { api } from '../lib/api';
 import { toast } from './Toast';
-import PremiumBadge from './PremiumBadge';
 
 interface DayMood {
   date: string;
@@ -122,7 +121,11 @@ export default function MoodForecast() {
           <h2 className="font-display text-lg text-gold-100">Météo de ton ciel</h2>
           <p className="text-xs text-night-400">14 jours d'avance sur ton humeur</p>
         </div>
-        {!isPremium && <PremiumBadge label="3j / 14j" />}
+        {!isPremium && (
+          <span className="text-xs px-2 py-1 rounded-full font-medium bg-amber-100 text-amber-800">
+            3j / 14j
+          </span>
+        )}
       </header>
 
       {/* Mini-chart courbe */}

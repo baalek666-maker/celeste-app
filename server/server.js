@@ -19,6 +19,28 @@ if (SENTRY_DSN) {
     environment: process.env.NODE_ENV || 'development',
     tracesSampleRate: Number(process.env.SENTRY_TRACES_RATE || 0.1),
     release: process.env.npm_package_version || '1.0.0',
+    // TEC01.b — Filtre PII : mots de passe, JWT, refresh tokens, secrets
+    // NE JAMAIS envoyer ces infos à Sentry.
+    beforeSend(event) {
+      try {
+        if (event.request?.data) {
+          const data = event.request.data;
+          delete data.password;
+          delete data.token;
+          delete data.refreshToken;
+          delete data.receipt;
+          delete data.iapSecret;
+        }
+        if (event.extra) {
+          for (const k of Object.keys(event.extra)) {
+            if (/password|token|secret|jwt|receipt/i.test(k)) delete event.extra[k];
+          }
+        }
+      } catch {
+        /* ne jamais laisser beforeSend faire crasher Sentry */
+      }
+      return event;
+    },
   });
   console.log('[sentry] Monitoring actif');
 } else {
