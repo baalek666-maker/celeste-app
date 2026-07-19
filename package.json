@@ -8,6 +8,7 @@
     "build": "tsc -b && vite build",
     "lint": "oxlint",
     "preview": "vite preview",
+    "test:unit": "node server/test-unit.mjs",
     "test:helpers": "node server/test-helpers.mjs",
     "test:e2e": "playwright test",
     "test:e2e:ui": "playwright test --ui"

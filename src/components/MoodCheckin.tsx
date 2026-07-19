@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react';
 import { api } from '../lib/api';
+import { toast } from '../components/Toast';
 
 const MOODS = [
   { emoji: '😔', score: 1, label: 'Difficile' },
@@ -67,8 +68,10 @@ export default function MoodCheckin() {
       setCheckedIn(true);
       setTodayData({ moodEmoji: mood.emoji, moodScore: selectedMood, energyScore: selectedEnergy });
       // Refresh stats
-      api.getMoodStats(30).then(setStats).catch(() => {});
-    } catch { /* silent */ }
+      api.getMoodStats(30).then(setStats).catch(() => { /* refresh secondaire : silencieux */ });
+    } catch (err) {
+      toast.error('Check-in non enregistré — réessaie dans quelques secondes.');
+    }
     finally { setBusy(false); }
   };
 

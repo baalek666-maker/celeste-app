@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from 'react';
 import { api } from '../lib/api';
+import { toast } from '../components/Toast';
 
 type DailyEnergy = {
   date: string;
@@ -59,7 +60,7 @@ export default function DailyEnergy({ compact = false }: { compact?: boolean } =
           setSavedReflection(true);
         }
       })
-      .catch(() => {})
+      .catch((err) => { toast.error('Énergie du jour indisponible — tu peux réessayer dans un instant.'); })
       .finally(() => { if (alive) setLoading(false); });
     return () => { alive = false; };
   }, []);

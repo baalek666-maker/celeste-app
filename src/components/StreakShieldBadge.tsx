@@ -12,8 +12,8 @@
  */
 import { useEffect, useState } from 'react';
 import { api } from '../lib/api';
+import { toast } from '../components/Toast';
 import { startConsumableCheckout } from '../lib/payment';
-import { toast } from './Toast';
 
 interface StreakStatus {
   count: number;
@@ -38,7 +38,7 @@ export function StreakShieldBadge({ streak = 0, onBuy }: StreakShieldBadgeProps)
   const refresh = () => {
     api.getStreakStatus()
       .then(setStatus)
-      .catch(() => {})
+      .catch((err) => { toast.error('Statut de streak indisponible — réessaie dans un instant.'); })
       .finally(() => setLoading(false));
   };
   useEffect(refresh, [streak]);

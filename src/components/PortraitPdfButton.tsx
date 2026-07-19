@@ -9,7 +9,7 @@
 import { useEffect, useState } from 'react';
 import { api } from '../lib/api';
 import { startConsumableCheckout } from '../lib/payment';
-import { toast } from './Toast';
+import { toast } from '../components/Toast';
 
 export function PortraitPdfButton() {
   const [status, setStatus] = useState<{
@@ -23,7 +23,7 @@ export function PortraitPdfButton() {
     setLoading(true);
     api.getPortraitPdfStatus()
       .then(setStatus)
-      .catch(() => {})
+      .catch((err) => { toast.error('Statut du portrait PDF indisponible — réessaie dans un instant.'); })
       .finally(() => setLoading(false));
   };
   useEffect(refresh, []);

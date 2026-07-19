@@ -11,7 +11,7 @@
 import { useEffect, useState } from 'react';
 import { api } from '../lib/api';
 import { startConsumableCheckout } from '../lib/payment';
-import { toast } from './Toast';
+import { toast } from '../components/Toast';
 
 interface Card {
   position: 'past' | 'present' | 'future';
@@ -42,7 +42,7 @@ export default function TarotCross() {
   const refresh = () => {
     api.getTarotCrossStatus()
       .then(setQuota)
-      .catch(() => {})
+      .catch((err) => { toast.error('Tirage croix indisponible — réessaie dans un instant.'); })
       .finally(() => setLoading(false));
   };
   useEffect(refresh, []);

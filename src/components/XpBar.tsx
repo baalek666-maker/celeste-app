@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from 'react';
 import { api } from '../lib/api';
+import { toast } from '../components/Toast';
 
 type GamificationStatus = Awaited<ReturnType<typeof api.getGamificationStatus>>;
 
@@ -27,7 +28,7 @@ export default function XpBar() {
         prevLevel.current = d.level;
         setData(d);
       })
-      .catch(() => {})
+      .catch((err) => { toast.error('Progression indisponible — réessaie dans quelques secondes.'); })
       .finally(() => {
         if (active) setLoading(false);
       });

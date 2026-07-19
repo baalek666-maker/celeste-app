@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react';
 import { api, type LunarIntention } from '../lib/api';
+import { toast } from '../components/Toast';
 
 type LunarStatus = {
   moonPhase: { name: string; emoji: string; description: string; age: number };
@@ -23,7 +24,7 @@ export default function LunarCycle() {
     let alive = true;
     api.getLunarStatus()
       .then(s => { if (alive) setStatus(s); })
-      .catch(() => {})
+      .catch((err) => { toast.error('Cycle lunaire indisponible — réessaie dans un instant.'); })
       .finally(() => { if (alive) setLoading(false); });
     return () => { alive = false; };
   }, []);

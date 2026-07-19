@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react';
 import { api } from '../lib/api';
+import { toast } from '../components/Toast';
 
 type Badge = {
   id: string; emoji: string; title: string; desc: string;
@@ -38,7 +39,7 @@ export default function BadgeGrid({ badges }: { badges?: Badge[] }) {
         setEarned(d.earnedCount ?? 0);
         setTotal(d.totalCount ?? 0);
       })
-      .catch(() => {})
+      .catch((err) => { toast.error('Badges indisponibles — réessaie dans quelques secondes.'); })
       .finally(() => { if (alive) setLoading(false); });
     return () => { alive = false; };
   }, [badges]);
