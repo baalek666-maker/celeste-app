@@ -3,6 +3,8 @@ import type { User, ZodiacSign, BirthData, CompatibilityResult } from '../types'
 import { api } from '../lib/api';
 import { ZODIAC_SIGNS, ZODIAC_ORDER } from '../data/zodiac';
 import { Skeleton, SkeletonCard } from '../components/Skeleton';
+import { CitySearch } from '../components/CitySearch';
+import type { GeoPlace } from '../lib/geocode';
 
 // Representative dates per sign (used in quick mode as approximation only).
 // NOTE: in quick mode the moon is computed by the backend from this date, so
@@ -14,23 +16,11 @@ const SIGN_REPRESENTATIVE_DATES: Record<string, string> = {
   capricorn: '2000-01-05', aquarius: '2000-02-05', pisces: '2000-03-05',
 };
 
-// Simplified: user enters partner's date + place (like onboarding-lite)
-const CITIES = [
-  { city: 'Paris', country: 'France', lat: 48.8566, lng: 2.3522, tz: 2 },
-  { city: 'Marseille', country: 'France', lat: 43.2965, lng: 5.3698, tz: 2 },
-  { city: 'Lyon', country: 'France', lat: 45.7640, lng: 4.8357, tz: 2 },
-  { city: 'Toulouse', country: 'France', lat: 43.6047, lng: 1.4442, tz: 2 },
-  { city: 'Nice', country: 'France', lat: 43.7102, lng: 7.2620, tz: 2 },
-  { city: 'Nantes', country: 'France', lat: 47.2184, lng: -1.5536, tz: 2 },
-  { city: 'Bordeaux', country: 'France', lat: 44.8378, lng: -0.5792, tz: 2 },
-  { city: 'Lille', country: 'France', lat: 50.6292, lng: 3.0573, tz: 2 },
-  { city: 'Genève', country: 'Suisse', lat: 46.2044, lng: 6.1432, tz: 2 },
-  { city: 'Bruxelles', country: 'Belgique', lat: 50.8503, lng: 4.3517, tz: 2 },
-  { city: 'Montréal', country: 'Canada', lat: 45.5017, lng: -73.5673, tz: -4 },
-  { city: 'New York', country: 'États-Unis', lat: 40.7128, lng: -74.0060, tz: -4 },
-  { city: 'Londres', country: 'Royaume-Uni', lat: 51.5074, lng: -0.1278, tz: 1 },
-  { city: 'Berlin', country: 'Allemagne', lat: 52.5200, lng: 13.4050, tz: 2 },
-];
+// Quick-mode fallback city (Paris) for sign-based comparison only.
+// Detailed mode now uses any city in the world via CitySearch/Nominatim.
+const QUICK_FALLBACK = {
+  city: 'Paris', country: 'France', lat: 48.8566, lng: 2.3522, tz: 2,
+};
 
 export function Compatibility({ user }: { user: User }) {
   const [mode, setMode] = useState<'quick' | 'detailed'>('quick');
@@ -38,7 +28,7 @@ export function Compatibility({ user }: { user: User }) {
   const [theirSign, setTheirSign] = useState<ZodiacSign>('leo');
   const [pDate, setPDate] = useState('');
   const [pTime, setPTime] = useState('');
-  const [pCityIdx, setPCityIdx] = useState(0);
+  const [pPlace, setPPlace] = useState<GeoPlace | null>(null);
   const [result, setResult] = useState<CompatibilityResult | null>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
@@ -71,15 +61,22 @@ export function Compatibility({ user }: { user: User }) {
       let partnerData: BirthData;
 
       if (mode === 'detailed') {
-        const c = CITIES[pCityIdx];
+        if (!pPlace) {
+          setError('Sélectionne la ville de naissance de l\'autre personne');
+          setLoading(false);
+          return;
+        }
+        // Timezone offset already computed by Nominatim (or longitude-based
+        // fallback in lib/geocode). DST-aware when IANA name is provided.
+        const tzOffset = pPlace.tzOffset;
         partnerData = {
           date: pDate,
           time: pTime || '12:00',
-          city: c.city,
-          country: c.country,
-          latitude: c.lat,
-          longitude: c.lng,
-          timezone: c.tz,
+          city: pPlace.city,
+          country: pPlace.country,
+          latitude: pPlace.latitude,
+          longitude: pPlace.longitude,
+          timezone: tzOffset,
         };
       } else {
         // Quick mode: use a representative date for the chosen sign. The
@@ -88,11 +85,11 @@ export function Compatibility({ user }: { user: User }) {
         partnerData = {
           date: SIGN_REPRESENTATIVE_DATES[theirSign],
           time: '12:00',
-          city: 'Paris',
-          country: 'France',
-          latitude: 48.8566,
-          longitude: 2.3522,
-          timezone: 2,
+          city: QUICK_FALLBACK.city,
+          country: QUICK_FALLBACK.country,
+          latitude: QUICK_FALLBACK.lat,
+          longitude: QUICK_FALLBACK.lng,
+          timezone: QUICK_FALLBACK.tz,
         };
       }
 
@@ -226,10 +223,11 @@ export function Compatibility({ user }: { user: User }) {
                 placeholder="Heure (optionnel)"
                 className="w-full py-3.5 px-4 rounded-2xl glass border border-night-700 text-night-100 focus:border-cosmic-500 focus:outline-none" />
               <p className="text-night-400 text-xs uppercase tracking-widest">Ville</p>
-              <select value={pCityIdx} onChange={e => setPCityIdx(Number(e.target.value))}
-                className="w-full py-3.5 px-4 rounded-2xl glass border border-night-700 text-night-100 focus:border-cosmic-500 focus:outline-none">
-                {CITIES.map((c, i) => <option key={c.city + i} value={i} className="bg-night-900">{c.city}</option>)}
-              </select>
+              <CitySearch
+                placeholder="🔎 Rechercher une ville (ex: Fort-de-France, Dakar...)"
+                onSelect={(place) => setPPlace(place)}
+                value={pPlace}
+              />
             </div>
           )}
 

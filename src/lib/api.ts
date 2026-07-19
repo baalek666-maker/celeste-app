@@ -632,6 +632,41 @@ export const api = {
     method: 'GET',
   }, 15_000, { bypassOfflineQueue: true }),
 
+  // ─── P0 #3 — Portrait astral PDF (9,99€, 1 offert à l'inscription) ──
+  getPortraitPdfStatus: () => apiCall<{
+    freeUsed: number;
+    freeQuota: number;
+    paidCount: number;
+    canDownload: boolean;
+  }>('/portrait/pdf/status', {}, 5_000),
+
+  /**
+   * Marque un paiement IAP (reçu Apple/Google/Stripe validé côté client).
+   * En prod, remplacer le stub par une vraie validation Receipt serveur.
+   */
+  markPortraitPdfPaid: (source: 'ios' | 'android' | 'stripe') =>
+    apiCall<{ ok: true; paidCount: number; canDownload: boolean }>(
+      '/portrait/pdf/mark-paid',
+      {
+        method: 'POST',
+        body: JSON.stringify({ source, receipt: 'client-stub' }),
+        headers: { 'x-celeste-iap-secret': 'DEV-IAP-SECRET' },
+      },
+      10_000
+    ),
+
+  downloadPortraitPdf: async (): Promise<Blob> => {
+    const token = getToken();
+    const headers: Record<string, string> = {};
+    if (token) headers['Authorization'] = `Bearer ${token}`;
+    const res = await fetch(apiUrl('/portrait/pdf'), { headers });
+    if (!res.ok) {
+      const text = await res.text().catch(() => '');
+      throw new Error(`Erreur PDF (${res.status}): ${text || res.statusText}`);
+    }
+    return res.blob();
+  },
+
   // ─── Daily Energy (personalized astro-forecast + reflection) ──
   getDailyEnergy: () => apiCall<{
     date: string;

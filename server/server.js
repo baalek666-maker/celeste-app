@@ -18,6 +18,7 @@ import { runMigrations } from './migrate.js';
 import { createNotificationsRouter } from './routes/notifications.js';
 import { createJournalRouter } from './routes/journal.js';
 import { createAccountRouter } from './routes/account.js';
+import { createPortraitPdfRouter } from './routes/portrait-pdf.js';
 import { createProfilesRouter } from './routes/profiles.js';
 import { createDailyEnergyRouter } from './routes/daily-energy.js';
 import { createLunarCycleRouter } from './routes/lunar-cycle.js';
@@ -54,7 +55,7 @@ const allowedOrigins = process.env.CORS_ORIGIN
 // ─── Web Push (VAPID) setup ────────────────────────────────
 import webpush from 'web-push';
 import { sendVerificationEmail, generateToken, isEmailConfigured } from './email.js';
-import { runAstroEventsJob } from './cron-events.js';
+import { detectAstroEvents, runAstroEventsJob } from './cron-events.js';
 const VAPID_PUBLIC_KEY = process.env.VAPID_PUBLIC_KEY;
 const VAPID_PRIVATE_KEY = process.env.VAPID_PRIVATE_KEY;
 const VAPID_SUBJECT = process.env.VAPID_SUBJECT || 'mailto:admin@example.com';
@@ -134,6 +135,18 @@ db.exec(`
   );
 
   -- Migration safe : ajout colonnes Stripe si table users pré-existait sans elles
+`);
+
+// P0 #3 — Portrait PDF purchase log (audit des achats one-shot IAP)
+db.exec(`
+  CREATE TABLE IF NOT EXISTS pdf_purchases_log (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    user_id INTEGER NOT NULL,
+    source TEXT NOT NULL,
+    created_at INTEGER NOT NULL,
+    FOREIGN KEY (user_id) REFERENCES users(id)
+  );
+  CREATE INDEX IF NOT EXISTS idx_pdf_purchases_user ON pdf_purchases_log(user_id, created_at DESC);
 `);
 
 // Safe migrations (idempotent)
@@ -1979,6 +1992,7 @@ app.get('/api/profile', auth, (req, res) => {
 // ─── GDPR: Data Export (Art. 20 — portabilité) ───────────
 // Returns all user data as JSON. User can download and import elsewhere.
 app.use('/api/account', createAccountRouter({ db, auth }));
+app.use('/api/portrait/pdf', createPortraitPdfRouter({ db, auth }));
 
 // ─── P2#15 — Yearly Recap ─────────────────────────────────
 // GET /api/yearly-recap?year=YYYY
@@ -3877,6 +3891,88 @@ function startCronScheduler() {
 }
 
 startCronScheduler();
+
+// P0 #4 — Admin debug : dry-run du job événements astro.
+// Affiche ce qui serait push à qui (sans envoyer).
+app.post('/api/admin/astro-events/preview', adminAuth, (req, res) => {
+  try {
+    const events = detectAstroEvents(new Date(), 24);
+    const today = new Date().toISOString().split('T')[0];
+
+    const users = db.prepare(`
+      SELECT DISTINCT u.id, u.email, u.is_premium, u.natal_chart,
+             u.last_astro_event_push,
+             (SELECT COUNT(*) FROM push_subscriptions ps WHERE ps.user_id = u.id) AS subs_count
+      FROM users u
+    `).all();
+
+    const candidates = users
+      .filter(u => u.last_astro_event_push !== today && u.subs_count > 0)
+      .map(u => {
+        let natal = {};
+        try { natal = u.natal_chart ? JSON.parse(u.natal_chart) : {}; } catch { /* ignore */ }
+        return {
+          ...u,
+          sun_sign: natal.sunSign || null,
+          moon_sign: natal.moonSign || null,
+          rising_sign: natal.risingSign || null,
+        };
+      });
+
+    function personalizeEvent(event, user) {
+      const sun = (user.sun_sign || '').toLowerCase();
+      const moon = (user.moon_sign || '').toLowerCase();
+      const rising = (user.rising_sign || '').toLowerCase();
+      if (event.type === 'lunar_eclipse' && (moon === 'cancer' || rising === 'cancer')) {
+        return `${event.body}\n→ Céleste: "Éclipse sur ton axe sensible. Tes émotions passent au crible."`;
+      }
+      if (event.type === 'moon_phase' && (event.title.includes('Pleine Lune') || event.title.includes('🌕'))) {
+        if (sun && rising) {
+          return `${event.body}\n→ Céleste: "Ton Ascendant en ${user.rising_sign} parle à ton corps en premier."`;
+        }
+      }
+      return event.body + '\n→ Céleste: fallback générique.';
+    }
+
+    const preview = candidates.map(user => ({
+      user_id: user.id,
+      email: user.email.replace(/(.).(@.).+(@).+/, '$1***$2$3***'),
+      is_premium: !!user.is_premium,
+      profile: { sun: user.sun_sign, moon: user.moon_sign, rising: user.rising_sign },
+      subs: user.subs_count,
+      would_receive: events.map(e => ({
+        type: e.type,
+        title: `${user.is_premium ? '✨' : '🌟'} ${e.title}`,
+        body_preview: personalizeEvent(e, user),
+        when: e.when,
+      })),
+    }));
+
+    res.json({
+      ok: true,
+      today,
+      events_found: events.length,
+      events: events.map(e => ({ type: e.type, title: e.title, when: e.when })),
+      candidates_count: candidates.length,
+      would_push_count: events.length * candidates.length,
+      users: preview,
+    });
+  } catch (err) {
+    console.error('[astro-events/preview]', err);
+    res.status(500).json({ error: 'preview_failed', message: err.message });
+  }
+});
+
+// P0 #4 — Admin debug : force-run (envoi réel).
+app.post('/api/admin/astro-events/run', adminAuth, async (req, res) => {
+  try {
+    await runAstroEventsJob(db, sendPushToUser);
+    res.json({ ok: true, ran_at: new Date().toISOString() });
+  } catch (err) {
+    console.error('[astro-events/run]', err);
+    res.status(500).json({ error: 'run_failed', message: err.message });
+  }
+});
 
 // ─── Serve static frontend in production ───────────────────
 // Hashed assets (/assets/index-XXXXXX.js) can be cached forever — content-addressed

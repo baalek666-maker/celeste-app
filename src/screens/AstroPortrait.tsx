@@ -1,6 +1,7 @@
 import { useState, useEffect, useCallback, useMemo } from 'react';
 import { api } from '../lib/api';
 import { useSpeech } from '../lib/useSpeech';
+import PortraitPdfButton from '../components/PortraitPdfButton';
 
 type Section = { heading: string; paragraphs: string[] };
 
@@ -206,7 +207,7 @@ export default function AstroPortrait({ onBack }: { onBack?: () => void } = {}) 
 
             {/* colophon / word-count badge */}
             <div className="mt-12 ornament-divider mb-5" />
-            <div className="flex items-center justify-center gap-3 text-xs text-night-500 tracking-wide">
+            <div className="flex items-center justify-center gap-3 text-xs text-night-500 tracking-wide mb-6">
               <span>~{wordCount.toLocaleString('fr-FR')} mots</span>
               {cached && (
                 <>
@@ -217,6 +218,14 @@ export default function AstroPortrait({ onBack }: { onBack?: () => void } = {}) 
                 </>
               )}
             </div>
+
+            {/* P0 #3 — Portrait PDF download + IAP */}
+            <div className="mb-2">
+              <PortraitPdfButton />
+            </div>
+            <p className="text-center text-night-600 text-[10px] mt-2">
+              Le PDF conserve ta mise en page et ton nom. Idéal à imprimer ou offrir.
+            </p>
           </article>
         )}
       </div>

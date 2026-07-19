@@ -212,19 +212,98 @@ export async function runAstroEventsJob(db, sendPushToUser) {
 
     const today = new Date().toISOString().split('T')[0];
 
-    // Users premium avec push activé et qui n'ont pas déjà reçu l'event aujourd'hui
-    // (on stocke la date du dernier push astro dans last_astro_event_push)
-    const users = db.prepare(`
-      SELECT DISTINCT u.id, u.last_astro_event_push
+    // P0 #4 — Inclure les users FREE (qui ont activé push) en plus des premium.
+    // Filtre : pas de push si déjà reçu aujourd'hui.
+    // NB : sun/moon/rising sont dans users.natal_chart (TEXT JSON), pas en colonnes.
+    const rawUsers = db.prepare(`
+      SELECT DISTINCT u.id, u.is_premium, u.natal_chart,
+             u.last_astro_event_push
       FROM users u
       JOIN push_subscriptions ps ON ps.user_id = u.id
-      WHERE u.is_premium = 1
-        AND (u.last_astro_event_push IS NULL OR u.last_astro_event_push != ?)
+      WHERE (u.last_astro_event_push IS NULL OR u.last_astro_event_push != ?)
     `).all(today);
+
+    // Hydrate les signes depuis natal_chart JSON pour la personnalisation.
+    const users = rawUsers.map(u => {
+      let natal = {};
+      try { natal = u.natal_chart ? JSON.parse(u.natal_chart) : {}; } catch { /* ignore */ }
+      return {
+        ...u,
+        sun_sign: natal.sunSign || null,
+        moon_sign: natal.moonSign || null,
+        rising_sign: natal.risingSign || null,
+      };
+    });
 
     if (users.length === 0) {
       console.log(`[cron:astro-events] ${events.length} événement(s), 0 user éligible (déjà notifiés ou pas de push).`);
       return;
+    }
+
+    /**
+     * P0 #4 — Personnalisation par profil astro.
+     *
+     * Pour chaque event, on adapte le `body` à la configuration natale de l'user :
+     *  - Nouvelle lune en Cancer + user Soleil Lion → "fort impact sur ta maison 11"
+     *  - Éclipse + user Lune Vierge → "tes émotions passent au crible ce week-end"
+     *  - Rétrograde Mercure → on suggère d'éviter les contrats (universel)
+     *
+     * Si on n'arrive pas à personnaliser, on garde le body générique mais on ajoute
+     * une ligne "Prends une minute pour voir comment ça touche ton thème."
+     */
+    function personalizeEvent(event, user) {
+      const sun = (user.sun_sign || '').toLowerCase();
+      const moon = (user.moon_sign || '').toLowerCase();
+      const rising = (user.rising_sign || '').toLowerCase();
+
+      // Titres personnalisés par évènement majeur
+      if (event.type === 'lunar_eclipse') {
+        if (moon === 'cancer' || rising === 'cancer') {
+          return { ...event,
+            body: `Éclipse de lune sur ton axe sensible. Tes émotions passent au crible ce week-end — note ce qui remonte, sans réagir.`,
+          };
+        }
+        if (moon === 'capricorn' || rising === 'capricorn') {
+          return { ...event,
+            body: `Éclipse en Cancer — Capri­corne de Lune ou d'Ascendant : ce qui t'a retenu trop longtemps demande à sortir.`,
+          };
+        }
+      }
+
+      if (event.type === 'moon_phase') {
+        if (event.title.includes('Pleine Lune') || event.title.includes('🌕')) {
+          if (sun === moon) {
+            return { ...event,
+              body: `Pleine lune sur ton propre signe. Tes intentions du mois dernier se révèlent ce soir — laisse émerger ce qui demande à être vu.`,
+            };
+          }
+          if (rising) {
+            return { ...event,
+              body: `Pleine lune. Si tu sens une tension inhabituelle, ton Ascendant en ${user.rising_sign} indique que c'est ton corps qui parle en premier.`,
+            };
+          }
+        }
+        if (event.title.includes('Nouvelle Lune')) {
+          if (sun === 'cancer' || sun === 'capricorn') {
+            return { ...event,
+              body: `Nouvelle lune dans ton axe soin-travail. Pose une intention concrète pour les 4 semaines à venir — santé, mieux-être, engagement.`,
+            };
+          }
+        }
+      }
+
+      if (event.type === 'retrograde_start' && event.title.includes('Mercure')) {
+        if (['vierge', 'gemini'].includes(sun) || ['vierge', 'gemini'].includes(rising)) {
+          return { ...event,
+            body: `Mercure rétrograde — tu es Mercurien (Soleil ou Ascendant en Gémeaux/Vierge). Ralentis les signatures de contrat cette semaine, clarifie avant d'engager.`,
+          };
+        }
+      }
+
+      // Fallback générique — toujours inviter à relier à son thème
+      return { ...event,
+        body: `${event.body}\n\nPrends une minute ce soir : où ton thème natal éclaire-t-il ce qui arrive ?`,
+      };
     }
 
     let sent = 0;
@@ -232,9 +311,10 @@ export async function runAstroEventsJob(db, sendPushToUser) {
       // On envoie au maximum le 1er événement majeur (pour ne pas spammer)
       // Sauf si c'est une éclipse + une pleine lune (on combine)
       for (const user of users) {
+        const personalized = personalizeEvent(event, user);
         const payload = {
-          title: `✨ ${event.title}`,
-          body: event.body,
+          title: `${user.is_premium ? '✨' : '🌟'} ${personalized.title}`,
+          body: personalized.body,
           icon: '/icon-192.png',
           badge: '/badge-72.png',
           tag: `celeste-astro-${event.type}-${today}`,

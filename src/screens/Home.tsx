@@ -2,6 +2,7 @@ import { useEffect, useMemo } from 'react';
 import type { User } from '../types';
 import type { Screen } from '../App';
 import StreakCelebration from '../components/StreakCelebration';
+import StreakShieldBadge from '../components/StreakShieldBadge';
 import DailyTarot from '../components/DailyTarot';
 import DailyEnergy from '../components/DailyEnergy';
 import HeroPrediction from '../components/HeroPrediction';
@@ -97,6 +98,7 @@ export function Home({ user, onNavigate, isGuest }: { user: User; onNavigate: (s
     <div className="cosmic-bg-adapt star-field min-h-screen text-night-100 pb-24" style={tintsStyle}>
       <div className="px-5 pt-12 pb-6 relative z-10">
       <StreakCelebration streak={streak} />
+      <StreakShieldBadge streak={streak} onBuy={() => onNavigate('settings')} />
 
       {/* v8 — 4 BLOCS MAX DANS LE FLUX PRINCIPAL */}
       {/* 1. HERO PREDICTION — phrase qui tue (40% écran, wow effect) */}

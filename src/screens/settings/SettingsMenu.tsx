@@ -10,6 +10,7 @@ import EmailVerificationBanner from '../../components/EmailVerificationBanner';
 import ReferralCard from '../../components/ReferralCard';
 import { YearlyRecapCollapsible } from '../../components/YearlyRecap';
 import ExpertModeToggle from '../../components/ExpertModeToggle';
+import StreakShopRow from '../../components/StreakShopRow';
 // eslint-disable-next-line @typescript-eslint/ban-ts-comment
 // @ts-ignore — Vite resolves this to the package.json version at build time.
 import pkg from '../../../package.json';
@@ -311,6 +312,11 @@ export function SettingsMenu({
 
       <div className="mt-2">
         <ReferralCard />
+      </div>
+
+      {/* P0 #2 — Streak Freeze : boutique IAP 0,99€ */}
+      <div className="mt-2">
+        <StreakShopRow />
       </div>
 
       {/* P2#15 — Yearly Recap (dépliable) */}
