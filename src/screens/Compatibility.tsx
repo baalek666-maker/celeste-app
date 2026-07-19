@@ -4,6 +4,7 @@ import { api } from '../lib/api';
 import { ZODIAC_SIGNS, ZODIAC_ORDER } from '../data/zodiac';
 import { Skeleton, SkeletonCard } from '../components/Skeleton';
 import { CitySearch } from '../components/CitySearch';
+import { CompatInviteButton } from '../components/CompatInviteButton';
 import type { GeoPlace } from '../lib/geocode';
 
 // Representative dates per sign (used in quick mode as approximation only).
@@ -140,6 +141,9 @@ export function Compatibility({ user }: { user: User }) {
 
       {!result && !loading && (
         <>
+          {/* P1 DUO — Invitation partenaire (lien partageable) */}
+          <CompatInviteButton context={context} />
+
           {/* Context selector */}
           <div className="mb-5">
             <p className="text-night-400 text-xs uppercase tracking-widest mb-3">Type de relation</p>

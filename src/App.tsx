@@ -20,8 +20,9 @@ const Paywall = lazy(() => import('./screens/Paywall').then(m => ({ default: m.P
 const Settings = lazy(() => import('./screens/Settings').then(m => ({ default: m.Settings })));
 const Explorer = lazy(() => import('./screens/Explorer').then(m => ({ default: m.Explorer })));
 const Onboarding = lazy(() => import('./screens/Onboarding').then(m => ({ default: m.Onboarding })));
+const CompatRedeem = lazy(() => import('./screens/CompatRedeem').then(m => ({ default: m.CompatRedeem })));
 
-export type Screen = 'landing' | 'auth' | 'onboarding' | 'home' | 'chart' | 'horoscope' | 'compatibility' | 'journal' | 'explorer' | 'paywall' | 'settings';
+export type Screen = 'landing' | 'auth' | 'onboarding' | 'home' | 'chart' | 'horoscope' | 'compatibility' | 'compat-redeem' | 'journal' | 'explorer' | 'paywall' | 'settings';
 
 // Detect network-level failures (API unreachable) vs. auth failures.
 function isNetworkError(err: unknown): boolean {
@@ -201,6 +202,7 @@ export function App() {
   const [apiDown, setApiDown] = useState<boolean>(false);
   const [bootStuck, setBootStuck] = useState<boolean>(false);
   const [isGuest, setIsGuest] = useState<boolean>(false);
+  const [compatInviteToken, setCompatInviteToken] = useState<string | null>(null);
 
   // v9 — Listener global pour navigation depuis CTA contextuel
   useEffect(() => {
@@ -208,8 +210,19 @@ export function App() {
       const target = (e as CustomEvent<Screen>).detail;
       if (typeof target === 'string') setScreen(target);
     };
+    const compatHandler = (e: Event) => {
+      const token = (e as CustomEvent<string>).detail;
+      if (typeof token === 'string' && token.length > 5) {
+        setCompatInviteToken(token);
+        setScreen('compat-redeem');
+      }
+    };
     window.addEventListener('celeste:navigate', handler);
-    return () => window.removeEventListener('celeste:navigate', handler);
+    window.addEventListener('celeste:compat-redeem', compatHandler);
+    return () => {
+      window.removeEventListener('celeste:navigate', handler);
+      window.removeEventListener('celeste:compat-redeem', compatHandler);
+    };
   }, []);
 
   // v10 — Deep-link push : si l'URL contient ?focus=<screen>, on y va directement.
@@ -219,8 +232,13 @@ export function App() {
     try {
       const params = new URLSearchParams(window.location.search);
       const focus = params.get('focus');
+      // P1 DUO — deep-link invitation compatibilité (lien partagé)
+      const inviteToken = params.get('invite');
+      if (inviteToken) {
+        window.dispatchEvent(new CustomEvent('celeste:compat-redeem', { detail: inviteToken }));
+      }
       if (!focus) return;
-      const allowed: Screen[] = ['home', 'chart', 'horoscope', 'compatibility', 'journal', 'explorer', 'settings'];
+      const allowed: Screen[] = ['home', 'chart', 'horoscope', 'compatibility', 'compat-redeem', 'journal', 'explorer', 'settings'];
       if (allowed.includes(focus as Screen)) {
         setScreen(focus as Screen);
       }
@@ -538,6 +556,28 @@ export function App() {
         <Paywall
           onClose={() => setScreen((prev) => prev === 'paywall' ? 'home' : prev)}
           onSubscribe={(u) => { setUser(u); saveUser(u); setScreen('horoscope'); }}
+        />
+      </Suspense>
+    );
+  }
+
+  // P1 DUO — écran de réception d'invitation (deep-link partagé)
+  if (screen === 'compat-redeem' && compatInviteToken) {
+    return (
+      <Suspense fallback={<Splash />}>
+        <CompatRedeem
+          token={compatInviteToken}
+          onDone={() => {
+            setCompatInviteToken(null);
+            // Nettoie l'URL pour éviter re-trigger
+            try {
+              const url = new URL(window.location.href);
+              url.searchParams.delete('invite');
+              window.history.replaceState({}, '', url.toString());
+            } catch {}
+            // Si l'utilisateur n'est pas authentifié → landing, sinon home
+            setScreen(isAuthed ? 'home' : 'landing');
+          }}
         />
       </Suspense>
     );

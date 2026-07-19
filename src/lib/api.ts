@@ -323,6 +323,28 @@ export const api = {
       body: JSON.stringify({ partnerBirthData, context }),
     }),
 
+  // ─── P1 DUO — Compatibilité partageable ────────────────────
+  createCompatInvite: (opts?: { inviteeName?: string; inviteeEmail?: string; context?: string }) =>
+    apiCall<{ token: string; shareUrl: string; deepLink: string; context: string; inviteeName: string | null }>('/compat/invite', {
+      method: 'POST',
+      body: JSON.stringify(opts || {}),
+    }),
+
+  getCompatInvite: (token: string) =>
+    apiCall<{
+      token: string;
+      status: 'pending' | 'redeemed';
+      inviterName: string;
+      inviterSun: string | null;
+      inviteeEmailPresent: boolean;
+    }>(`/compat/invite/${encodeURIComponent(token)}`, { method: 'GET' }),
+
+  redeemCompatInvite: (token: string, birthData: BirthData) =>
+    apiCall<{ ok: true; result: CompatibilityResult }>(`/compat/invite/${encodeURIComponent(token)}/redeem`, {
+      method: 'POST',
+      body: JSON.stringify({ birthData }),
+    }),
+
   // Horoscope history (v13.1 — J-7 → J passé uniquement, pas de prédiction future)
   getWeekHoroscope: () =>
     apiCall<{
@@ -659,7 +681,7 @@ export const api = {
     const token = getToken();
     const headers: Record<string, string> = {};
     if (token) headers['Authorization'] = `Bearer ${token}`;
-    const res = await fetch(apiUrl('/portrait/pdf'), { headers });
+    const res = await fetch(`${API_URL}/portrait/pdf`, { headers });
     if (!res.ok) {
       const text = await res.text().catch(() => '');
       throw new Error(`Erreur PDF (${res.status}): ${text || res.statusText}`);

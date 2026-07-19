@@ -56,6 +56,7 @@ const allowedOrigins = process.env.CORS_ORIGIN
 import webpush from 'web-push';
 import { sendVerificationEmail, generateToken, isEmailConfigured } from './email.js';
 import { detectAstroEvents, runAstroEventsJob } from './cron-events.js';
+import { randomUUID } from 'node:crypto';
 const VAPID_PUBLIC_KEY = process.env.VAPID_PUBLIC_KEY;
 const VAPID_PRIVATE_KEY = process.env.VAPID_PRIVATE_KEY;
 const VAPID_SUBJECT = process.env.VAPID_SUBJECT || 'mailto:admin@example.com';
@@ -147,6 +148,33 @@ db.exec(`
     FOREIGN KEY (user_id) REFERENCES users(id)
   );
   CREATE INDEX IF NOT EXISTS idx_pdf_purchases_user ON pdf_purchases_log(user_id, created_at DESC);
+`);
+
+// P1 DUO — Invitations Compatibilité partageable.
+// Schéma :
+//   - token = UUID unique, sert d'URL partageable (push, email, etc.)
+//   - inviter_user_id : l'user qui initie l'invitation
+//   - invitee_user_id : l'user qui clique/remplit (peut être NULL si pas encore inscrit)
+//   - invitee_birth_data : snapshot de l'input reçu (date+heure+lieu) AVANT création compte
+//   - status : pending → redeemed (invité a rejoint et vu le résultat) → expired
+//   - computed_result : cache du dernier résultat de compat (JSON, sinon recalcul)
+db.exec(`
+  CREATE TABLE IF NOT EXISTS compat_invites (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    token TEXT NOT NULL UNIQUE,
+    inviter_user_id INTEGER NOT NULL,
+    invitee_user_id INTEGER,
+    invitee_birth_data TEXT,
+    invitee_email TEXT,
+    status TEXT NOT NULL DEFAULT 'pending',
+    computed_result TEXT,
+    created_at INTEGER NOT NULL,
+    redeemed_at INTEGER,
+    FOREIGN KEY (inviter_user_id) REFERENCES users(id),
+    FOREIGN KEY (invitee_user_id) REFERENCES users(id)
+  );
+  CREATE INDEX IF NOT EXISTS idx_compat_invites_token ON compat_invites(token);
+  CREATE INDEX IF NOT EXISTS idx_compat_invites_inviter ON compat_invites(inviter_user_id, created_at DESC);
 `);
 
 // Safe migrations (idempotent)
@@ -1238,6 +1266,125 @@ const SIGN_ELEMENTS = {
   'Gémeaux': 'Air', 'Balance': 'Air', 'Verseau': 'Air',
   'Cancer': 'Eau', 'Scorpion': 'Eau', 'Poissons': 'Eau',
 };
+
+// P1 DUO — calcul de compatibilité déterministe (fallback si LLM KO)
+// Basé sur la théorie astrologique classique : affinité élémentaire +
+// aspects inter-cartes (synastrie). Référence : Liz Greene / Robert Hand.
+const ELEMENT_AFFINITY = {
+  'Feu-Feu': 90, 'Feu-Air': 85, 'Feu-Terre': 45, 'Feu-Eau': 40,
+  'Air-Air': 80, 'Air-Terre': 50, 'Air-Eau': 55,
+  'Terre-Terre': 80, 'Terre-Eau': 85,
+  'Eau-Eau': 80,
+};
+function elementAffinity(e1, e2) {
+  if (e1 === e2) return ELEMENT_AFFINITY[`${e1}-${e2}`] ?? 70;
+  return ELEMENT_AFFINITY[`${e1}-${e2}`] ?? ELEMENT_AFFINITY[`${e2}-${e1}`] ?? 55;
+}
+
+function signDistance(s1, s2) {
+  // Index 0-11 ; retourne distance angulaire [0, 180]
+  const order = ['Bélier','Taureau','Gémeaux','Cancer','Lion','Vierge','Balance','Scorpion','Sagittaire','Capricorne','Verseau','Poissons'];
+  const i1 = order.indexOf(s1); const i2 = order.indexOf(s2);
+  if (i1 < 0 || i2 < 0) return 999;
+  let d = Math.abs(i1 - i2) * 30;
+  return d > 180 ? 360 - d : d;
+}
+
+function aspectTypeFromDistance(deg) {
+  if (deg <= 8) return { name: 'conjunction', weight: 1.0, harmonious: false };
+  if (Math.abs(deg - 60) <= 6) return { name: 'sextile', weight: 0.6, harmonious: true };
+  if (Math.abs(deg - 90) <= 6) return { name: 'square', weight: -0.7, harmonious: false };
+  if (Math.abs(deg - 120) <= 8) return { name: 'trine', weight: 0.9, harmonious: true };
+  if (Math.abs(deg - 180) <= 8) return { name: 'opposition', weight: -0.4, harmonious: false };
+  return null;
+}
+
+/**
+ * computeCompatDeterministic — synastrie pure sans LLM.
+ * Inputs: chart1, chart2 (sorties de getNatalPositions)
+ * Output: même shape que generateCompatibility (score, title, strengths, challenges, description)
+ */
+function computeCompatDeterministic(chart1, chart2, sign1, sign2, context = 'romantic') {
+  const planets = ['sun', 'moon', 'mercury', 'venus', 'mars', 'jupiter', 'saturn'];
+  const aspects = [];
+  let harmoniousCount = 0, tensionCount = 0;
+
+  for (const p1 of planets) {
+    const a = chart1[p1]; if (!a) continue;
+    for (const p2 of planets) {
+      const b = chart2[p2]; if (!b) continue;
+      // Approx angle sign-based (si on n'a pas longitude exacte, distance sign->sign)
+      const dist = (typeof a.longitude === 'number' && typeof b.longitude === 'number')
+        ? Math.abs(a.longitude - b.longitude)
+        : signDistance(a.sign, b.sign);
+      const norm = dist > 180 ? 360 - dist : dist;
+      const asp = aspectTypeFromDistance(norm);
+      if (asp) {
+        aspects.push({ p1, p2, type: asp.name, harmonious: asp.harmonious });
+        if (asp.harmonious) harmoniousCount++;
+        else tensionCount++;
+      }
+    }
+  }
+
+  // Affinité élémentaire Soleil-Lune + Soleil-Venus + Soleil-Soleil
+  const sun1 = SIGN_ELEMENTS[chart1.sun?.sign] || '';
+  const moon2 = SIGN_ELEMENTS[chart2.moon?.sign] || '';
+  const sun2 = SIGN_ELEMENTS[chart2.sun?.sign] || '';
+  const venus1El = SIGN_ELEMENTS[chart1.venus?.sign] || '';
+  const mars2El = SIGN_ELEMENTS[chart2.mars?.sign] || '';
+
+  const sunMoonAff = sun1 && moon2 ? elementAffinity(sun1, moon2) : 60;
+  const sunSunAff = sun1 && sun2 ? elementAffinity(sun1, sun2) : 60;
+  const venusMarsAff = venus1El && mars2El ? elementAffinity(venus1El, mars2El) : 60;
+  const elementalScore = Math.round(0.4 * sunMoonAff + 0.3 * sunSunAff + 0.3 * venusMarsAff);
+
+  // Score global
+  const aspectScore = 50 + (harmoniousCount - tensionCount) * 4;
+  let score = Math.round(0.5 * elementalScore + 0.5 * aspectScore);
+  if (context === 'romantic') score = Math.round(0.4 * elementalScore + 0.3 * aspectScore + 0.3 * venusMarsAff);
+  score = Math.max(20, Math.min(95, score));
+
+  const totalAspects = harmoniousCount + tensionCount;
+  const harmonyRatio = totalAspects ? harmoniousCount / totalAspects : 0.5;
+
+  // Titre + description basés sur score
+  const titleByScore = score >= 80 ? 'Une étincelle rare'
+    : score >= 65 ? 'Un dialogue fertile'
+    : score >= 50 ? 'Un équilibre à construire'
+    : score >= 35 ? 'Une rencontre qui bouscule'
+    : 'Un apprentissage mutuel';
+
+  const strengths = [];
+  const challenges = [];
+
+  if (sunMoonAff >= 75) strengths.push('Complémentarité Soleil-Lune forte — vous vous comprendrez intuitivement.');
+  if (sunSunAff >= 75) strengths.push('Mêmes éléments solaires — vision du monde partagée.');
+  if (venusMarsAff >= 75 && context === 'romantic') strengths.push('Magnétisme Vénus-Mars — chimie sensorielle réelle.');
+  if (harmonyRatio >= 0.6) strengths.push(`Nombreux aspects fluides (${harmoniousCount}) — coopération naturelle.`);
+  if (aspects.some(a => a.p1 === 'mercury' && a.p2 === 'mercury' && a.harmonious)) {
+    strengths.push('Mercure en aspect harmonique — communication claire.');
+  }
+
+  if (sunSunAff < 50) challenges.push('Éléments solaires dissonants — rythmes de vie différents.');
+  if (venusMarsAff < 50 && context === 'romantic') challenges.push('Désir et tendances amoureuses à ajuster.');
+  if (tensionCount > harmoniousCount) challenges.push(`Aspects tendus (${tensionCount}) — frictions possibles à métaboliser.`);
+  if (aspects.some(a => a.type === 'square')) challenges.push('Carrés présents — remise en question stimulante.');
+
+  if (strengths.length === 0) strengths.push('Des ponts à tisser patiemment.');
+  if (challenges.length === 0) challenges.push('Peu de tensions majeures — terrain calme.');
+
+  const description = `${sign1} et ${sign2} : ${harmonyRatio >= 0.6 ? 'beaucoup de points de contact harmonieux' : 'un mélange de tensions et d\'harmonies'}. ${score >= 65 ? 'Votre duo a un potentiel de compréhension profonde, à condition de cultiver la curiosité mutuelle.' : score >= 50 ? 'Votre relation demande des ajustements, mais elle vous fera grandir.' : 'Votre rencontre est exigeante — elle vous confrontera à vos parts d\'ombre.'}`;
+
+  return {
+    score,
+    title: titleByScore,
+    strengths: strengths.slice(0, 4),
+    challenges: challenges.slice(0, 3),
+    description,
+    _deterministic: true,
+  };
+}
 
 function findHouse(longitude, houses) {
   for (let i = 0; i < 12; i++) {
@@ -2531,6 +2678,167 @@ app.post('/api/compatibility', auth, llmLimiter, async (req, res) => {
   } catch (err) {
     console.error('Compatibility error:', err.message);
     res.status(500).json({ error: 'Failed', detail: err.message });
+  }
+});
+
+// ════════════════════════════════════════════════════════════════
+// P1 DUO — Compatibilité partageable (viral growth)
+// ════════════════════════════════════════════════════════════════
+
+/**
+ * POST /api/compat/invite
+ * Crée une invitation pour le partenaire d'un user authentifié.
+ * Body: { context?, inviteeName?, inviteeEmail? }
+ * Returns: { token, shareUrl, deepLink }
+ */
+app.post('/api/compat/invite', auth, (req, res) => {
+  try {
+    const inviter = db.prepare('SELECT id, birth_data FROM users WHERE id = ?').get(req.user.id);
+    if (!inviter?.birth_data) {
+      return res.status(400).json({ error: 'Set your birth data first' });
+    }
+    const { inviteeName, inviteeEmail, context = 'romantic' } = req.body || {};
+    const token = randomUUID();
+    const now = Math.floor(Date.now() / 1000);
+
+    db.prepare(`
+      INSERT INTO compat_invites (token, inviter_user_id, invitee_email, status, created_at)
+      VALUES (?, ?, ?, 'pending', ?)
+    `).run(token, req.user.id, inviteeEmail ? String(inviteeEmail).slice(0, 200) : null, now);
+
+    const baseUrl = process.env.PUBLIC_URL || `http://localhost:${process.env.PORT || 3001}`;
+    res.json({
+      token,
+      shareUrl: `${baseUrl}/invite/${token}`,
+      deepLink: `https://celeste.app/invite/${token}`,
+      context,
+      inviteeName: inviteeName ? String(inviteeName).slice(0, 80) : null,
+    });
+  } catch (err) {
+    console.error('compat invite error:', err.message);
+    res.status(500).json({ error: 'invite_failed', detail: err.message });
+  }
+});
+
+/**
+ * GET /api/compat/invite/:token
+ * PUBLIC — l'invité clique le lien, on renvoie les infos teaser (pas de LLM côté serveur)
+ * pour qu'il puisse voir "Qui t'invite, signe solaire, etc."
+ */
+app.get('/api/compat/invite/:token', (req, res) => {
+  try {
+    const row = db.prepare(`
+      SELECT ci.token, ci.status, ci.invitee_email,
+             u.id AS inviter_id, u.display_name, u.natal_chart
+      FROM compat_invites ci
+      JOIN users u ON u.id = ci.inviter_user_id
+      WHERE ci.token = ?
+    `).get(req.params.token);
+    if (!row) return res.status(404).json({ error: 'invite_not_found' });
+
+    let sun = null;
+    try {
+      const n = row.natal_chart ? JSON.parse(row.natal_chart) : {};
+      sun = n.sunSign || null;
+    } catch { /* ignore */ }
+
+    res.json({
+      token: row.token,
+      status: row.status,
+      inviterName: row.display_name || 'Un(e) ami(e)',
+      inviterSun: sun,
+      inviteeEmailPresent: !!row.invitee_email,
+    });
+  } catch (err) {
+    console.error('compat invite get error:', err.message);
+    res.status(500).json({ error: 'fetch_failed', detail: err.message });
+  }
+});
+
+/**
+ * POST /api/compat/invite/:token/redeem
+ * L'invité soumet ses birth data → on calcule le résultat et on le cache.
+ * Body: { birthData: { date, time, latitude, longitude, placeName? } }
+ * No-auth (le token est l'authorization), mais on attache l'user s'il est connecté.
+ */
+app.post('/api/compat/invite/:token/redeem', (req, res) => {
+  try {
+    const token = req.params.token;
+    const invite = db.prepare(`
+      SELECT ci.*, u.birth_data AS inviter_birth_data
+      FROM compat_invites ci
+      JOIN users u ON u.id = ci.inviter_user_id
+      WHERE ci.token = ?
+    `).get(token);
+    if (!invite) return res.status(404).json({ error: 'invite_not_found' });
+
+    const { birthData } = req.body || {};
+    if (!birthData || typeof birthData !== 'object' ||
+        !birthData.date || !/^\d{4}-\d{2}-\d{2}$/.test(birthData.date) ||
+        !birthData.time || !/^\d{2}:\d{2}$/.test(birthData.time) ||
+        typeof birthData.latitude !== 'number' || Math.abs(birthData.latitude) > 90 ||
+        typeof birthData.longitude !== 'number' || Math.abs(birthData.longitude) > 180) {
+      return res.status(400).json({ error: 'invalid_birth_data' });
+    }
+
+    const inviterBd = safeJsonParse(invite.inviter_birth_data, null, 'duo redeem inviter_birth_data');
+    if (!inviterBd) return res.status(500).json({ error: 'inviter_birth_data_corrupt' });
+
+    const chart1 = getNatalPositions(inviterBd);
+    const chart2 = getNatalPositions(birthData);
+
+    // On fait le même compute que /api/compatibility mais sans auth et sans décrément de scans
+    // Le coût LLM est sur nous : c'est l'investissement acquisition viral.
+    // En dev (COMPAT_DETERMINISTIC_ONLY=1) on skip le LLM pour valider le pipeline.
+    const computePromise = process.env.COMPAT_DETERMINISTIC_ONLY === '1'
+      ? Promise.resolve(computeCompatDeterministic(chart1, chart2, chart1.sun.sign, chart2.sun.sign, 'romantic'))
+      : generateCompatibility(chart1, chart2, chart1.sun.sign, chart2.sun.sign, 'romantic')
+        .catch((err) => {
+          console.warn('compat redeem LLM KO, using deterministic fallback:', err.message);
+          return computeCompatDeterministic(chart1, chart2, chart1.sun.sign, chart2.sun.sign, 'romantic');
+        });
+    computePromise.then((compat) => {
+      const now = Math.floor(Date.now() / 1000);
+      const computed = {
+        ...compat,
+        yourSun: chart1.sun.sign,
+        theirSun: chart2.sun.sign,
+        yourMoon: chart1.moon.sign,
+        theirMoon: chart2.moon.sign,
+        redeemed_via: 'invite',
+      };
+
+      // Si l'invité est connecté → on attache
+      let inviteeUserId = null;
+      const authHeader = req.headers.authorization;
+      if (authHeader?.startsWith('Bearer ')) {
+        try {
+          const payload = jwt.verify(authHeader.slice(7), process.env.JWT_SECRET);
+          if (payload?.id) inviteeUserId = payload.id;
+        } catch { /* token invalide → on reste anonyme */ }
+      }
+
+      db.prepare(`
+        UPDATE compat_invites
+        SET invitee_birth_data = ?, invitee_user_id = ?, status = 'redeemed',
+            redeemed_at = ?, computed_result = ?
+        WHERE token = ?
+      `).run(
+        JSON.stringify(birthData),
+        inviteeUserId,
+        now,
+        JSON.stringify(computed),
+        token
+      );
+
+      res.json({ ok: true, result: computed });
+    }).catch((err) => {
+      console.error('compat redeem llm error:', err.message);
+      res.status(502).json({ error: 'llm_failed', detail: err.message });
+    });
+  } catch (err) {
+    console.error('compat redeem error:', err.message);
+    res.status(500).json({ error: 'redeem_failed', detail: err.message });
   }
 });
 

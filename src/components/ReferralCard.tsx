@@ -108,7 +108,7 @@ export function ReferralCard() {
         onClick={handleShare}
         className="w-full py-2.5 rounded-xl bg-gradient-to-r from-cosmic-600 to-cosmic-700 text-night-950 text-sm font-semibold transition-all hover:from-cosmic-500 hover:to-cosmic-600"
       >
-        {navigator.share ? '📨 Partager mon lien' : '📋 Copier mon lien'}
+        📋 Copier mon lien
       </button>
 
       {data.referralsCount > 0 && (

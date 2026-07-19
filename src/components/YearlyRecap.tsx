@@ -15,7 +15,7 @@
 
 import { useEffect, useState } from 'react';
 import { api } from '../lib/api';
-import { ShareCard } from './ShareCard';
+import ShareCard from './ShareCard';
 
 interface RecapData {
   year: number;
