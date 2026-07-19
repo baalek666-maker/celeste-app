@@ -151,6 +151,68 @@ router.post('/restore', async (req, res) => {
 });
 
 /**
+ * POST /api/billing/start-trial
+ *
+ * P1-7 — Free trial de 7 jours SANS carte bancaire.
+ * One-shot : trial_started_at est définitif, non re-activable.
+ * Active is_premium=1 + premium_until = now + 7 jours.
+ * Le cron runTrialExpiryJob (server.js) envoie un rappel J-2 puis retombe
+ * automatiquement sur le plan gratuit à expiration (is_premium reste 1 tant
+ * que premium_until > now, mais le check auth() le désactive à l'expiration).
+ */
+const TRIAL_DURATION_DAYS = 7;
+
+router.post('/start-trial', (req, res) => {
+  const userId = req.user?.id;
+  if (!userId) return res.status(401).json({ error: 'Non authentifié.' });
+
+  const row = req.db.prepare(
+    'SELECT trial_started_at, is_premium, premium_until FROM users WHERE id = ?'
+  ).get(userId);
+
+  if (!row) return res.status(404).json({ error: 'Compte introuvable.' });
+
+  // One-shot : si trial_started_at est déjà set, on refuse
+  if (row.trial_started_at) {
+    return res.status(409).json({
+      ok: false,
+      code: 'trial_already_used',
+      error: 'Tu as déjà utilisé ton essai gratuit.',
+    });
+  }
+
+  // Si déjà premium (abonnement actif ou trial Stripe), pas besoin
+  const now = Math.floor(Date.now() / 1000);
+  if (row.is_premium === 1 && row.premium_until && row.premium_until > now) {
+    return res.status(409).json({
+      ok: false,
+      code: 'already_premium',
+      error: 'Tu as déjà un abonnement Premium actif.',
+    });
+  }
+
+  const trialEndsAt = now + TRIAL_DURATION_DAYS * 86400;
+
+  req.db.prepare(`
+    UPDATE users SET
+      trial_started_at = ?,
+      is_premium = 1,
+      premium_until = ?,
+      scans_remaining = 999999
+    WHERE id = ?
+  `).run(now, trialEndsAt, userId);
+
+  console.log(`[billing] ✅ Trial 7j démarré pour user ${userId} — expire ${new Date(trialEndsAt * 1000).toISOString()}`);
+
+  return res.json({
+    ok: true,
+    trialEndsAt,
+    trialDays: TRIAL_DURATION_DAYS,
+    message: 'Ton essai Premium de 7 jours est actif !',
+  });
+});
+
+/**
  * POST /api/billing/create-checkout
  * Body : { plan: 'monthly' | 'yearly' }
  * Crée une session Stripe Checkout (subscription) et renvoie l'URL de redirection.

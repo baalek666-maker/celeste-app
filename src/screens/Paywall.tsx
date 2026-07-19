@@ -45,6 +45,32 @@ export function Paywall({ onClose, onSubscribe }: {
     }
   };
 
+  // ─── P1-7 — Free trial sans CB ────────────────────────────────
+  // Bouton "Essayer gratuitement 7 jours" : active le premium immédiatement
+  // sans demander de carte bancaire. One-shot (le serveur vérifie trial_started_at).
+  // À la fin de l'essai, retombée automatique vers le plan gratuit.
+  const [trialBusy, setTrialBusy] = useState(false);
+
+  const handleStartTrial = async () => {
+    setTrialBusy(true);
+    setError('');
+    try {
+      const res = await api.startTrial();
+      const existing = getUser();
+      onSubscribe({
+        ...existing,
+        isPremium: true,
+        scansRemaining: 0,
+        premiumUntil: res.trialEndsAt,
+        trialStartedAt: Math.floor(Date.now() / 1000),
+      });
+    } catch (err: unknown) {
+      setError(err instanceof Error ? err.message : 'Impossible de démarrer l\'essai.');
+    } finally {
+      setTrialBusy(false);
+    }
+  };
+
   // ─── Fix #2 — Restaurer mes achats (App Store Guideline 3.1.5) ───────
   // Sur iOS ce bouton est OBLIGATOIRE (sinon rejet App Store). Sans Stripe
   // configuré on remonte un message clair au lieu de planter.
@@ -140,6 +166,28 @@ export function Paywall({ onClose, onSubscribe }: {
             </div>
           ))}
         </div>
+
+        {/* P1-7 — Essai gratuit SANS carte bancaire.
+            Offre one-shot de 7 jours premium sans demander de CB.
+            Placé AVANT les plans payants : conversion maximale, zéro friction. */}
+        <button onClick={handleStartTrial}
+          disabled={trialBusy || busy}
+          className="w-full p-4 mb-4 rounded-2xl border-2 border-cosmic-500/40 glass-cosmic transition-all duration-300 text-left group hover:border-cosmic-400/60 disabled:opacity-50 disabled:cursor-not-allowed">
+          <div className="flex items-center gap-3">
+            <div className="w-10 h-10 rounded-full bg-cosmic-500/20 flex items-center justify-center text-xl group-hover:scale-110 transition-transform">
+              🎁
+            </div>
+            <div className="flex-1">
+              <p className="text-night-100 font-bold text-sm">Essayer gratuitement 7 jours</p>
+              <p className="text-night-400 text-xs mt-0.5">Sans carte bancaire · Accès complet Premium</p>
+            </div>
+            {trialBusy ? (
+              <span className="text-cosmic-300 text-sm animate-pulse">…</span>
+            ) : (
+              <span className="text-cosmic-300 text-xl">→</span>
+            )}
+          </div>
+        </button>
 
         {/* Plans */}
         <div className="space-y-3 mb-6">

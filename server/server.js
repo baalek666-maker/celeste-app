@@ -256,6 +256,11 @@ if (!hasCol('last_activity_at')) {
 if (!hasCol('last_early_reengagement_date')) {
   db.exec('ALTER TABLE users ADD COLUMN last_early_reengagement_date TEXT');
 }
+// P1-7 — Free trial. trial_started_at est définitif (one-shot), last_trial_reminder
+// évite le double-push du rappel J-2.
+if (!hasCol('last_trial_reminder')) {
+  db.exec('ALTER TABLE users ADD COLUMN last_trial_reminder TEXT');
+}
 // P0#6 — Vérification email (Resend). email_verified=0 par défaut, 1 après clic.
 // email_verify_token = token opaque 32 bytes (hex), expiré après vérification.
 if (!hasCol('email_verified')) {
@@ -2151,14 +2156,18 @@ app.post('/api/profile/birth-data', auth, (req, res) => {
 app.get('/api/profile', auth, (req, res) => {
   const user = db.prepare('SELECT * FROM users WHERE id = ?').get(req.user.id);
   if (!user) return res.status(404).json({ error: 'User not found' });
+  const now = Math.floor(Date.now() / 1000);
+  const isPremium = !!user.is_premium && (!user.premium_until || user.premium_until > now);
   res.json({
     id: user.id,
     email: user.email,
-    isPremium: !!user.is_premium,
+    isPremium,
     scansRemaining: user.scans_remaining,
     birthData: safeJsonParse(user.birth_data, null, 'login auth birth_data'),
     premiumUntil: user.premium_until,
     streak: user.streak_count ?? 0,
+    trialStartedAt: user.trial_started_at ?? null,  // P1-7: null = jamais utilisé
+    trialUsed: user.trial_started_at != null,       // P1-7: one-shot côté frontend
   });
 });
 
@@ -4518,6 +4527,72 @@ async function runEarlyReengagementJob() {
   }
 }
 
+// ═══════════════════════════════════════════════════════════════════════════
+// P1-7 — Trial expiry job : rappel J-2 avant fin d'essai gratuit.
+//
+// Le trial sans CB dure 7 jours. À J-2 (donc 5 jours après le début), on envoie
+// un push "Ton essai Premium se termine dans 2 jours" pour donner à l'utilisateur
+// le temps de convertir vers un abonnement payant sans interruption de service.
+//
+// - On ne push qu'une seule fois (marqueur `last_trial_reminder` via une colonne
+//   dérivée de trial_started_at + comparaison de date).
+// - Si l'utilisateur a déjà un abonnement Stripe actif (premium_until > trial_end),
+//   on ne push pas (il a déjà converti).
+// ═══════════════════════════════════════════════════════════════════════════
+const TRIAL_DURATION_DAYS = 7;
+const TRIAL_REMINDER_DAYS_BEFORE = 2;
+
+async function runTrialExpiryJob() {
+  try {
+    const nowSec = Math.floor(Date.now() / 1000);
+    const today = new Date().toISOString().split('T')[0];
+
+    // Users en trial actif (trial_started_at set, is_premium=1) qui approchent de
+    // la fin de leur essai et n'ont pas encore reçu le rappel aujourd'hui.
+    const users = db.prepare(`
+      SELECT u.id, u.email, u.trial_started_at, u.premium_until, u.notification_timezone
+      FROM users u
+      JOIN push_subscriptions ps ON ps.user_id = u.id
+      WHERE u.trial_started_at IS NOT NULL
+        AND u.is_premium = 1
+        AND u.premium_until IS NOT NULL
+        AND u.premium_until > ?
+        AND u.last_trial_reminder IS NULL
+    `).all(nowSec);
+
+    if (users.length === 0) return;
+
+    let sent = 0;
+    for (const user of users) {
+      const elapsedDays = (nowSec - user.trial_started_at) / 86400;
+      // Push à J-(TRIAL_REMINDER_DAYS_BEFORE) = 5 jours après le début
+      if (elapsedDays < TRIAL_DURATION_DAYS - TRIAL_REMINDER_DAYS_BEFORE) continue;
+
+      const payload = {
+        title: '✨ Ton essai Céleste',
+        body: `⏳ Ton essai Premium se termine dans ${TRIAL_REMINDER_DAYS_BEFORE} jour(s). Continue ton voyage cosmique en t'abonnant.`,
+        icon: '/icon-192.png',
+        badge: '/badge-72.png',
+        tag: 'celeste-trial-expiry',
+        url: '/?screen=paywall',
+        data: { type: 'trial-expiry', userId: user.id },
+      };
+      const result = await sendPushToUser(user.id, payload);
+      if (result.sent > 0) {
+        // Marquer pour ne pas re-pousser
+        db.prepare('UPDATE users SET last_trial_reminder = ? WHERE id = ?').run(today, user.id);
+        sent++;
+      }
+    }
+
+    if (sent > 0) {
+      console.log(`[cron:trial-expiry] ${sent} user(s) notifiés (rappel J-2 essai)`);
+    }
+  } catch (err) {
+    console.error('[cron:trial-expiry] error:', err.message);
+  }
+}
+
 let cronInterval = null;
 let astroEventsLastRun = 0;
 const ASTRO_EVENTS_INTERVAL_MS = 6 * 3600_000; // P1#8 — check events astro toutes les 6h
@@ -4531,6 +4606,7 @@ function startCronScheduler() {
     runReengagementJob();
     runStreakReminderJob();
     runEarlyReengagementJob(); // P1#12
+    runTrialExpiryJob(); // P1-7
     // P1#8 — events astro au démarrage (après 90s pour ne pas tout saturer)
     setTimeout(() => {
       runAstroEventsJob(db, sendPushToUser);
@@ -4543,6 +4619,7 @@ function startCronScheduler() {
     runReengagementJob();
     runStreakReminderJob();
     runEarlyReengagementJob(); // P1#12
+    runTrialExpiryJob(); // P1-7
     // P1#8 — events astro : check toutes les 6h (la granularité d'un événement astro est de l'heure, pas besoin de 30min)
     if (Date.now() - astroEventsLastRun >= ASTRO_EVENTS_INTERVAL_MS) {
       runAstroEventsJob(db, sendPushToUser);

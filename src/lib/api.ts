@@ -285,6 +285,8 @@ export const api = {
       birthData?: BirthData | null;
       premiumUntil?: number | null;
       streak?: number;
+      trialStartedAt?: number | null;  // P1-7 — null = essai jamais démarré
+      trialUsed?: boolean;              // P1-7 — one-shot flag (true si trialStartedAt != null)
     }>('/profile'),
 
   // Horoscope (LLM-powered, cached server-side per day)
@@ -612,6 +614,18 @@ export const api = {
 
   // Fix #2 — expose Stripe-configured au client pour afficher le bon message dans le Paywall
   getBillingStatus: () => apiCall<{ configured: boolean }>('/billing/status', {}, 5_000),
+
+  // ─── P1-7 — Free trial (7 jours SANS carte bancaire) ────────
+  // One-shot : le serveur track trial_started_at et refuse un second essai.
+  startTrial: () => apiCall<{
+    ok: true;
+    trialEndsAt: number;   // epoch seconds
+    trialDays: number;
+    message: string;
+  }>('/billing/start-trial', {
+    method: 'POST',
+    body: '{}',
+  }, 10_000),
 
   // ─── P0#6 — Email verification (Resend) ─────────────────
   getEmailStatus: () => apiCall<{
