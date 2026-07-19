@@ -7,6 +7,8 @@ import DailyTarot from '../components/DailyTarot';
 import TarotCross from '../components/TarotCross';
 import TodayIn10s from '../components/TodayIn10s';
 import EveningRitualCard from '../components/EveningRitualCard';
+import MoodForecast from '../components/MoodForecast';
+import LiveAstroBanner from '../components/LiveAstroBanner';
 import DailyEnergy from '../components/DailyEnergy';
 import HeroPrediction from '../components/HeroPrediction';
 import DailyIntention from '../components/DailyIntention';
@@ -107,6 +109,9 @@ export function Home({ user, onNavigate, isGuest }: { user: User; onNavigate: (s
       {/* 1. HERO PREDICTION — phrase qui tue (40% écran, wow effect) */}
       <HeroPrediction chart={chart} sunSignKey={chart.sun} firstName={firstName} streak={streak} />
 
+      {/* PISTE 3 — ÉPHÉMÉRIDES VIVANTES — bannière événement astro du jour */}
+      <LiveAstroBanner />
+
       {/* VAL01 — Aujourd'hui en 10s : carrousel swipeable (énergie + lune + transits) */}
       <TodayIn10s />
 
@@ -124,6 +129,9 @@ export function Home({ user, onNavigate, isGuest }: { user: User; onNavigate: (s
 
       {/* VAL04 — RITUEL DU SOIR — sommeil + lune + journaling 3 lignes */}
       <EveningRitualCard streak={streak} />
+
+      {/* PISTE 5 — MOOD FORECAST 14j (3j gratuit, 14j premium) */}
+      <MoodForecast />
 
       {/* 4. SIGNATURE FOOTER — fusion astrolabe + CTA explorateur */}
       <SignatureFooter

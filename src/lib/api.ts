@@ -728,6 +728,38 @@ export const api = {
     body: JSON.stringify({ question: question || '' }),
   }, 30_000),
 
+  // ─── PISTE 5 — Mood Forecast 14j (premium gate : 3j gratuit, 14j premium) ──
+  getMoodForecast: () => apiCall<{
+    forecast: Array<{
+      date: string;
+      score: number;
+      label: string;
+      emoji: string;
+      tone: string;
+      phrase: string;
+      moonSign: string;
+      mercuryRetrograde: boolean;
+      highlights: Array<{ aspect: string; planets: [string, string]; nature: string; weight: number }>;
+    }>;
+    isPremium: boolean;
+    daysRequested: number;
+    freeDaysLimit: number;
+  }>('/mood-forecast', {}, 10_000),
+
+  // ─── PISTE 3 — Ephémérides vivantes (événements astro des prochaines heures) ──
+  getAstroEvents: (hours = 24) => apiCall<{
+    events: Array<{
+      type: string;
+      title: string;
+      body: string;
+      emoji: string;
+      when: string;
+    }>;
+    count: number;
+    generatedAt: string;
+    windowHours: number;
+  }>(`/astro/events?hours=${hours}`, {}, 10_000),
+
   // ─── Daily Energy (personalized astro-forecast + reflection) ──
   getDailyEnergy: () => apiCall<{
     date: string;

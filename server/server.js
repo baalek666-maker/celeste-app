@@ -8,6 +8,22 @@ import { rateLimit, ipKeyGenerator } from 'express-rate-limit';
 import helmet from 'helmet';
 import compression from 'compression';
 import * as Astronomy from 'astronomy-engine';
+import * as Sentry from '@sentry/node';
+import { writeFileSync, mkdirSync, existsSync, readdirSync, unlinkSync, statSync } from 'node:fs';
+
+// ─── TEC01 — Sentry init (no-op si SENTRY_DSN absent) ───────────────
+const SENTRY_DSN = process.env.SENTRY_DSN;
+if (SENTRY_DSN) {
+  Sentry.init({
+    dsn: SENTRY_DSN,
+    environment: process.env.NODE_ENV || 'development',
+    tracesSampleRate: Number(process.env.SENTRY_TRACES_RATE || 0.1),
+    release: process.env.npm_package_version || '1.0.0',
+  });
+  console.log('[sentry] Monitoring actif');
+} else {
+  console.log('[sentry] DSN manquant — monitoring désactivé (set SENTRY_DSN to enable)');
+}
 const { AstroTime, Body, GeoVector, SiderealTime, EclipticGeoMoon, Rotation_EQJ_ECL, RotateVector, Observer, Horizon, Equator, MakeTime, Ecliptic } = Astronomy;
 import { readFileSync } from 'fs';
 import { fileURLToPath } from 'url';
@@ -805,6 +821,7 @@ async function callLLMWithRetry(messages, maxRetries = 3, maxTokens = 4096, extr
 // ─── v11.2 — Garde-fous process : une ReferenceError async ne doit plus tuer le serveur. ───
 process.on('uncaughtException', (err) => {
   console.error('[FATAL] uncaughtException:', err.name, err.message);
+  if (SENTRY_DSN) Sentry.captureException(err);
   // On log, on n'arrête PAS le process. Les handlers HTTP peuvent continuer à servir les requêtes suivantes.
   if (err.name === 'ReferenceError') {
     console.error('[FATAL] ReferenceError — vérifiez qu\'une variable du bloc fallback est bien déclarée.');
@@ -812,6 +829,7 @@ process.on('uncaughtException', (err) => {
 });
 process.on('unhandledRejection', (reason) => {
   console.error('[FATAL] unhandledRejection:', String(reason).slice(0, 200));
+  if (SENTRY_DSN && reason instanceof Error) Sentry.captureException(reason);
 });
 // Utilisés si le LLM rate-limit ou panne. Garantit un horoscope TOUJOURS disponible.
 const FALLBACK_HOROSCOPES = {
@@ -3088,6 +3106,180 @@ app.get('/api/transits/today', auth, (req, res) => {
   }
 });
 
+// ─── PISTE 5 — Mood Forecast 14 jours ──────────────────────
+// Forecast purement astronomique (zéro LLM, zéro IA). Chaque jour : transits +
+// score d'humeur 0-100 basé sur la nature des aspects planétaires + label FR +
+// 1 phrase expressive qui résume l'énergie du jour (style CHANI).
+//
+// Premium gate : gratuit = 3 jours (aujourd'hui + J+1 + J+2), premium = 14 jours.
+
+const MOOD_LABELS = [
+  { max: 25, label: 'Chahutée',  emoji: '🌧️', tone: 'tendue' },
+  { max: 45, label: 'Mouvementée', emoji: '🌬️', tone: 'contrastée' },
+  { max: 60, label: 'Neutre',     emoji: '🌫️', tone: 'neutre' },
+  { max: 75, label: 'Douce',      emoji: '🌿', tone: 'fluide' },
+  { max: 90, label: 'Belle',      emoji: '✨', tone: 'harmonieuse' },
+  { max: 101, label: 'Radiante',  emoji: '☀️', tone: 'rayonnante' },
+];
+
+function moodLabelFor(score) {
+  return MOOD_LABELS.find(m => score < m.max) || MOOD_LABELS[MOOD_LABELS.length - 1];
+}
+
+const MOOD_PHRASES = {
+  tendue: [
+    "Le ciel tend ses fils — respire avant de réagir.",
+    "Quelques graines de friction aujourd'hui, mais rien d'insurmontable.",
+    "Le climat est électrique : garde tes bases solides.",
+  ],
+  contrastée: [
+    "Du mouvement dans l'air — adapte ton rythme.",
+    "Aspects contrastés : choisis tes batailles.",
+    "Une journée en deux temps — reste souple.",
+  ],
+  neutre: [
+    "Un ciel calme — parfait pour avancer au gré de tes envies.",
+    "Ni pleine ni basse — une journée pour respirer.",
+    "Le ciel se tait doucement — écoute ton instinct.",
+  ],
+  fluide: [
+    "Le ciel souffle dans ton sens — avance avec confiance.",
+    "Énergie douce et coopérative aujourd'hui.",
+    "Une belle fluidité pour faire ce qui te tient à cœur.",
+  ],
+  harmonieuse: [
+    "Le ciel est clair — profite de cette belle énergie.",
+    "Aspects harmonieux : c'est un beau jour pour créer.",
+    "Tout coule de source — laisse-toi porter.",
+  ],
+  rayonnante: [
+    "Ciel exceptionnel — fais ce qui te fait le plus peur aujourd'hui.",
+    "Une fenêtre d'or s'ouvre — saisis-la.",
+    "Le ciel te pousse en avant — brille sans modération.",
+  ],
+};
+
+const ASPECT_NATURE_SCORE = {
+  conjunction: 0,   // contextuel, neutre par défaut
+  opposition: -8,
+  square: -10,
+  quincunx: -4,
+  sextile: +6,
+  trine: +10,
+};
+
+function computeDayMood(date) {
+  const transits = getTransits(date);
+  // Compute major aspects for the day
+  const planets = ['sun','moon','mercury','venus','mars','jupiter','saturn'];
+  const aspectDefs = [
+    { name: 'conjunction', angle: 0, orb: 6 },
+    { name: 'opposition', angle: 180, orb: 6 },
+    { name: 'trine', angle: 120, orb: 5 },
+    { name: 'square', angle: 90, orb: 5 },
+    { name: 'sextile', angle: 60, orb: 4 },
+  ];
+  let score = 55; // baseline neutre
+  const highlights = [];
+  const time = new AstroTime(date);
+  const longs = {};
+  for (const p of planets) {
+    longs[p] = geoEclipticLongitude(p, time);
+  }
+  for (let i = 0; i < planets.length; i++) {
+    for (let j = i + 1; j < planets.length; j++) {
+      const a = planets[i], b = planets[j];
+      const diff = Math.abs(longs[a] - longs[b]);
+      const d = diff > 180 ? 360 - diff : diff;
+      for (const ad of aspectDefs) {
+        const orb = Math.abs(d - ad.angle);
+        if (orb <= ad.orb) {
+          const delta = ASPECT_NATURE_SCORE[ad.name] || 0;
+          score += delta;
+          // Lune impliquée = plus impactant émotionnellement
+          const weight = (a === 'moon' || b === 'moon') ? 1.5 : 1;
+          if (Math.abs(delta) >= 6) {
+            highlights.push({
+              aspect: ad.name,
+              planets: [a, b],
+              nature: delta > 0 ? 'harmonique' : 'tendu',
+              weight,
+            });
+          }
+          break;
+        }
+      }
+    }
+  }
+  // Lune en signe : +5 si eau/terre (introspection), -5 si feu/air (action)
+  const moonSign = transits.moon?.sign;
+  if (moonSign) {
+    const waterEarth = ['Cancer','Scorpion','Poissons','Taureau','Vierge','Capricorne'];
+    score += waterEarth.includes(moonSign) ? +3 : -2;
+  }
+  // Mercure rétrograde = friction
+  if (transits.mercury?.retrograde) score -= 5;
+  if (transits.venus?.retrograde) score -= 3;
+
+  score = Math.max(10, Math.min(95, Math.round(score)));
+  const label = moodLabelFor(score);
+  const phrases = MOOD_PHRASES[label.tone];
+  const phrase = phrases[Math.floor(date.getTime() / 86400000) % phrases.length];
+
+  return {
+    date: date.toISOString().split('T')[0],
+    score,
+    label: label.label,
+    emoji: label.emoji,
+    tone: label.tone,
+    phrase,
+    moonSign: transits.moon?.sign,
+    mercuryRetrograde: !!transits.mercury?.retrograde,
+    highlights: highlights.slice(0, 3),
+  };
+}
+
+app.get('/api/mood-forecast', auth, (req, res) => {
+  try {
+    const user = db.prepare('SELECT is_premium, premium_until FROM users WHERE id = ?').get(req.user.id);
+    const now = Date.now();
+    const isPremium = !!user?.is_premium && (!user?.premium_until || user.premium_until > now);
+    const days = isPremium ? 14 : 3;
+    const forecast = [];
+    const base = new Date();
+    base.setUTCHours(12, 0, 0, 0); // midi UTC = stable quel que soit TZ
+    for (let i = 0; i < days; i++) {
+      const d = new Date(base.getTime() + i * 86400000);
+      forecast.push(computeDayMood(d));
+    }
+    res.json({ forecast, isPremium, daysRequested: days, freeDaysLimit: 3 });
+  } catch (err) {
+    console.error('mood-forecast error:', err.message);
+    res.status(500).json({ error: 'Failed' });
+  }
+});
+
+// ─── PISTE 3 — Ephémérides vivantes ─────────────────────────
+// GET /api/astro/events — événements astronomiques des prochaines 24h
+// (nouvelle lune, pleine lune, ingress, station, éclipse…).
+// Accessible à tous (free + premium). Pas de personalisation ici — la
+// personnalisation se fait dans le push (cron-events.js).
+app.get('/api/astro/events', auth, (req, res) => {
+  try {
+    const hoursAhead = Math.min(Number(req.query.hours) || 24, 72);
+    const events = detectAstroEvents(new Date(), hoursAhead);
+    res.json({
+      events,
+      count: events.length,
+      generatedAt: new Date().toISOString(),
+      windowHours: hoursAhead,
+    });
+  } catch (err) {
+    console.error('astro/events error:', err.message);
+    res.status(500).json({ error: 'Failed' });
+  }
+});
+
 // ─── Daily Aspects (Feature 9) ───────────────────────────────
 // Cache table for the day's planetary aspects (LLM-generated, refreshed daily)
 db.exec(`
@@ -4437,6 +4629,57 @@ app.get('*', (req, res) => {
   res.setHeader('Expires', '0');
   res.sendFile(join(__dirname, '..', 'dist', 'index.html'));
 });
+
+// ─── TEC01 — Sentry error handler (DOIT être après toutes les routes) ───
+if (SENTRY_DSN) {
+  app.use(Sentry.expressErrorHandler({ shouldHandleError: () => true }));
+  console.log('[sentry] Error handler middleware registered');
+}
+
+// ─── TEC03 — Backup DB automatique ──────────────────────────
+// Sauvegarde la SQLite toutes les 6h. Garde les 7 derniers backups.
+// Format : backups/celeste-YYYY-MM-DD-HHMM.db
+const BACKUP_DIR = join(__dirname, 'backups');
+const BACKUP_INTERVAL_MS = 6 * 3600 * 1000; // 6h
+const BACKUP_RETENTION = 7;
+
+function backupDatabase() {
+  try {
+    if (!existsSync(BACKUP_DIR)) mkdirSync(BACKUP_DIR, { recursive: true });
+    const now = new Date();
+    const ts = now.toISOString().replace(/[:T]/g, '-').slice(0, 16); // YYYY-MM-DD-HHMM
+    const dest = join(BACKUP_DIR, `celeste-${ts}.db`);
+    // better-sqlite3 .backup() fait une snapshot atomique (online backup API)
+    db.backup(dest)
+      .then(() => {
+        console.log(`[backup] OK → ${dest}`);
+        // Nettoyage : garder seulement BACKUP_RETENTION fichiers
+        const files = readdirSync(BACKUP_DIR)
+          .filter(f => f.startsWith('celeste-') && f.endsWith('.db'))
+          .map(f => ({ name: f, path: join(BACKUP_DIR, f), mtime: statSync(join(BACKUP_DIR, f)).mtimeMs }))
+          .sort((a, b) => b.mtime - a.mtime);
+        for (const f of files.slice(BACKUP_RETENTION)) {
+          try { unlinkSync(f.path); console.log(`[backup] rotated out ${f.name}`); } catch { /* ignore */ }
+        }
+      })
+      .catch(err => {
+        console.error('[backup] FAILED:', err.message);
+        if (SENTRY_DSN) Sentry.captureException(err);
+      });
+  } catch (err) {
+    console.error('[backup] setup error:', err.message);
+    if (SENTRY_DSN) Sentry.captureException(err);
+  }
+}
+
+// Backup toutes les 6h + un au démarrage (après 60s pour laisser le serveur démarrer)
+if (process.env.DISABLE_BACKUP !== '1') {
+  setTimeout(backupDatabase, 60_000); // 1min après start
+  setInterval(backupDatabase, BACKUP_INTERVAL_MS);
+  console.log(`[backup] Auto-backup actif (toutes les 6h, rétention ${BACKUP_RETENTION})`);
+} else {
+  console.log('[backup] Désactivé via DISABLE_BACKUP=1');
+}
 
 app.listen(PORT, () => {
   console.log(`🌟 Céleste server running on http://localhost:${PORT}`);
