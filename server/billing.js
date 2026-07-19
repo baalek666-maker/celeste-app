@@ -23,6 +23,17 @@ const STRIPE_WEBHOOK_SECRET = process.env.STRIPE_WEBHOOK_SECRET || '';
 const STRIPE_PRICE_ANNUAL = process.env.STRIPE_PRICE_ANNUAL || '';
 const STRIPE_PRICE_MONTHLY = process.env.STRIPE_PRICE_MONTHLY || '';
 
+// ─── Consommables (one-time purchases) ───────────────────────────
+// Montants en centimes (Stripe n'accepte que des entiers).
+// Gate : si STRIPE_SECRET_KEY est absent → create-consumable renvoie 503.
+// Étant donné que tout passe par Stripe côté serveur, l'utilisateur NE PEUT PAS
+// truquer ces montants (ils sont fixés ici, pas envoyés par le client).
+const CONSUMABLES = {
+  freeze: { amount: 99,   label: 'Recharge Céleste — Bouclier Streak',   sku: 'streak_freeze' },   // 0,99€
+  tarot:  { amount: 299,  label: 'Tirage Tarot Premium — 5 cartes',      sku: 'tarot_cross' },    // 2,99€
+  pdf:    { amount: 999,  label: 'Portrait Astrologique PDF — téléchargement', sku: 'portrait_pdf' }, // 9,99€
+};
+
 // Client Stripe initialisé seulement si la clé est présente
 export const stripe = STRIPE_SECRET_KEY ? new Stripe(STRIPE_SECRET_KEY) : null;
 
@@ -190,6 +201,97 @@ router.post('/create-checkout', async (req, res) => {
 });
 
 /**
+ * POST /api/billing/create-consumable
+ * Body : { type: 'freeze' | 'tarot' | 'pdf' }
+ *
+ * Crée une session Stripe Checkout en mode PAYMENT (one-shot, pas subscription).
+ * L'activation de la grant (freeze +1, tarot +1, pdf +1) se fait dans le webhook
+ * Stripe quand le paiement est confirmé — JAMAIS sur l'appel client.
+ *
+ * metadata.consumable_type permet au webhook de savoir quoi créditer.
+ * metadata.userId est redondant avec session.client_reference_id pour robustesse.
+ */
+router.post('/create-consumable', async (req, res) => {
+  if (!isStripeConfigured()) {
+    return res.status(503).json({
+      error: 'Paiements en cours de configuration. Réessaie bientôt.',
+      code: 'stripe_not_configured',
+    });
+  }
+
+  const { type } = req.body || {};
+  const userId = req.user?.id;
+  if (!userId) return res.status(401).json({ error: 'Non authentifié.' });
+
+  const item = CONSUMABLES[type];
+  if (!item) {
+    return res.status(400).json({ error: 'Type de consommable invalide.', validTypes: Object.keys(CONSUMABLES) });
+  }
+
+  try {
+    const session = await stripe.checkout.sessions.create({
+      mode: 'payment',
+      payment_method_types: ['card'],
+      line_items: [{
+        price_data: {
+          currency: 'eur',
+          unit_amount: item.amount,
+          product_data: {
+            name: item.label,
+            metadata: { sku: item.sku },
+          },
+        },
+        quantity: 1,
+      }],
+      customer_email: req.user?.email,
+      client_reference_id: String(userId),
+      success_url: `${req.protocol}://${req.get('host')}/billing/consumable-success?session_id={CHECKOUT_SESSION_ID}&type=${type}`,
+      cancel_url: `${req.protocol}://${req.get('host')}/billing/cancel`,
+      metadata: {
+        userId: String(userId),
+        consumable_type: type,
+        sku: item.sku,
+      },
+      allow_promotion_codes: false,
+      billing_address_collection: 'auto',
+    });
+
+    return res.json({ url: session.url, sessionId: session.id, type, amount: item.amount });
+  } catch (err) {
+    console.error('[billing] create-consumable error:', err.message);
+    return res.status(500).json({ error: 'Impossible de créer la session de paiement.' });
+  }
+});
+
+/**
+ * POST /api/billing/verify-consumable
+ * Body : { sessionId }
+ * Fallback si le webhook Stripe met du temps : permet au client de vérifier
+ * qu'un paiement consommable a bien été traité. Renvoie l'état de la session
+ * SANS ré-appliquer la grant (le webhook le fait déjà de façon idempotente).
+ */
+router.post('/verify-consumable', async (req, res) => {
+  if (!isStripeConfigured()) {
+    return res.status(503).json({ error: 'Paiements non configurés.' });
+  }
+  const { sessionId } = req.body || {};
+  if (!sessionId) return res.status(400).json({ error: 'sessionId requis.' });
+
+  try {
+    const session = await stripe.checkout.sessions.retrieve(sessionId);
+    return res.json({
+      status: session.status,
+      paymentStatus: session.payment_status,
+      consumableType: session.metadata?.consumable_type || null,
+      paid: session.payment_status === 'paid',
+    });
+  } catch (err) {
+    console.error('[billing] verify-consumable error:', err.message);
+    return res.status(404).json({ error: 'Session introuvable.' });
+  }
+});
+
+/**
  * POST /api/billing/portal
  * Crée une session Stripe Customer Portal pour que l'utilisateur puisse
  * gérer / annuler son abonnement.
@@ -278,13 +380,54 @@ export function stripeWebhookHandler(req, res, db) {
       case 'checkout.session.completed': {
         const session = event.data.object;
         const userId = Number(session.metadata?.userId);
-        const plan = session.metadata?.plan || 'monthly';
+        const plan = session.metadata?.plan;
+        const consumableType = session.metadata?.consumable_type;
         const customerId = session.customer;
         const subscriptionId = session.subscription;
         if (!userId) {
           console.error('[billing] checkout.session.completed sans userId dans metadata');
           break;
         }
+
+        // ─── Branche CONSOMMABLE (mode payment one-shot) ───────────
+        // Idempotence : la stripe_events table (ci-dessus) empêche déjà le double-traitement
+        // d'un même event.id, donc on est safe.
+        if (consumableType && CONSUMABLES[consumableType]) {
+          const item = CONSUMABLES[consumableType];
+          const source = `stripe:${item.sku}`;
+          try {
+            if (consumableType === 'freeze') {
+              const u = db.prepare('SELECT streak_freezes FROM users WHERE id = ?').get(userId);
+              const newCount = (u?.streak_freezes ?? 0) + 1;
+              db.prepare('UPDATE users SET streak_freezes = ? WHERE id = ?').run(newCount, userId);
+            } else if (consumableType === 'tarot') {
+              const row = db.prepare('SELECT paid_count FROM tarot_grants WHERE user_id = ?').get(userId);
+              if (!row) {
+                db.prepare('INSERT INTO tarot_grants (user_id, paid_count) VALUES (?, 1)').run(userId);
+              } else {
+                db.prepare('UPDATE tarot_grants SET paid_count = paid_count + 1, updated_at = strftime(\'%s\',\'now\') WHERE user_id = ?').run(userId);
+              }
+            } else if (consumableType === 'pdf') {
+              const row = db.prepare('SELECT paid_count FROM pdf_grants WHERE user_id = ?').get(userId);
+              if (!row) {
+                db.prepare('INSERT INTO pdf_grants (user_id, paid_count) VALUES (?, 1)').run(userId);
+              } else {
+                db.prepare('UPDATE pdf_grants SET paid_count = paid_count + 1, updated_at = strftime(\'%s\',\'now\') WHERE user_id = ?').run(userId);
+              }
+            }
+            // Audit log (même table que les anciens mark-paid pour cohérence historique)
+            db.prepare('INSERT INTO pdf_purchases_log (user_id, source, created_at) VALUES (?, ?, strftime(\'%s\',\'now\'))')
+              .run(userId, source);
+            console.log(`[billing] ✅ Consommable ${consumableType} crédité pour user ${userId} (${item.amount / 100}€)`);
+          } catch (grantErr) {
+            console.error(`[billing] grant ${consumableType} failed for user ${userId}:`, grantErr.message);
+            // On ne renvoie pas 500 — Stripe retrierrait indéfiniment. L'event est loggé.
+            // En prod, Sentry capturera (le server.js wrapper s'en occupe).
+          }
+          break;
+        }
+
+        // ─── Branche SUBSCRIPTION (mode subscription) ──────────────
         const now = Date.now();
         // P0#3 — monthly remplace weekly (30 jours au lieu de 7).
         const duration = plan === 'yearly' || plan === 'annual'

@@ -128,6 +128,97 @@ export async function startCheckout(plan: Plan): Promise<CheckoutResult> {
 }
 
 /**
+ * Lance le checkout Stripe pour un consommable (one-shot payment).
+ * type: 'freeze' | 'tarot' | 'pdf' — Stripe → webhook → grant automatique.
+ * - Web : redirige vers Stripe-hosted Checkout
+ * - Natif (Capacitor) : à brancher sur RevenueCat quand iOS/Android livré
+ *
+ * Ne throw jamais — renvoie un objet CheckoutResult.
+ */
+export type ConsumableType = 'freeze' | 'tarot' | 'pdf';
+
+export async function startConsumableCheckout(
+  type: ConsumableType
+): Promise<CheckoutResult> {
+  if (checkoutInProgress) {
+    return { success: false, recoverable: true, error: 'Paiement en cours…' };
+  }
+  checkoutInProgress = true;
+
+  const token = getToken();
+  if (!token) {
+    checkoutInProgress = false;
+    return { success: false, recoverable: false, error: 'Connecte-toi avant d\'acheter.' };
+  }
+
+  try {
+    const resp = await fetch(`${API_URL}/api/billing/create-consumable`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        Authorization: 'Bearer ' + token,
+      },
+      body: JSON.stringify({ type }),
+    });
+
+    const data = await resp.json().catch(() => ({} as Record<string, unknown>));
+
+    if (resp.status === 503 || data.code === 'stripe_not_configured') {
+      checkoutInProgress = false;
+      return {
+        success: false,
+        recoverable: true,
+        configured: false,
+        error: 'Paiements non configurés côté serveur.',
+      };
+    }
+    if (!resp.ok) {
+      checkoutInProgress = false;
+      return {
+        success: false,
+        recoverable: true,
+        error: data.error || `Erreur ${resp.status}`,
+      };
+    }
+    if (data.url) {
+      try {
+        const parsed = new URL(data.url);
+        if (parsed.protocol !== 'https:') {
+          checkoutInProgress = false;
+          return { success: false, recoverable: true, error: 'URL non sécurisée.' };
+        }
+        const isStripe =
+          parsed.hostname.endsWith('.stripe.com') || parsed.hostname.endsWith('.stripe.network');
+        const isLocalApi = parsed.origin === API_URL;
+        if (!isStripe && !isLocalApi) {
+          checkoutInProgress = false;
+          return { success: false, recoverable: true, error: 'URL de paiement non reconnue.' };
+        }
+      } catch {
+        checkoutInProgress = false;
+        return { success: false, recoverable: true, error: 'URL de paiement invalide.' };
+      }
+      window.location.href = data.url;
+      return { success: true, recoverable: false };
+    }
+
+    checkoutInProgress = false;
+    return {
+      success: false,
+      recoverable: true,
+      error: 'Réponse serveur inattendue (pas d\'URL de paiement).',
+    };
+  } catch (err) {
+    checkoutInProgress = false;
+    return {
+      success: false,
+      recoverable: true,
+      error: err instanceof Error ? err.message : 'Erreur réseau.',
+    };
+  }
+}
+
+/**
  * Ouvre le portail client Stripe pour gérer l'abonnement (annuler, CB).
  * Redirige le navigateur.
  */

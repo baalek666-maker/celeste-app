@@ -12,6 +12,7 @@
  */
 import { useEffect, useState } from 'react';
 import { api } from '../lib/api';
+import { startConsumableCheckout } from '../lib/payment';
 import { toast } from './Toast';
 
 interface StreakStatus {
@@ -47,16 +48,19 @@ export function StreakShieldBadge({ streak = 0, onBuy }: StreakShieldBadgeProps)
     setShowBuyModal(true);
   };
 
-  const handlePurchase = async (source: 'ios' | 'android' | 'stripe') => {
+  const handlePurchase = async (_source: 'ios' | 'android' | 'stripe') => {
     setBuying(true);
     try {
-      const r = await api.markStreakFreezePaid(source, 1);
-      toast.success(`🛡️ Freeze ajouté ! Tu as maintenant ${r.freezesAvailable} freeze(s).`);
-      setShowBuyModal(false);
-      refresh();
+      // Plus de "mark-paid" client-side — tout passe par Stripe Checkout → webhook.
+      // startConsumableCheckout redirige vers Stripe ; le webhook crédite le freeze.
+      const r = await startConsumableCheckout('freeze');
+      if (!r.success) {
+        toast.error(r.error || 'Achat refusé');
+        setBuying(false);
+      }
+      // En cas de succès, redirection vers Stripe — pas de toast ici.
     } catch (err: unknown) {
       toast.error(err instanceof Error ? err.message : 'Achat refusé');
-    } finally {
       setBuying(false);
     }
   };

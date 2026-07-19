@@ -2661,21 +2661,14 @@ app.get('/api/tarot/cross/status', auth, (req, res) => {
   res.json({ freeUsed: row.free_used, paidCount: row.paid_count, isPremium, canDraw });
 });
 
-// POST /api/tarot/cross/mark-paid — crédite 1 tirage après achat IAP
+// POST /api/tarot/cross/mark-paid — @DEPRECATED Route désactivée.
+// La gate x-celeste-iap-secret a été supprimée (secret hardcodé côté client = faille).
+// Pour acheter un tirage : /api/billing/create-consumable {type:'tarot'} → Stripe webhook.
 app.post('/api/tarot/cross/mark-paid', auth, (req, res) => {
-  const iapSecret = req.header('x-celeste-iap-secret');
-  const expected = process.env.CELESTE_IAP_SECRET || 'DEV-IAP-SECRET';
-  if (iapSecret !== expected) return res.status(402).json({ error: 'iap_secret_invalid' });
-  const source = String(req.body?.source || 'unknown').slice(0, 16);
-  const row = db.prepare('SELECT paid_count FROM tarot_grants WHERE user_id = ?').get(req.user.id);
-  if (!row) {
-    db.prepare('INSERT INTO tarot_grants (user_id, paid_count) VALUES (?, 1)').run(req.user.id);
-  } else {
-    db.prepare('UPDATE tarot_grants SET paid_count = paid_count + 1, updated_at = strftime(\'%s\',\'now\') WHERE user_id = ?').run(req.user.id);
-  }
-  db.prepare('INSERT INTO pdf_purchases_log (user_id, source, created_at) VALUES (?, ?, strftime(\'%s\',\'now\'))')
-    .run(req.user.id, `tarot:${source}`);
-  res.json({ ok: true });
+  res.status(410).json({
+    error: 'route_deprecated',
+    message: 'Utilise /api/billing/create-consumable {type:"tarot"} pour acheter un tirage.',
+  });
 });
 
 // POST /api/tarot/cross — tirage 3 cartes (Passé/Présent/Futur) + interprétation LLM
@@ -3058,28 +3051,34 @@ app.get('/api/streak', auth, (req, res) => {
   }
 });
 
-// Recharge un jeton freeze (IAP 0,99€ / unité).
-// Le client doit d'abord valider l'achat Stripe/Store avant d'appeler cet endpoint.
+// Recharge un jeton freeze — usage ADMIN/PREMIUM GRANT uniquement.
+// Pour les achats payants : utiliser /api/billing/create-consumable {type:'freeze'}
+// (Stripe Checkout → webhook → grant). L'ancienne gate x-celeste-iap-secret a été
+// supprimée (secret hardcodé = faille de sécurité — n'importe qui pouvait l'extraire).
 app.post('/api/streak/freeze', auth, (req, res) => {
   try {
     const qty = Math.max(1, Math.min(10, Number(req.body?.quantity) || 1));
     const u = db.prepare('SELECT streak_freezes FROM users WHERE id = ?').get(req.user.id);
     if (!u) return res.status(404).json({ error: 'user not found' });
 
-    // MON01 — Gate IAP : le secret doit être fourni (iOS/Android/Stripe receipt validated client-side)
-    // Sauf si quantity est 0 (cas spécial : ajout gratuit via premium mensuel, admin, etc.)
+    // Plus de gate IAP côté client. Cette route n'est plus utilisée pour les achats ;
+    // tout passe par Stripe Checkout (+ webhook). On la garde pour les grants gratuits
+    // (premium mensuel, admin, bonus onboarding) où qty=0 → +1 offert.
     const isFreeGrant = qty === 0;
+    const addQty = isFreeGrant ? 1 : qty;
+
     if (!isFreeGrant) {
-      const iapSecret = req.header('x-celeste-iap-secret');
-      const expected = process.env.CELESTE_IAP_SECRET || 'DEV-IAP-SECRET';
-      if (iapSecret !== expected) return res.status(402).json({ error: 'iap_secret_invalid' });
+      // Sécurité : toute demande d'ajout payant via cette route est refusée.
+      // L'utilisateur doit passer par /api/billing/create-consumable.
+      return res.status(402).json({
+        error: 'use_billing_route',
+        message: 'Utilise /api/billing/create-consumable {type:"freeze"} pour acheter un freeze.',
+      });
     }
 
-    // Free grant → +1 seulement (ne pas exploiter pour +10)
-    const addQty = isFreeGrant ? 1 : qty;
     const newCount = (u.streak_freezes ?? 0) + addQty;
     db.prepare('UPDATE users SET streak_freezes = ? WHERE id = ?').run(newCount, req.user.id);
-    console.log(`[streak/freeze] user ${req.user.id} +${addQty} freeze(s) → total ${newCount}${isFreeGrant ? ' (free)' : ''}`);
+    console.log(`[streak/freeze] user ${req.user.id} +${addQty} freeze(s) → total ${newCount} (free grant)`);
     res.json({ ok: true, freezesAvailable: newCount });
   } catch (err) {
     console.error('[streak/freeze] error:', err.message);

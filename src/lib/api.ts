@@ -644,12 +644,12 @@ export const api = {
     15_000
   ),
   // MON01 — marque le freeze comme payé (IAP receipt validated client-side).
+  /** @deprecated Utilise startConsumableCheckout('freeze') — Stripe only. */
   markStreakFreezePaid: (source: 'ios' | 'android' | 'stripe', quantity = 1) => apiCall<{ ok: true; freezesAvailable: number }>(
     '/streak/freeze',
     {
       method: 'POST',
       body: JSON.stringify({ quantity }),
-      headers: { 'x-celeste-iap-secret': 'DEV-IAP-SECRET' },
     },
     15_000
   ),
@@ -673,6 +673,7 @@ export const api = {
   }>('/portrait/pdf/status', {}, 5_000),
 
   /**
+   * @deprecated Utilise startConsumableCheckout('pdf') — Stripe only.
    * Marque un paiement IAP (reçu Apple/Google/Stripe validé côté client).
    * En prod, remplacer le stub par une vraie validation Receipt serveur.
    */
@@ -682,7 +683,6 @@ export const api = {
       {
         method: 'POST',
         body: JSON.stringify({ source, receipt: 'client-stub' }),
-        headers: { 'x-celeste-iap-secret': 'DEV-IAP-SECRET' },
       },
       10_000
     ),
@@ -704,11 +704,11 @@ export const api = {
     freeUsed: number; paidCount: number; isPremium: boolean; canDraw: boolean;
   }>('/tarot/cross/status', {}, 5_000),
 
+  /** @deprecated Utilise startConsumableCheckout('tarot') — Stripe only. */
   markTarotCrossPaid: (source: 'ios' | 'android' | 'stripe') =>
     apiCall<{ ok: true }>('/tarot/cross/mark-paid', {
       method: 'POST',
       body: JSON.stringify({ source, receipt: 'client-stub' }),
-      headers: { 'x-celeste-iap-secret': 'DEV-IAP-SECRET' },
     }, 10_000),
 
   drawTarotCross: (question?: string) => apiCall<{

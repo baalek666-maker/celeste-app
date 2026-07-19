@@ -8,6 +8,7 @@
  */
 import { useEffect, useState } from 'react';
 import { api } from '../lib/api';
+import { startConsumableCheckout } from '../lib/payment';
 import { toast } from './Toast';
 
 export function PortraitPdfButton() {
@@ -53,12 +54,14 @@ export function PortraitPdfButton() {
     }
   };
 
-  const handleBuy = async (source: 'ios' | 'android' | 'stripe') => {
+  const handleBuy = async (_source: 'ios' | 'android' | 'stripe') => {
     try {
-      await api.markPortraitPdfPaid(source);
-      toast.success('Paiement validé. Ton nouveau PDF est prêt.');
-      setShowBuyModal(false);
-      refresh();
+      // Stripe Checkout → webhook → grant automatique du PDF.
+      const r = await startConsumableCheckout('pdf');
+      if (!r.success) {
+        toast.error(r.error || 'Paiement refusé');
+      }
+      // Redirection vers Stripe si succès → toast de confirmation géré sur /billing/success.
     } catch (err: unknown) {
       toast.error(err instanceof Error ? err.message : 'Paiement refusé');
     }

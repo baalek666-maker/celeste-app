@@ -73,37 +73,14 @@ export function createPortraitPdfRouter({ db, auth }) {
    * The receipt validation is stubbed — production must validate against
    * App Store / Play Store / Stripe BEFORE incrementing.
    */
+  // POST /portrait/pdf/mark-paid — @DEPRECATED Route désactivée.
+  // La gate x-celeste-iap-secret a été supprimée (secret hardcodé côté client = faille).
+  // Pour acheter un PDF : /api/billing/create-consumable {type:'pdf'} → Stripe webhook.
   router.post('/mark-paid', auth, (req, res) => {
-    try {
-      const userId = req.user.id;
-      const iapSecret = req.header('x-celeste-iap-secret');
-      const expected = process.env.CELESTE_IAP_SECRET || 'DEV-IAP-SECRET';
-      if (iapSecret !== expected) {
-        console.warn(`[portrait-pdf/mark-paid] user ${userId} bad IAP secret`);
-        return res.status(402).json({ error: 'iap_secret_invalid' });
-      }
-      const source = String(req.body?.source || 'unknown').slice(0, 16);
-      // Idempotent insert
-      const existing = db.prepare('SELECT paid_count FROM pdf_grants WHERE user_id = ?').get(userId);
-      if (!existing) {
-        db.prepare('INSERT INTO pdf_grants (user_id, paid_count) VALUES (?, 1)').run(userId);
-      } else {
-        db.prepare('UPDATE pdf_grants SET paid_count = paid_count + 1, updated_at = strftime(\'%s\',\'now\') WHERE user_id = ?')
-          .run(userId);
-      }
-      // Log purchase event for audit
-      db.prepare('INSERT INTO pdf_purchases_log (user_id, source, created_at) VALUES (?, ?, strftime(\'%s\',\'now\'))')
-        .run(userId, source);
-      const row = db.prepare('SELECT paid_count, free_used, free_quota FROM pdf_grants WHERE user_id = ?').get(userId);
-      res.json({
-        ok: true,
-        paidCount: row.paid_count,
-        canDownload: (row.free_used < row.free_quota) || row.paid_count > 0,
-      });
-    } catch (err) {
-      console.error('[portrait-pdf/mark-paid] error:', err.message);
-      res.status(500).json({ error: 'mark-paid failed' });
-    }
+    res.status(410).json({
+      error: 'route_deprecated',
+      message: 'Utilise /api/billing/create-consumable {type:"pdf"} pour acheter un Portrait PDF.',
+    });
   });
 
   /**
