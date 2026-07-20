@@ -23,10 +23,10 @@ const QUEST_DEFS = [
 ];
 
 const BADGE_DEFS = [
-  { id: 'first_steps',     emoji: '🌟', title: 'Premiers pas',     desc: 'Créer ton compte céleste' },
-  { id: 'first_horoscope', emoji: '🔮', title: 'Première lecture', desc: 'Consulter ton premier horoscope' },
-  { id: 'first_tarot',     emoji: '🃏', title: 'Le Tirage',        desc: 'Tirer ta première carte' },
-  { id: 'streak_7',        emoji: '🔥', title: 'Une semaine',      desc: '7 jours de suite' },
+  { id: 'first_steps',     emoji: '🌟', title: 'Premiers pas',     desc: 'Créer ton compte céleste', reward: 'Bienvenue sur Céleste', action: 'Tu viens de le débloquer' },
+  { id: 'first_horoscope', emoji: '🔮', title: 'Première lecture', desc: 'Consulter ton premier horoscope', reward: '15 XP', action: 'Lis ton horoscope du jour' },
+  { id: 'first_tarot',     emoji: '🃏', title: 'Le Tirage',        desc: 'Tirer ta première carte', reward: '15 XP', action: ' Tire ta carte du jour' },
+  { id: 'streak_7',        emoji: '🔥', title: 'Une semaine',      desc: '7 jours de suite', reward: '1 streak freeze offert', action: 'Ouvre Céleste 7 jours de suite' },
   { id: 'streak_30',       emoji: '🌙', title: 'Cycle lunaire',    desc: '30 jours de suite', reward: '3 streak freezes offerts', action: 'Continue à ouvrir Céleste chaque jour' },
   { id: 'explorer',        emoji: '◈',  title: 'Explorateur',      desc: 'Découvrir toutes les sections', reward: '100 XP bonus', action: 'Explore les 3 piliers de la section Explorer' },
   { id: 'journalist',      emoji: '✍️', title: 'Chroniqueur',      desc: '5 entrées de journal', reward: '50 XP bonus', action: 'Écris 5 fois dans ton journal' },
