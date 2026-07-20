@@ -124,23 +124,23 @@ function playTone({ freq, duration, type = 'sine', volume = 0.15, startDelay = 0
 
 /** Petit tintement cristallin pour un tirage de carte. */
 export function playCardReveal() {
-  playTone({ freq: 523.25, duration: 0.4, type: 'sine', volume: 0.18 });       // C5
-  playTone({ freq: 659.25, duration: 0.4, type: 'sine', volume: 0.12, startDelay: 0.08 }); // E5
-  playTone({ freq: 783.99, duration: 0.6, type: 'sine', volume: 0.10, startDelay: 0.16 }); // G5
+  playTone({ freq: 523.25, duration: 0.4, type: 'sine', volume: 0.30 });       // C5
+  playTone({ freq: 659.25, duration: 0.4, type: 'sine', volume: 0.20, startDelay: 0.08 }); // E5
+  playTone({ freq: 783.99, duration: 0.6, type: 'sine', volume: 0.16, startDelay: 0.16 }); // G5
   haptic([10, 30, 20]);
 }
 
 /** Son plus grave et mystérieux pour un tirage de rune. */
 export function playRuneReveal() {
-  playTone({ freq: 196.00, duration: 0.8, type: 'triangle', volume: 0.20, sweepTo: 174.61 }); // G3 → F3
-  playTone({ freq: 392.00, duration: 0.5, type: 'sine', volume: 0.10, startDelay: 0.1 });     // G4
+  playTone({ freq: 196.00, duration: 0.8, type: 'triangle', volume: 0.32, sweepTo: 174.61 }); // G3 → F3
+  playTone({ freq: 392.00, duration: 0.5, type: 'sine', volume: 0.18, startDelay: 0.1 });     // G4
   haptic([15, 40, 25]);
 }
 
 /** Notification douce (révélation de horoscope, quête complétée). */
 export function playChime() {
-  playTone({ freq: 880.00, duration: 0.3, type: 'sine', volume: 0.12 }); // A5
-  playTone({ freq: 1108.73, duration: 0.4, type: 'sine', volume: 0.10, startDelay: 0.05 }); // C#6
+  playTone({ freq: 880.00, duration: 0.3, type: 'sine', volume: 0.20 }); // A5
+  playTone({ freq: 1108.73, duration: 0.4, type: 'sine', volume: 0.16, startDelay: 0.05 }); // C#6
   haptic(15);
 }
 
