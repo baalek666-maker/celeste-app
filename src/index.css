@@ -531,9 +531,9 @@ html {
    absolues (px) qui ne suivent pas le rem. Elles sont trop petites sur mobile.
    On les remonte d'un cran : 9→11, 10→12, 11→13.
    Impact ZÉRO sur le layout (padding, marges, largeurs ne changent pas). */
-.text-\[9px\] { font-size: 11px !important; }
-.text-\[10px\] { font-size: 12px !important; }
-.text-\[11px\] { font-size: 13px !important; }
+.text-\[9px\] { font-size: 13px !important; }
+.text-\[10px\] { font-size: 14px !important; }
+.text-\[11px\] { font-size: 15px !important; }
 /* Virtualize offscreen sections for faster long-page rendering */
 .cv-auto {
   content-visibility: auto;
