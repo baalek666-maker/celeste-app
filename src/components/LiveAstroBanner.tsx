@@ -1,21 +1,14 @@
 /**
- * LiveAstroBanner — "Éphémérides vivantes" (Piste 3).
+ * LiveAstroBanner — "Éphémérides vivantes".
  *
- * Bannière qui affiche l'événement astronomique majeur des prochaines 24h,
- * rafraîchie à chaque ouverture de Home. Si plusieurs événements, on prend
- * le plus proche dans le temps.
+ * Bannière qui affiche l'événement astronomique majeur des prochaines 24h.
  *
  * États :
- *  - Aucun événement → rien ne s'affiche (ne pas polluer Home)
- *  - 1 événement → bannière avec emoji + titre + body court + "dans Xh"
- *  - 2+ événements → carrousel horizontal (swipe)
- *
- * Pas de polling : on charge une seule fois au mount, et on rafraîchit si
- * l'user revient sur Home (App.tsx remount au screen change).
- *
- * Deep-link : tap → ouvre l'écran Horoscope pour le détail.
+ *  - Aucun événement → rien ne s'affiche
+ *  - 1 événement → bannière simple
+ *  - 2+ événements → swipe horizontal + tap pour avancer + dots
  */
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { api } from '../lib/api';
 
 interface AstroEvent {
@@ -43,24 +36,16 @@ function relativeTime(isoWhen: string): string {
   return `Dans ${Math.floor(diffH / 24)}j`;
 }
 
-function eventAccent(type: string): string {
-  if (type === 'moon_phase') return 'glass border-violet-500/20';
-  if (type === 'lunar_eclipse') return 'glass border-rose-500/20';
-  if (type === 'ingress') return 'glass border-amber-500/20';
-  if (type === 'station') return 'glass border-cyan-500/20';
-  return 'glass border-night-700/30';
-}
-
 export default function LiveAstroBanner() {
   const [events, setEvents] = useState<AstroEvent[] | null>(null);
   const [idx, setIdx] = useState(0);
+  const touchStartX = useRef<number | null>(null);
 
   useEffect(() => {
     let alive = true;
     api.getAstroEvents(24)
       .then(data => {
         if (!alive) return;
-        // Trier par proximité temporelle (le plus proche d'abord)
         const sorted = [...data.events].sort((a, b) => {
           const ta = Math.abs(Date.now() - new Date(a.when).getTime());
           const tb = Math.abs(Date.now() - new Date(b.when).getTime());
@@ -72,18 +57,29 @@ export default function LiveAstroBanner() {
     return () => { alive = false; };
   }, []);
 
-  // Pas d'événement → on ne rend rien (ne pas polluer la Home)
   if (!events || events.length === 0) return null;
 
   const current = events[idx % events.length];
   const hasMultiple = events.length > 1;
 
+  const next = () => setIdx(i => (i + 1) % events.length);
+  const prev = () => setIdx(i => (i - 1 + events.length) % events.length);
+
   return (
     <section
-      className={`rounded-2xl p-4 mb-6 glass border border-night-700/20`}
+      className="rounded-2xl p-4 mb-6 glass border border-night-700/20 select-none cursor-pointer"
+      onTouchStart={(e) => { touchStartX.current = e.touches[0].clientX; }}
+      onTouchEnd={(e) => {
+        if (touchStartX.current === null) return;
+        const delta = e.changedTouches[0].clientX - touchStartX.current;
+        if (delta < -40 && hasMultiple) next();
+        else if (delta > 40 && hasMultiple) prev();
+        touchStartX.current = null;
+      }}
+      onClick={() => { if (hasMultiple) next(); }}
     >
       <div className="flex items-start gap-3">
-        <div className="text-3xl leading-none mt-0.5 select-none">{current.emoji}</div>
+        <div className="text-3xl leading-none mt-0.5">{current.emoji}</div>
         <div className="flex-1 min-w-0">
           <div className="flex items-center gap-2 mb-0.5">
             <span className="text-[9px] uppercase tracking-widest text-night-500">En direct du ciel</span>
@@ -93,10 +89,13 @@ export default function LiveAstroBanner() {
           <h3 className="text-sm font-medium text-night-100 leading-tight">{current.title}</h3>
           <p className="text-xs text-night-300 leading-relaxed mt-1 line-clamp-2">{current.body}</p>
         </div>
+        {hasMultiple && (
+          <span className="text-night-600 text-xs mt-1">›</span>
+        )}
       </div>
 
       {hasMultiple && (
-        <div className="flex justify-center gap-1.5 mt-3">
+        <div className="flex justify-center gap-1.5 mt-3" onClick={(e) => e.stopPropagation()}>
           {events.map((_, i) => (
             <button
               key={i}
