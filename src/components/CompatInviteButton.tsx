@@ -61,7 +61,7 @@ export function CompatInviteButton({ context }: { context: 'romantic' | 'family'
       <div className="flex items-start gap-3">
         <div className="text-2xl">✨</div>
         <div className="flex-1">
-          <p className="text-cosmic-100 font-medium text-sm mb-1">Vous êtes deux à analyser</p>
+          <p className="text-cosmic-100 font-medium text-sm mb-1">Vous êtes deux sur Céleste</p>
           <p className="text-night-300 text-xs leading-relaxed mb-3">
             Envoie un lien à l'autre personne. Elle ouvre Céleste, saisit son heure de naissance,
             et vous découvrez <span className="text-cosmic-200">votre compatibilité détaillée</span> ensemble.

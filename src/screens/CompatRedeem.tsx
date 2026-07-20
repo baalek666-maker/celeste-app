@@ -204,7 +204,7 @@ export function CompatRedeem({ token, onDone }: { token: string; onDone: () => v
           {inviterName} t'a invité(e)
         </h1>
         <p className="text-night-300 text-sm leading-relaxed">
-          Découvrez votre <span className="text-cosmic-200">compatibilité astrale détaillée</span>.
+          Découvre ta <span className="text-cosmic-200">compatibilité astrale détaillée</span>.
           Renseigne ta date, heure et lieu de naissance — c'est gratuit.
         </p>
       </div>
