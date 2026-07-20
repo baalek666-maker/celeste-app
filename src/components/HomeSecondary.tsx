@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react';
 import type { Screen } from '../App';
 import { pushService } from '../lib/pushNotifications';
 import { MoodWidget } from './MoodWidget';
+import { StreakShieldBadge } from './StreakShieldBadge';
 
 /**
  * HomeSecondary — panneau repliable qui regroupe les widgets de rétention
@@ -54,6 +55,7 @@ export function HomeSecondary({
         <div className="mt-3 space-y-2 animate-fade-in">
           <MoodWidget />
           {streak > 0 && <StreakInline streak={streak} />}
+          {streak > 0 && <StreakShieldBadge streak={streak} onBuy={() => onNavigate('settings')} />}
           <EveningReminderInline />
           {!pushEnabled ? (
             <button

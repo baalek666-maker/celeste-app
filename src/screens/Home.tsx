@@ -2,7 +2,6 @@ import { useEffect, useMemo } from 'react';
 import type { User } from '../types';
 import type { Screen } from '../App';
 import StreakCelebration from '../components/StreakCelebration';
-import StreakShieldBadge from '../components/StreakShieldBadge';
 import DailyTarot from '../components/DailyTarot';
 import TarotCross from '../components/TarotCross';
 import TodayIn10s from '../components/TodayIn10s';
@@ -118,7 +117,6 @@ export function Home({ user, onNavigate, isGuest }: { user: User; onNavigate: (s
       <TrialBanner user={user} onNavigate={(s) => onNavigate(s as Screen)} />
       <EmailVerificationBanner email={user.email} />
       <StreakCelebration streak={streak} />
-      <StreakShieldBadge streak={streak} onBuy={() => onNavigate('settings')} />
 
       {/* Hero — la phrase qui tue */}
       <HeroPrediction chart={chart} sunSignKey={chart.sun} firstName={firstName} streak={streak} />
