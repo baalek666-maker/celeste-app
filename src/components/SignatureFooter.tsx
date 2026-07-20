@@ -56,7 +56,7 @@ export function SignatureFooter({
   return (
     <button
       onClick={() => onNavigate('explorer')}
-      className="w-full glass rounded-2xl p-4 mb-4 text-left hover:border-gold-500/40 border border-transparent transition-all duration-300 group flex items-center gap-4"
+      className="w-full glass rounded-2xl p-4 mb-4 text-left hover:border-night-500/40 border border-night-700/20 transition-all duration-300 flex items-center gap-4"
     >
       {/* Mini astrolabe compact 88×88 */}
       <div className="relative w-[88px] h-[88px] flex-shrink-0">

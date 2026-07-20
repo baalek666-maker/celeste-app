@@ -146,8 +146,8 @@ export default function TarotCross() {
         </div>
 
         {/* Synthèse */}
-        <div className="mt-4 p-4 rounded-2xl bg-gradient-to-br from-gold-500/10 to-cosmic-500/10 border border-gold-500/30">
-          <p className="text-gold-400 text-[10px] uppercase tracking-widest font-semibold mb-2">✦ Synthèse</p>
+        <div className="mt-4 p-4 glass rounded-xl border border-night-700/30">
+          <p className="text-night-500 text-[10px] uppercase tracking-widest mb-2">Synthèse</p>
           <p className="text-night-100 text-sm leading-relaxed">{result.reading.synthesis}</p>
         </div>
 
@@ -275,10 +275,10 @@ export default function TarotCross() {
           onClick={() => setShowBuyModal(false)}
         >
           <div
-            className="w-full max-w-md glass rounded-3xl p-6 border border-gold-500/30 shadow-2xl"
+            className="w-full max-w-md glass rounded-2xl p-6 border border-night-700/40"
             onClick={(e) => e.stopPropagation()}
           >
-            <h3 className="font-display text-xl text-gold-gradient mb-2 tracking-wider">
+            <h3 className="text-lg font-medium text-night-100 mb-2">
               Tirage en croix
             </h3>
             <p className="text-night-300 text-sm leading-relaxed mb-5">

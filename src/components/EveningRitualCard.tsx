@@ -103,23 +103,20 @@ export default function EveningRitualCard({ streak = 0 }: Props) {
   }
 
   return (
-    <div className="relative glass rounded-3xl p-5 mb-4 border border-cosmic-500/25 overflow-hidden stagger-card card-glow animate-fade-in">
-      {/* Halo nocturne */}
-      <div className="absolute -top-16 -left-16 w-40 h-40 rounded-full bg-indigo-500/10 blur-3xl pointer-events-none" />
-
+    <div className="relative glass rounded-2xl p-5 mb-4 border border-night-700/30 stagger-card animate-fade-in">
       {/* Header */}
       <div className="relative flex items-center justify-between mb-4">
         <div className="flex items-center gap-2">
-          <div className="w-9 h-9 rounded-xl bg-gradient-to-br from-cosmic-400 to-cosmic-600 flex items-center justify-center text-lg shadow-lg shadow-cosmic-500/40">
+          <div className="w-8 h-8 rounded-lg glass flex items-center justify-center text-base">
             🌙
           </div>
           <div>
-            <p className="text-[10px] text-cosmic-300 uppercase tracking-widest font-semibold">Rituel du soir</p>
-            <h3 className="text-base font-bold text-night-100 leading-tight">Trois lignes avant de dormir</h3>
+            <p className="text-[10px] text-night-500 uppercase tracking-widest">Rituel du soir</p>
+            <h3 className="text-sm font-medium text-night-100 leading-tight">Trois lignes avant de dormir</h3>
           </div>
         </div>
         {completedEvening && (
-          <span className="text-[10px] text-cosmic-300 font-semibold bg-cosmic-500/15 px-2.5 py-1 rounded-full border border-cosmic-400/40">
+          <span className="text-[10px] text-night-400">
             ✓ Scellé
           </span>
         )}

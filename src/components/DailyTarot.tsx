@@ -418,19 +418,18 @@ export default function DailyTarot() {
                   </p>
                 </div>
 
-                {/* Footer — bouton CTA clair (vs ancien text-[10px] invisible) */}
-                <div className="mt-4 pt-3 border-t border-gold-500/30">
+                {/* Footer — bouton CTA sobre */}
+                <div className="mt-4 pt-3 border-t border-night-700/40">
                   <button
                     type="button"
                     onClick={toggleFlip}
-                    className="w-full flex items-center justify-center gap-2 py-2 px-3 rounded-xl bg-gold-500/10 hover:bg-gold-500/20 border border-gold-500/30 hover:border-gold-500/50 transition-all active:scale-[0.98] animate-pulse-slow"
+                    className="w-full flex items-center justify-center gap-2 py-2 px-3 rounded-xl glass border border-night-700/40 hover:border-night-500/60 transition-all active:scale-[0.98]"
                     aria-label={flipSide === 'verso' ? 'Revenir à la carte' : 'Voir la lecture détaillée'}
                   >
-                    <span className="text-base">👆</span>
-                    <span className="text-gold-300 text-sm font-semibold tracking-wide">
-                      {flipSide === 'verso' ? 'Touche pour revoir la carte' : 'Touche pour ta lecture détaillée'}
+                    <span className="text-sm">👆</span>
+                    <span className="text-night-200 text-xs">
+                      {flipSide === 'verso' ? 'Revoir la carte' : 'Ta lecture détaillée'}
                     </span>
-                    <span className="text-gold-400 text-base">↻</span>
                   </button>
                 </div>
               </div>

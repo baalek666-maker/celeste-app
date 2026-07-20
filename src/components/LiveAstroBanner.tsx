@@ -44,11 +44,11 @@ function relativeTime(isoWhen: string): string {
 }
 
 function eventAccent(type: string): string {
-  if (type === 'moon_phase') return 'from-violet-500/30 to-indigo-500/10 border-violet-500/30';
-  if (type === 'lunar_eclipse') return 'from-rose-500/30 to-purple-500/10 border-rose-500/40';
-  if (type === 'ingress') return 'from-amber-500/30 to-orange-500/10 border-amber-500/30';
-  if (type === 'station') return 'from-cyan-500/30 to-blue-500/10 border-cyan-500/30';
-  return 'from-gold-500/30 to-gold-400/10 border-gold-500/30';
+  if (type === 'moon_phase') return 'glass border-violet-500/20';
+  if (type === 'lunar_eclipse') return 'glass border-rose-500/20';
+  if (type === 'ingress') return 'glass border-amber-500/20';
+  if (type === 'station') return 'glass border-cyan-500/20';
+  return 'glass border-night-700/30';
 }
 
 export default function LiveAstroBanner() {
