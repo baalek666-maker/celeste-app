@@ -956,11 +956,14 @@ export const api = {
   }>('/astro/events'),
 
   // ─── Astrological Portrait ────────────────────────────────
+  // Portrait = LLM 8192 tokens (lent). Timeout 60s car le backend peut
+  // prendre 30s (LLM) avant de servir le fallback déterministe.
   getAstroPortrait: () => apiCall<{
     portrait: string;
     wordCount: number;
     cached: boolean;
-  }>('/natal-chart/portrait'),
+    fallback?: boolean;
+  }>('/natal-chart/portrait', {}, 60_000),
 
   // P2#15 — Yearly Recap
   getYearlyRecap: (year?: number) => apiCall<{
