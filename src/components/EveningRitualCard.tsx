@@ -62,10 +62,6 @@ export default function EveningRitualCard({ streak = 0 }: Props) {
       }
       if (ritualR.status === 'fulfilled') {
         setCompletedEvening(ritualR.value.completedEvening);
-        // Pré-remplir l'intention du soir si pas encore notée
-        if (!intention && ritualR.value.eveningIntention) {
-          setIntention(ritualR.value.eveningIntention);
-        }
       }
       setLoading(false);
     });
