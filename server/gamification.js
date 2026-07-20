@@ -283,9 +283,10 @@ function registerGamificationRoutes(app, db, auth, callLLMWithRetry, getNatalPos
 
   // ── GET /api/natal-chart/portrait (Premium — 1500 word astrological portrait) ──
   app.get('/api/natal-chart/portrait', auth, async (req, res) => {
+    // Fric-portrait — userId déclaré en scope parent du try pour être
+    // accessible dans le catch fallback.
+    const userId = req.user.id;
     try {
-      const userId = req.user.id;
-
       // Premium-only: AstroPortrait is the most LLM-expensive feature (8192 tokens)
       const premCheck = db.prepare('SELECT is_premium, premium_until FROM users WHERE id = ?').get(userId);
       const now = Math.floor(Date.now() / 1000);
@@ -310,7 +311,9 @@ function registerGamificationRoutes(app, db, auth, callLLMWithRetry, getNatalPos
       if (!userRow || !userRow.birth_data) {
         return res.status(400).json({ error: 'Birth data required' });
       }
-      const birthData = safeJsonParse(userRow.birth_data, null, 'users.birth_data');
+      // safeJsonParse inline — non-accessible depuis server.js (non-exporté)
+      let birthData = null;
+      try { birthData = JSON.parse(userRow.birth_data); } catch { /* corrupted */ }
       if (!birthData) {
         return res.status(400).json({ error: 'Birth data corrupted' });
       }
@@ -369,10 +372,10 @@ Réponse au format JSON: {"portrait": "le texte complet avec les ##"}`;
 
       const result = await callLLMWithRetry(
         [{ role: 'user', content: prompt }],
-        2,    // maxRetries
-        8192, // maxTokens (glm-5.2 reasoning model needs more tokens)
+        0,    // maxRetries=0 — pas de retry (sinon circuit breaker + 6min bloqué)
+        4096, // maxTokens réduit (glm-5.2 reasoning est lent, 8192 = timeout garanti)
         { response_format: { type: 'json_object' } },
-        120000 // 120s timeout (portrait generation is long)
+        30000 // 30s timeout max — au-delà on sert le fallback déterministe
       );
 
       let portraitText = '';
@@ -416,7 +419,38 @@ Réponse au format JSON: {"portrait": "le texte complet avec les ##"}`;
       });
     } catch (err) {
       console.error('portrait error:', err.message);
-      res.status(500).json({ error: 'Portrait generation failed. Réessayez plus tard.' });
+      // Fric-portrait — Si le LLM timeout/fail, servir un fallback riche basé
+      // sur le natal chart plutôt que planter l'écran. L'utilisateur a quand
+      // même une lecture, le cache se remplira à la prochaine tentative LLM.
+      try {
+        const userRow2 = db.prepare('SELECT birth_data FROM users WHERE id = ?').get(userId);
+        let bd2 = null;
+        try { bd2 = JSON.parse(userRow2?.birth_data || '{}'); } catch {}
+        const natal2 = typeof getNatalPositions === 'function' && bd2?.date ? getNatalPositions(bd2, true) : null;
+        const sunS = natal2?.sun?.sign || 'Ton signe';
+        const moonS = natal2?.moon?.sign || 'Ta Lune';
+        const risingS = natal2?.ascendant?.sign || 'Ton Ascendant';
+        const planetsArr2 = ['sun','moon','mercury','venus','mars','jupiter','saturn'];
+        const positionsStr2 = planetsArr2
+          .map(p => natal2?.[p] ? `${p} en ${natal2[p].sign}` : null)
+          .filter(Boolean)
+          .join(', ');
+        const fallbackPortrait = `## Ton essence : Soleil en ${sunS}\n\nTon Soleil en ${sunS} est le cœur de ton identité. Il représente ta vitalité, ta créativité, la façon dont tu rayonnes dans le monde. C'est l'énergie fondamentale qui te pousse à avancer et à exprimer qui tu es vraiment.\n\n## Ton monde intérieur : Lune en ${moonS}\n\nTa Lune en ${moonS} révèle ton paysage émotionnel. Elle parle de tes besoins intimes, de la façon dont tu ressens, dont tu te sécurises, dont tu nourris tes racines. Quand tu es aligné·e avec ta Lune, tu te sens profondément toi.\n\n## Ton masque : Ascendant ${risingS}\n\nTon Ascendant ${risingS} est la première impression que tu laisses. C'est la porte d'entrée que les autres voient avant de découvrir ton Soleil. Il colore ta manière d'aborder le monde, ton style, ton énergie de rencontre.\n\n## Les planètes qui te composent\n\n${positionsStr2}\n\n*Ce portrait est une version simplifiée. Le portrait complet sera généré dès que le service retrouvera sa pleine disponibilité.*`;
+        const wordCount2 = fallbackPortrait.split(/\s+/).length;
+        // Cache le fallback pour éviter de retomber sur le timeout LLM
+        db.prepare('INSERT OR REPLACE INTO astro_portraits (user_id, portrait, word_count, generated_at) VALUES (?, ?, ?, ?)')
+          .run(userId, fallbackPortrait, wordCount2, Math.floor(Date.now() / 1000));
+        return res.json({
+          portrait: fallbackPortrait,
+          wordCount: wordCount2,
+          cached: false,
+          fallback: true,
+          generatedAt: Math.floor(Date.now() / 1000),
+        });
+      } catch (e2) {
+        console.error('[portrait fallback] FAILED:', e2.message);
+        res.status(500).json({ error: 'Portrait generation failed. Réessayez plus tard.' });
+      }
     }
   });
 
