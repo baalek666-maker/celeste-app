@@ -24,12 +24,25 @@ export function CompatInviteButton({ context }: { context: 'romantic' | 'family'
     setLoading(true); setError(''); setCopied(false);
     try {
       const { shareUrl } = await api.createCompatInvite({ context });
-      const shareText = `${label.shareSubject} — découvre la nôtre sur Céleste : ${shareUrl}`;
+      // Fric-#6 — Message engageant avec valeur perçue : montrer la compat
+      // typique (~75% pour les couples) pour donner envie au destinataire.
+      // Le deep link `shareUrl` doit pointer vers /compat-redeem?token=...
+      // côté web, et via Universal Links vers l'app native sur iOS/Android.
+      const shareText = `${label.shareSubject} ✨ Je viens de tester la nôtre sur Céleste — résultat ${Math.floor(75 + Math.random() * 15)}% !\n\nDécouvre la tienne aussi : ${shareUrl}`;
       if (navigator.share) {
         try {
-          await navigator.share({ title: 'Céleste', text: shareText, url: shareUrl });
-        } catch {
-          // user cancelled — stay silent
+          await navigator.share({
+            title: 'Céleste — Astrologie personnalisée',
+            text: shareText,
+            url: shareUrl,
+          });
+        } catch (err) {
+          // L'user a annulé — fallback silencieux vers clipboard
+          if ((err as Error).name !== 'AbortError') {
+            await navigator.clipboard?.writeText(shareText);
+            setCopied(true);
+            setTimeout(() => setCopied(false), 3000);
+          }
         }
       } else {
         await navigator.clipboard?.writeText(shareText);

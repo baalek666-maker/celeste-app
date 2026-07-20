@@ -255,6 +255,17 @@ export const api = {
     return res;
   },
 
+  // Fric-#1 — OAuth sign-in (Apple + Google, fric-#1)
+  oauthLogin: async (params: { provider: 'apple' | 'google'; idToken: string; email?: string; displayName?: string; avatar?: string }) => {
+    const res = await apiCall<AuthResponse>('/auth/oauth/login', {
+      method: 'POST',
+      body: JSON.stringify(params),
+    }, DEFAULT_TIMEOUT_MS, { bypassOfflineQueue: true });
+    setToken(res.token);
+    setRefreshToken(res.refreshToken);
+    return res;
+  },
+
   logout: async () => {
     const refreshToken = getRefreshToken();
     try {

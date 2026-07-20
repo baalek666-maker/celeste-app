@@ -203,13 +203,16 @@ export function Onboarding({ onComplete }: { onComplete: (u: User) => void }) {
     </div>,
 
     // Step 2: Place of birth (P0#2 — CitySearch remplace la liste hardcodée)
+    // Fric-#3 — Ajout d'un raccourci "Je préciserai plus tard" qui prend Paris
+    // comme défaut pour réduire l'abandon. Le user pourra le changer plus tard
+    // dans Settings > Profil.
     <div key="2" className="flex flex-col items-center justify-center min-h-screen px-8 animate-fade-in relative">
       <ProgressBar current={2} />
       <BackButton to={1} />
       <p className="text-gold-400 text-sm uppercase tracking-widest mb-3">Étape 2 sur 2</p>
       <h2 className="text-2xl font-bold mb-2 text-center">Où es-tu né·e ?</h2>
       <p className="text-night-400 text-sm mb-6 text-center max-w-xs">
-        Le lieu de naissance complète ta carte du ciel. Tape ta ville — partout dans le monde.
+        Le lieu de naissance affine ton Ascendant. Tape ta ville — partout dans le monde.
       </p>
 
       <div className="w-full max-w-xs">
@@ -220,14 +223,37 @@ export function Onboarding({ onComplete }: { onComplete: (u: User) => void }) {
         />
       </div>
 
+      {/* Fric-#3 — Skip CTA : Paris par défaut, modifiable dans Settings */}
+      <button
+        onClick={() => {
+          setSelectedPlace({
+            displayName: 'Paris, Île-de-France, France',
+            city: 'Paris', country: 'France',
+            latitude: 48.8566, longitude: 2.3522, tzOffset: 2,
+          });
+          // Trigger handleSubmit après le setState
+          setTimeout(() => {
+            const btn = document.getElementById('onboarding-submit');
+            if (btn) (btn as HTMLButtonElement).click();
+          }, 50);
+        }}
+        className="mt-4 text-night-400 hover:text-gold-400 text-sm transition-colors underline-offset-4 hover:underline"
+      >
+        Je préciserai plus tard → utiliser Paris
+      </button>
+
       <div className="mt-auto w-full max-w-xs pb-8">
         <button
+          id="onboarding-submit"
           disabled={!selectedPlace}
           onClick={handleSubmit}
           className="w-full py-4 rounded-2xl bg-gradient-to-r from-gold-500 to-gold-600 disabled:opacity-30 disabled:cursor-not-allowed text-night-950 font-semibold text-lg shadow-lg shadow-gold-900/50 transition-all"
         >
           Révéler mon thème ✨
         </button>
+        <p className="text-night-500 text-xs text-center mt-3">
+          Tu pourras modifier ta ville à tout moment dans Réglages.
+        </p>
       </div>
     </div>,
 

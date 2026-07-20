@@ -64,6 +64,7 @@ import { createMoodTrackerRouter } from './routes/mood-tracker.js';
 import { createPersonalTransitsRouter } from './routes/personal-transits.js';
 import { createActivatedHousesRouter } from './routes/activated-houses.js';
 import { createAsteroidWisdomRouter } from './routes/asteroid-wisdom.js';
+import oauthRouter from './routes/oauth.js';
 import { CELESTE_VOICE, celesteSystemPrompt } from './celest-voice.js';
 import {
   signAccessToken,
@@ -1089,6 +1090,8 @@ const llmLimiter = rateLimit({
 // ─── Server ────────────────────────────────────────────────
 const app = express();
 app.set('trust proxy', 1);
+// Fric-#1 — Expose db aux sous-routeurs (oauth.js n'a pas auth middleware)
+app.locals.db = db;
 
 // P1 #5 — Compression HTTP (gzip) — gain ~70% bande passante sur JSON.
 app.use(compression({
@@ -1678,8 +1681,13 @@ app.post('/api/auth/register', authLimiter, async (req, res) => {
   const hash = bcrypt.hashSync(password, 10);
   // P0#6 — Email verification : génère un token, l'enregistre, envoie l'email.
   const verifyToken = generateToken();
+  // Fric-#9 — Offrir 1 streak_freeze gratuit à l'inscription pour ne pas perdre
+  // le streak en J+2 si l'user n'a pas encore l'habitude d'ouvrir l'app.
+  // Le schéma DEFAULT streak_freezes = 1 ne s'applique que si la colonne est
+  // absente ; on force la valeur explicitement pour les nouvelles DBs où le
+  // DEFAULT peut avoir été perdu lors d'une migration.
   const result = db.prepare(
-    'INSERT INTO users (email, password_hash, email_verify_token) VALUES (?, ?, ?)'
+    'INSERT INTO users (email, password_hash, email_verify_token, streak_freezes) VALUES (?, ?, ?, 2)'
   ).run(emailLower, hash, verifyToken);
   const user = { id: result.lastInsertRowid, email: emailLower };
   const { access, refresh } = issueTokenPair(db, user);
@@ -2191,6 +2199,8 @@ app.get('/api/profile', auth, (req, res) => {
 // ─── GDPR: Data Export (Art. 20 — portabilité) ───────────
 // Returns all user data as JSON. User can download and import elsewhere.
 app.use('/api/account', createAccountRouter({ db, auth }));
+// Fric-#1 — OAuth routes (Sign in with Apple + Google)
+app.use('/api/auth/oauth', oauthRouter);
 app.use('/api/portrait/pdf', createPortraitPdfRouter({ db, auth }));
 
 // ─── P2#15 — Yearly Recap ─────────────────────────────────

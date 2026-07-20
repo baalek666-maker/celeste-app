@@ -15,6 +15,7 @@ import DailyIntention from '../components/DailyIntention';
 import { SignatureFooter } from '../components/SignatureFooter';
 import { HomeSecondary } from '../components/HomeSecondary';
 import { TrialBanner } from '../components/TrialBanner';
+import { EmailVerificationBanner } from '../components/EmailVerificationBanner';
 import { pushService } from '../lib/pushNotifications';
 import { getDailyDominantTransit, TRANSIT_INFO } from '../lib/dailyTransit';
 
@@ -109,6 +110,11 @@ export function Home({ user, onNavigate, isGuest }: { user: User; onNavigate: (s
       {/* P2-Fix-5 — Bandeau trial "X jours restants". Apparition conditionnelle,
           ne s'affiche PAS quand l'utilisateur a un vrai abonnement payant (>30j). */}
       <TrialBanner user={user} onNavigate={(s) => onNavigate(s as Screen)} />
+
+      {/* Fric-#5 — Email verification banner juste après register.
+          Premier écran post-login = meilleur moment pour demander la vérif
+          (l'user vient de créer son compte, il est encore engagé). */}
+      <EmailVerificationBanner email={user.email} />
 
       <StreakCelebration streak={streak} />
       <StreakShieldBadge streak={streak} onBuy={() => onNavigate('settings')} />

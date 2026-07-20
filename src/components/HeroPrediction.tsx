@@ -62,28 +62,35 @@ export default function HeroPrediction({ chart, sunSignKey, firstName, streak }:
   const sign = ZODIAC_SIGNS[sunSignKey as ZodiacSign];
   const highlight = getDailyHighlightPlanet(chart);
 
-  // Piste #2 — Génération de la phrase signature
-  let heroPhrase = '';
-  let phraseSource: 'api' | 'generated' | 'fallback' = 'fallback';
-  let subInfo: string | null = null;
+  // Fric-#8 — Pré-génération locale IMMÉDIATE pour le first value moment.
+  // Avant : on attendait l'API LLM (3-15s) avant d'afficher quoi que ce soit.
+  // Maintenant : on affiche la phrase locale déterministe (240 combinaisons)
+  // dès le mount, puis on swap avec la version API quand elle arrive (si plus précise).
 
-  if (data?.headline && data.headline.length > 25) {
-    // 1. API DailyEnergy si la headline est assez parlante
-    heroPhrase = data.headline;
-    phraseSource = 'api';
-  } else if (highlight) {
-    // 2. Générateur local (240 combinaisons)
+  // 1. Phrase locale — IMMÉDIATE (avant même que l'API réponde)
+  let localPhrase = '';
+  let localSubInfo: string | null = null;
+  if (highlight) {
     const generated = generateSignaturePhrase(sunSignKey, highlight.planet);
     if (generated) {
-      heroPhrase = generated.text;
-      phraseSource = 'generated';
-      subInfo = `${capitalize(generated.planetFr)} te parle aujourd'hui`;
+      localPhrase = generated.text;
+      localSubInfo = `${capitalize(generated.planetFr)} te parle aujourd'hui`;
     }
   }
+  if (!localPhrase) {
+    localPhrase = `Le ciel a quelque chose à te dire aujourd'hui${firstName ? `, ${firstName}` : ''}.`;
+  }
 
-  if (!heroPhrase) {
-    // 3. Fallback universel (ne devrait pas arriver souvent)
-    heroPhrase = `Le ciel a quelque chose à te dire aujourd'hui${firstName ? `, ${firstName}` : ''}.`;
+  // 2. Phrase API — remplace la locale si elle est assez précise
+  let heroPhrase = localPhrase;
+  let phraseSource: 'api' | 'generated' | 'fallback' = 'generated';
+  let subInfo: string | null = localSubInfo;
+
+  if (data?.headline && data.headline.length > 25) {
+    heroPhrase = data.headline;
+    phraseSource = 'api';
+    // L'API fournit son propre sub via le badge énergie, pas besoin de subInfo local
+    subInfo = null;
   }
 
   const energyEmoji = data?.energy?.emoji ?? '✦';

@@ -23,6 +23,28 @@ const QUICK_FALLBACK = {
   city: 'Paris', country: 'France', lat: 48.8566, lng: 2.3522, tz: 2,
 };
 
+// FR → EN sign mapping. Backend returns French names ('Bélier', 'Lion'...),
+// but the frontend type system uses English ZodiacSign ('aries', 'leo'...).
+// Without this map, ZODIAC_SIGNS[result.yourSun] returns undefined → no glyph,
+// no color, broken display.
+const SIGN_FR_TO_EN: Record<string, ZodiacSign> = {
+  'Bélier': 'aries', 'Taureau': 'taurus', 'Gémeaux': 'gemini',
+  'Cancer': 'cancer', 'Lion': 'leo', 'Vierge': 'virgo',
+  'Balance': 'libra', 'Scorpion': 'scorpio', 'Sagittaire': 'sagittarius',
+  'Capricorne': 'capricorn', 'Verseau': 'aquarius', 'Poissons': 'pisces',
+};
+
+// Normalize any sign value (FR or EN) to the EN ZodiacSign the app expects.
+function normalizeSign(s: string | undefined | null): ZodiacSign | undefined {
+  if (!s) return undefined;
+  // Already English?
+  const lower = s.toLowerCase();
+  const enKeys: ZodiacSign[] = ['aries','taurus','gemini','cancer','leo','virgo','libra','scorpio','sagittarius','capricorn','aquarius','pisces'];
+  if (enKeys.includes(lower as ZodiacSign)) return lower as ZodiacSign;
+  // French → English
+  return SIGN_FR_TO_EN[s];
+}
+
 export function Compatibility({ user }: { user: User }) {
   const [mode, setMode] = useState<'quick' | 'detailed'>('quick');
   const [context, setContext] = useState<'romantic' | 'family' | 'friend' | 'colleague'>('romantic');
@@ -95,14 +117,20 @@ export function Compatibility({ user }: { user: User }) {
       }
 
       const res = await api.getCompatibility(partnerData, context);
-      // Trust the backend: it returns yourMoon/theirMoon computed from real
-      // birth data. Only fall back to the user/sun if the field is absent.
+      // Backend returns French sign names ('Bélier', 'Lion'...). Normalize to
+      // English ZodiacSign so ZODIAC_SIGNS[sun]?.symbol renders correctly.
+      // Prefer the user's known natal chart (already in EN) over the backend
+      // response for yourSun/yourMoon — they're identical anyway.
+      const normYourSun = normalizeSign(res.yourSun) ?? user.natalChart?.sun ?? 'aries';
+      const normTheirSun = normalizeSign(res.theirSun) ?? theirSign;
+      const normYourMoon = normalizeSign(res.yourMoon) ?? user.natalChart?.moon ?? 'aries';
+      const normTheirMoon = normalizeSign(res.theirMoon) ?? theirSign;
       setResult({
         ...res,
-        yourSun: user.natalChart?.sun || 'aries',
-        theirSun: theirSign,
-        yourMoon: res.yourMoon ?? user.natalChart?.moon ?? 'aries',
-        theirMoon: res.theirMoon ?? theirSign,
+        yourSun: normYourSun,
+        theirSun: normTheirSun,
+        yourMoon: normYourMoon,
+        theirMoon: normTheirMoon,
       });
     } catch (err: unknown) {
       setError(err instanceof Error ? err.message : 'Erreur');
