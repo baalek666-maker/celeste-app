@@ -215,35 +215,85 @@ export default function ProgressionHub() {
       )}
 
       {/* ── Badges ────────────────────────────── */}
-      <div className="glass rounded-3xl p-5 mb-4">
+      <div className="glass rounded-2xl p-5 mb-4 border border-night-700/20">
         <div className="flex items-center justify-between mb-3">
-          <h3 className="text-night-100 font-bold text-sm">🏆 Badges</h3>
+          <h3 className="text-night-100 font-medium text-sm">🏆 Badges</h3>
           <span className="text-night-400 text-xs">{gami.badgesEarned}/{gami.badgesTotal}</span>
         </div>
+
+        {/* Progression globale */}
+        <div className="h-1 rounded-full bg-night-800/60 overflow-hidden mb-4">
+          <div
+            className="h-full rounded-full bg-gradient-to-r from-gold-500 to-gold-300 transition-all duration-700"
+            style={{ width: `${gami.badgesTotal ? (gami.badgesEarned / gami.badgesTotal) * 100 : 0}%` }}
+          />
+        </div>
+
+        {/* Prochain objectif — le premier badge non débloqué */}
+        {(() => {
+          const next = gami.badges.find(b => !b.earned);
+          if (!next) return null;
+          return (
+            <div className="mb-4 p-3 rounded-xl bg-night-800/30 border border-night-700/30">
+              <div className="flex items-center gap-2 mb-1">
+                <span className="text-base opacity-50">{next.emoji}</span>
+                <span className="text-xs text-night-200 font-medium">{next.title}</span>
+              </div>
+              <p className="text-[11px] text-night-400 leading-relaxed">
+                {(next as any).action || next.desc}
+              </p>
+              {(next as any).reward && (
+                <p className="text-[11px] text-gold-400/80 mt-1">🎁 {(next as any).reward}</p>
+              )}
+            </div>
+          );
+        })()}
+
+        {/* Grille des badges */}
         <div className="grid grid-cols-4 gap-2.5">
           {gami.badges.map(b => (
             <button
               key={b.id}
-              onClick={() => b.earned && setBadgeActive(badgeActive === b.id ? null : b.id)}
+              onClick={() => setBadgeActive(badgeActive === b.id ? null : b.id)}
               className={`flex flex-col items-center gap-1 p-2 rounded-xl transition-all ${
-                b.earned ? 'hover:scale-105 cursor-pointer' : 'opacity-30'
+                b.earned ? 'hover:scale-105 cursor-pointer' : 'opacity-50 hover:opacity-70 cursor-pointer'
               }`}
             >
-              <span className="text-2xl">{b.earned ? b.emoji : '🔒'}</span>
-              <span className={`text-[9px] text-center leading-tight ${b.earned ? 'text-night-300' : 'text-night-500'}`}>
+              <span className={`text-2xl ${b.earned ? '' : 'grayscale opacity-60'}`}>
+                {b.emoji}
+              </span>
+              <span className={`text-[9px] text-center leading-tight ${b.earned ? 'text-gold-300/80' : 'text-night-500'}`}>
                 {b.title}
               </span>
             </button>
           ))}
         </div>
+
+        {/* Détail au clic — reward + action visibles */}
         {badgeActive && (() => {
           const b = gami.badges.find(x => x.id === badgeActive);
-          return b ? (
-            <div className="mt-3 glass-gold rounded-xl p-3 animate-fade-in">
-              <p className="text-gold-200 font-semibold text-xs mb-1">{b.emoji} {b.title}</p>
-              <p className="text-night-200 text-xs">{b.desc}</p>
+          if (!b) return null;
+          const bd = b as any;
+          return (
+            <div className="mt-3 glass rounded-xl p-3 border border-night-700/30 animate-fade-in">
+              <div className="flex items-center gap-2 mb-2">
+                <span className="text-lg">{b.emoji}</span>
+                <p className="text-night-100 font-medium text-xs">{b.title}</p>
+                {b.earned ? (
+                  <span className="ml-auto text-[10px] text-gold-400/70">✓ Débloqué</span>
+                ) : (
+                  <span className="ml-auto text-[10px] text-night-500">Verrouillé</span>
+                )}
+              </div>
+              <p className="text-night-300 text-xs leading-relaxed">{b.desc}</p>
+              {bd.action && (
+                <p className="text-night-400 text-[11px] mt-2">→ {bd.action}</p>
+              )}
+              {bd.reward && (
+                <p className="text-gold-400/80 text-[11px] mt-1">🎁 {bd.reward}</p>
+              )}
             </div>
-          ) : null;
+          );
         })()}
       </div>
 
