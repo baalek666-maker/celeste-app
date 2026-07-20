@@ -1026,7 +1026,7 @@ Réponds UNIQUEMENT avec le JSON.`;
   const data = await callLLMWithRetry([
     { role: 'system', content: systemPrompt },
     { role: 'user', content: userPrompt },
-  ], 3);
+  ], 0, 4096, { response_format: { type: 'json_object' } }, 15000);
   const content = data.choices?.[0]?.message?.content || data.choices?.[0]?.message?.reasoning_content || '';
   const cleaned = content.replace(/```json\s*/g, '').replace(/```\s*/g, '').trim();
   const jsonMatch = cleaned.match(/\{[\s\S]*\}/);
@@ -2201,7 +2201,7 @@ app.get('/api/profile', auth, (req, res) => {
 app.use('/api/account', createAccountRouter({ db, auth }));
 // Fric-#1 — OAuth routes (Sign in with Apple + Google)
 app.use('/api/auth/oauth', oauthRouter);
-app.use('/api/portrait/pdf', createPortraitPdfRouter({ db, auth }));
+app.use('/api/portrait/pdf', createPortraitPdfRouter({ db, auth, getNatalPositions }));
 
 // ─── P2#15 — Yearly Recap ─────────────────────────────────
 // GET /api/yearly-recap?year=YYYY
@@ -2839,7 +2839,14 @@ app.post('/api/compatibility', auth, llmLimiter, async (req, res) => {
     const chart1 = getNatalPositions(userBd);
     const chart2 = getNatalPositions(partnerBirthData);
 
-    const result = await generateCompatibility(chart1, chart2, chart1.sun.sign, chart2.sun.sign, ctx);
+    // Try LLM first, fallback to deterministic if timeout/fail
+    let result;
+    try {
+      result = await generateCompatibility(chart1, chart2, chart1.sun.sign, chart2.sun.sign, ctx);
+    } catch (llmErr) {
+      console.warn('[compat] LLM failed, using deterministic fallback:', llmErr.message);
+      result = computeCompatDeterministic(chart1, chart2, chart1.sun.sign, chart2.sun.sign, ctx);
+    }
 
     // P0 #3 — Décrément conditionné au succès du LLM.
     if (!isPremium && scansRemaining !== null) {

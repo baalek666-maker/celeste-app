@@ -334,7 +334,7 @@ export const api = {
     apiCall<CompatibilityResult>('/compatibility', {
       method: 'POST',
       body: JSON.stringify({ partnerBirthData, context }),
-    }),
+    }, 25_000),
 
   // ─── P1 DUO — Compatibilité partageable ────────────────────
   createCompatInvite: (opts?: { inviteeName?: string; inviteeEmail?: string; context?: string }) =>
