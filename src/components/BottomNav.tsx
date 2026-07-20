@@ -95,7 +95,7 @@ export function BottomNav({ items, labels, active, onNavigate }: NavProps) {
               onClick={() => handleNav(item)}
               aria-current={isActive ? 'page' : undefined}
               aria-label={labels[item]}
-              className="flex flex-col items-center gap-1 px-3 py-1.5 transition-all duration-300 active:scale-90"
+              className="flex flex-col items-center gap-1 px-1.5 py-1.5 transition-all duration-300 active:scale-90"
             >
               <div className={`relative transition-all duration-300 ${isActive ? 'scale-110' : 'scale-100'}`}>
                 {/* Gold glow background on active */}
@@ -110,7 +110,7 @@ export function BottomNav({ items, labels, active, onNavigate }: NavProps) {
                   <NavIcon item={item} active={isActive} />
                 </div>
               </div>
-              <span className={`text-[10px] font-medium tracking-wide transition-all duration-300 ${isActive ? 'text-gold-400 font-display' : 'text-night-500'}`}>
+              <span className={`text-[10px] font-medium tracking-tight transition-all duration-300 ${isActive ? 'text-gold-400 font-display' : 'text-night-500'}`}>
                 {labels[item]}
               </span>
             </button>

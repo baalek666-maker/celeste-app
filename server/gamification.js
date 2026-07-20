@@ -27,13 +27,13 @@ const BADGE_DEFS = [
   { id: 'first_horoscope', emoji: '🔮', title: 'Première lecture', desc: 'Consulter ton premier horoscope' },
   { id: 'first_tarot',     emoji: '🃏', title: 'Le Tirage',        desc: 'Tirer ta première carte' },
   { id: 'streak_7',        emoji: '🔥', title: 'Une semaine',      desc: '7 jours de suite' },
-  { id: 'streak_30',       emoji: '🌙', title: 'Cycle lunaire',    desc: '30 jours de suite' },
-  { id: 'explorer',        emoji: '◈',  title: 'Explorateur',      desc: 'Découvrir toutes les sections' },
-  { id: 'journalist',      emoji: '✍️', title: 'Chroniqueur',      desc: '5 entrées de journal' },
-  { id: 'compatibility',   emoji: '💗', title: 'Âmes liées',       desc: 'Première analyse de compatibilité' },
-  { id: 'astrologer',      emoji: '✦',  title: 'Astrologue',       desc: 'Atteindre le niveau 5' },
-  { id: 'master',          emoji: '👑', title: 'Maître céleste',   desc: 'Atteindre le niveau 10' },
-  { id: 'cosmic_soul',     emoji: '💫', title: 'Âme cosmique',     desc: '100 jours de suite' },
+  { id: 'streak_30',       emoji: '🌙', title: 'Cycle lunaire',    desc: '30 jours de suite', reward: '3 streak freezes offerts', action: 'Continue à ouvrir Céleste chaque jour' },
+  { id: 'explorer',        emoji: '◈',  title: 'Explorateur',      desc: 'Découvrir toutes les sections', reward: '100 XP bonus', action: 'Explore les 3 piliers de la section Explorer' },
+  { id: 'journalist',      emoji: '✍️', title: 'Chroniqueur',      desc: '5 entrées de journal', reward: '50 XP bonus', action: 'Écris 5 fois dans ton journal' },
+  { id: 'compatibility',   emoji: '💗', title: 'Âmes liées',       desc: 'Première compatibilité', reward: '1 scan gratuit', action: 'Analyse ta compatibilité avec quelqu un' },
+  { id: 'astrologer',      emoji: '✦',  title: 'Astrologue',       desc: 'Atteindre le niveau 5', reward: 'Titre "Astrologue"', action: 'Accumule de l XP via tes rituels quotidiens' },
+  { id: 'master',          emoji: '👑', title: 'Maître céleste',   desc: 'Atteindre le niveau 10', reward: 'Titre "Maître céleste" + PDF offert', action: 'Atteins le niveau 10 en accumulant de l XP' },
+  { id: 'cosmic_soul',     emoji: '💫', title: 'Âme cosmique',     desc: '100 jours de suite', reward: 'Statut légende + 5 freezes', action: '100 jours de présence' },
 ];
 
 const LEVEL_TITLES = [
@@ -375,7 +375,7 @@ Réponse au format JSON: {"portrait": "le texte complet avec les ##"}`;
         0,    // maxRetries=0 — pas de retry (sinon circuit breaker + 6min bloqué)
         4096, // maxTokens réduit (glm-5.2 reasoning est lent, 8192 = timeout garanti)
         { response_format: { type: 'json_object' } },
-        30000 // 30s timeout max — au-delà on sert le fallback déterministe
+        30000 // 30s — portrait est long à générer, fallback après
       );
 
       let portraitText = '';
