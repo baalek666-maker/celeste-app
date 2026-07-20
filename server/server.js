@@ -1026,7 +1026,7 @@ Réponds UNIQUEMENT avec le JSON.`;
   const data = await callLLMWithRetry([
     { role: 'system', content: systemPrompt },
     { role: 'user', content: userPrompt },
-  ], 0, 4096, { response_format: { type: 'json_object' } }, 15000);
+  ], 0, 4096, { response_format: { type: 'json_object' } }, 8000);
   const content = data.choices?.[0]?.message?.content || data.choices?.[0]?.message?.reasoning_content || '';
   const cleaned = content.replace(/```json\s*/g, '').replace(/```\s*/g, '').trim();
   const jsonMatch = cleaned.match(/\{[\s\S]*\}/);

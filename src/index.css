@@ -525,6 +525,15 @@ html {
   scroll-behavior: smooth;
   text-size-adjust: 100%;
 }
+
+/* ═════ Lisibilité mini-texte ═════ */
+/* Les classes Tailwind text-[9px], text-[10px], text-[11px] sont des valeurs
+   absolues (px) qui ne suivent pas le rem. Elles sont trop petites sur mobile.
+   On les remonte d'un cran : 9→11, 10→12, 11→13.
+   Impact ZÉRO sur le layout (padding, marges, largeurs ne changent pas). */
+.text-\[9px\] { font-size: 11px !important; }
+.text-\[10px\] { font-size: 12px !important; }
+.text-\[11px\] { font-size: 13px !important; }
 /* Virtualize offscreen sections for faster long-page rendering */
 .cv-auto {
   content-visibility: auto;
