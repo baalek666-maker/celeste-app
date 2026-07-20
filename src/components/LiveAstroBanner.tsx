@@ -80,18 +80,18 @@ export default function LiveAstroBanner() {
 
   return (
     <section
-      className={`rounded-2xl p-4 bg-gradient-to-br ${eventAccent(current.type)} border backdrop-blur-sm`}
+      className={`rounded-2xl p-4 mb-6 glass border border-night-700/20`}
     >
       <div className="flex items-start gap-3">
         <div className="text-3xl leading-none mt-0.5 select-none">{current.emoji}</div>
         <div className="flex-1 min-w-0">
           <div className="flex items-center gap-2 mb-0.5">
-            <span className="text-[9px] uppercase tracking-widest text-night-400">En direct du ciel</span>
-            <span className="w-1 h-1 rounded-full bg-rose-400 animate-pulse" />
-            <span className="text-[9px] text-night-500 ml-auto">{relativeTime(current.when)}</span>
+            <span className="text-[9px] uppercase tracking-widest text-night-500">En direct du ciel</span>
+            <span className="w-1 h-1 rounded-full bg-rose-400/80 animate-pulse" />
+            <span className="text-[9px] text-night-600 ml-auto">{relativeTime(current.when)}</span>
           </div>
-          <h3 className="font-display text-base text-gold-100 leading-tight">{current.title}</h3>
-          <p className="text-xs text-night-200 leading-relaxed mt-1 line-clamp-2">{current.body}</p>
+          <h3 className="text-sm font-medium text-night-100 leading-tight">{current.title}</h3>
+          <p className="text-xs text-night-300 leading-relaxed mt-1 line-clamp-2">{current.body}</p>
         </div>
       </div>
 

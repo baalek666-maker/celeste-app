@@ -115,10 +115,10 @@ export default function MoodForecast() {
   const areaD = `${pathD} L${points[points.length - 1].x},${chartH - padding} L${points[0].x},${chartH - padding} Z`;
 
   return (
-    <section className="glass rounded-3xl p-5 space-y-4">
+    <section className="glass rounded-2xl p-5 mb-6 space-y-4 border border-night-700/20">
       <header className="flex items-center justify-between">
         <div>
-          <h2 className="font-display text-lg text-gold-100">Météo de ton ciel</h2>
+          <h2 className="text-base font-medium text-night-100">Météo de ton ciel</h2>
           <p className="text-xs text-night-400">14 jours d'avance sur ton humeur</p>
         </div>
         {!isPremium && (
