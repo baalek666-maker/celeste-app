@@ -16,13 +16,23 @@ import { SignatureFooter } from '../components/SignatureFooter';
 import { HomeSecondary } from '../components/HomeSecondary';
 import { TrialBanner } from '../components/TrialBanner';
 import { EmailVerificationBanner } from '../components/EmailVerificationBanner';
+import { QuickAccessBar } from '../components/QuickAccessBar';
 import { pushService } from '../lib/pushNotifications';
 import { getDailyDominantTransit, TRANSIT_INFO } from '../lib/dailyTransit';
 
 /**
- * v11 — fond adaptatif total : cosmic-bg teinté par la couleur du transit dominant.
- * Conversion hex → rgba pour alpha 0.06-0.14 sur les 4 ellipses du gradient,
- * plus une base sombre légèrement teintée (différent du noir pur v10).
+ * v12 — Home "Dashboard Rituel" (Proposition B)
+ *
+ * AU-DESSUS DE LA LIGNE DE FLOTTAISON (sans scroller) :
+ *   1. HeroPrediction — la phrase qui tue
+ *   2. QuickAccessBar — 4 icônes pour sauter vers un rituel
+ *
+ * EN DESSOUS (scroll) :
+ *   3. DailyTarot, DailyEnergy, DailyIntention, EveningRitualCard
+ *   4. TodayIn10s, LiveAstroBanner, TarotCross, MoodForecast
+ *   5. SignatureFooter + HomeSecondary
+ *
+ * Les bannières (Trial, Email, Streak) restent en haut mais discrètes.
  */
 function transitTints(transit: string): React.CSSProperties {
   const t = TRANSIT_INFO[transit as keyof typeof TRANSIT_INFO];
@@ -51,10 +61,6 @@ export function Home({ user, onNavigate, isGuest }: { user: User; onNavigate: (s
     pushService.init();
   }, []);
 
-  // v11 — Fond adaptatif total : cosmic-bg-adapt teinté par la couleur du transit dominant.
-  // Le fond MOI-MÊME change de teinte (pas un overlay halo comme v10).
-  // Calcul mémorisé : getDailyDominantTransit a déjà son cache par jour UTC.
-  // NOTE : useMemo doit être appelé AVANT tout early return (règle des Hooks React).
   const transit = useMemo(() => {
     try { return getDailyDominantTransit(); } catch { return 'mercury'; }
   }, []);
@@ -100,53 +106,61 @@ export function Home({ user, onNavigate, isGuest }: { user: User; onNavigate: (s
 
   const chart = user.natalChart as NonNullable<User['natalChart']>;
   const firstName = (user.name?.split(' ')[0]) || (user.email?.split('@')[0]) || undefined;
-
-  // (transit calculé plus haut pour respecter l'ordre des hooks React)
   const tintsStyle = transitTints(transit);
 
   return (
     <div className="cosmic-bg-adapt star-field min-h-screen text-night-100 pb-24" style={tintsStyle}>
       <div className="px-5 pt-12 pb-6 relative z-10">
-      {/* P2-Fix-5 — Bandeau trial "X jours restants". Apparition conditionnelle,
-          ne s'affiche PAS quand l'utilisateur a un vrai abonnement payant (>30j). */}
+
+      {/* ── ZONE 1 : AU-DESSUS DE LA LIGNE DE FLOTTAISON ── */}
+
+      {/* Bannières discrètes (n'apparaissent que si nécessaire) */}
       <TrialBanner user={user} onNavigate={(s) => onNavigate(s as Screen)} />
-
-      {/* Fric-#5 — Email verification banner juste après register.
-          Premier écran post-login = meilleur moment pour demander la vérif
-          (l'user vient de créer son compte, il est encore engagé). */}
       <EmailVerificationBanner email={user.email} />
-
       <StreakCelebration streak={streak} />
       <StreakShieldBadge streak={streak} onBuy={() => onNavigate('settings')} />
 
-      {/* 1. HERO PREDICTION — phrase qui tue (40% écran, wow effect) */}
+      {/* Hero — la phrase qui tue */}
       <HeroPrediction chart={chart} sunSignKey={chart.sun} firstName={firstName} streak={streak} />
 
-      {/* PISTE 3 — ÉPHÉMÉRIDES VIVANTES — bannière événement astro du jour */}
-      <LiveAstroBanner />
+      {/* Barre d'accès rapide — 4 rituels */}
+      <QuickAccessBar />
 
-      {/* VAL01 — Aujourd'hui en 10s : carrousel swipeable (énergie + lune + transits) */}
+      {/* ── ZONE 2 : RITUELS DU JOUR (scroll) ── */}
+
+      {/* Tarot */}
+      <div id="home-tarot">
+        <DailyTarot />
+      </div>
+
+      {/* Énergie du jour */}
+      <div id="home-energy">
+        <DailyEnergy compact />
+      </div>
+
+      {/* Intention du jour */}
+      <div id="home-intention">
+        <DailyIntention />
+      </div>
+
+      {/* Aujourd'hui en 10s */}
       <TodayIn10s />
 
-      {/* v10 — INTENTION DU JOUR — geste rituel signature (cercle + phrase méditative) */}
-      <DailyIntention />
+      {/* Rituel du soir */}
+      <div id="home-ritual">
+        <EveningRitualCard streak={streak} />
+      </div>
 
-      {/* 2. TAROT — différenciateur vs Co-Star */}
-      <DailyTarot />
-
-      {/* 2.b — Tarot premium (tirage en croix 3 cartes, 2,99€) */}
+      {/* Tarot premium (croix) */}
       <TarotCross />
 
-      {/* 3. DAILY ENERGY — mode compact (résumé 1-ligne, pas de redondance avec Hero) */}
-      <DailyEnergy compact />
+      {/* Éphémérides vivantes */}
+      <LiveAstroBanner />
 
-      {/* VAL04 — RITUEL DU SOIR — sommeil + lune + journaling 3 lignes */}
-      <EveningRitualCard streak={streak} />
-
-      {/* PISTE 5 — MOOD FORECAST 14j (3j gratuit, 14j premium) */}
+      {/* Mood forecast */}
       <MoodForecast />
 
-      {/* 4. SIGNATURE FOOTER — fusion astrolabe + CTA explorateur */}
+      {/* ── ZONE 3 : FOOTER ── */}
       <SignatureFooter
         sunSignKey={chart.sun}
         moonSignKey={chart.moon}
@@ -154,7 +168,6 @@ export function Home({ user, onNavigate, isGuest }: { user: User; onNavigate: (s
         onNavigate={onNavigate}
       />
 
-      {/* Panneau SECONDARY collapsable (streak inline + reminder + optin push) */}
       <HomeSecondary streak={streak} onNavigate={onNavigate} />
       </div>
     </div>
