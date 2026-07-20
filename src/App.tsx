@@ -447,7 +447,12 @@ export function App() {
       // Journal: always allowed (read & write)
     }
     setScreen(s);
+    // UX nav — si l'user clique sur le tab déjà actif, on force un remount
+    // du screen pour reset son état interne (ex: Explorer pilier/module).
+    if (s === screen) setNavKey(k => k + 1);
   };
+
+  const [navKey, setNavKey] = useState(0);
 
   // Fix #3 — Listener postMessage du Service Worker.
   // Quand l'user clique une notification push (sw.js envoie
@@ -602,7 +607,7 @@ export function App() {
               {screen === 'horoscope' && <Horoscope user={user} onNavigate={setScreen} />}
               {screen === 'compatibility' && <Compatibility user={user} />}
               {screen === 'journal' && <Journal user={user} />}
-              {screen === 'explorer' && <Explorer user={user} onNavigate={handleNavigate} />}
+              {screen === 'explorer' && <Explorer key={navKey} user={user} onNavigate={handleNavigate} />}
               {screen === 'settings' && <Settings user={user} onUpdate={(u) => { setUser(u); saveUser(u); }} onPaywall={() => setScreen('paywall')} />}
             </Suspense>
           </div>
