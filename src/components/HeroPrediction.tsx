@@ -179,43 +179,43 @@ export default function HeroPrediction({ chart, sunSignKey, firstName, streak }:
         )}
       </svg>
 
-      <div className="relative p-6 pb-7">
-        {/* Header strip — signe + énergie */}
-        <div className="flex items-center justify-between mb-5">
-          <div className="flex items-center gap-2.5">
+      <div className="relative p-5 pb-6">
+        {/* Header strip compact — signe + énergie sur une ligne discrète */}
+        <div className="flex items-center justify-between mb-3">
+          <div className="flex items-center gap-2">
             {sign && (
               <div
-                className="w-9 h-9 rounded-full flex items-center justify-center text-lg flex-shrink-0 ring-1 ring-gold-500/30"
-                style={{ background: `${sign.color}30`, borderColor: `${sign.color}60` }}
+                className="w-7 h-7 rounded-full flex items-center justify-center text-sm flex-shrink-0 ring-1 ring-gold-500/20"
+                style={{ background: `${sign.color}25` }}
               >
                 <span style={{ color: sign.color }}>{sign.symbol}</span>
               </div>
             )}
-            <div>
-              <p className="text-[10px] text-gold-400 uppercase tracking-widest font-bold">Aujourd'hui</p>
-              <p className="text-[11px] text-night-200">
-                {firstName ? `${firstName}, ` : ''}{sign?.name}
-              </p>
-            </div>
+            <p className="text-[11px] text-night-300">
+              <span className="text-gold-400/80 font-medium">Aujourd'hui</span>
+              {firstName ? ` · ${firstName}` : ''}
+              {sign ? ` · ${sign.name}` : ''}
+            </p>
           </div>
 
-          {data?.energy && (
-            <div className="flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-gold-500/15 border border-gold-500/40 backdrop-blur-sm">
-              <span className="text-base">{energyEmoji}</span>
-              <span className="text-[10px] text-gold-200 font-semibold capitalize">{energyLabel}</span>
-            </div>
-          )}
+          <div className="flex items-center gap-2">
+            {data?.energy && (
+              <div className="flex items-center gap-1 px-2 py-0.5 rounded-full bg-gold-500/10 border border-gold-500/20">
+                <span className="text-xs">{energyEmoji}</span>
+                <span className="text-[10px] text-gold-200/80 capitalize">{energyLabel}</span>
+              </div>
+            )}
 
-          {/* Chantier D (v8) — streak badge visible chaque jour, pas seulement aux milestones */}
-          {streak !== undefined && streak > 0 && (
-            <div
-              className="flex items-center gap-1 px-2 py-1 rounded-full bg-orange-500/15 border border-orange-500/40 animate-flame-flicker"
-              title={`${streak} jour${streak > 1 ? 's' : ''} d'affilée — reviens chaque jour pour entretenir le fil`}
-            >
-              <span className="text-[10px]">🔥</span>
-              <span className="text-[10px] text-orange-200 font-bold tabular-nums">{streak}j</span>
-            </div>
-          )}
+            {streak !== undefined && streak > 0 && (
+              <div
+                className="flex items-center gap-1 px-1.5 py-0.5 rounded-full bg-orange-500/10 border border-orange-500/20"
+                title={`${streak} jour${streak > 1 ? 's' : ''} d'affilée`}
+              >
+                <span className="text-[9px]">🔥</span>
+                <span className="text-[9px] text-orange-200/80 font-bold tabular-nums">{streak}j</span>
+              </div>
+            )}
+          </div>
         </div>
 
         {/* v9 — streak milestone ribbon (7, 14, 30j+) */}

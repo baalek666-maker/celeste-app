@@ -68,51 +68,28 @@ export function StreakShieldBadge({ streak = 0, onBuy }: StreakShieldBadgeProps)
   if (loading || !status) return null;
   if (streak <= 0) return null;
 
-  // Cas : aucun freeze dispo → CTA d'achat plus visible
+  // UX : ne pas afficher le prix sur la Home. Le prix ne doit apparaître que
+  // dans le modal d'achat (après clic). La première impression de l'app ne doit
+  // pas parler d'argent.
   const noFreezeLeft = status.freezesAvailable <= 0;
 
   return (
     <>
       <button
         onClick={handleBuyClick}
-        className="w-full mb-3 px-4 py-2.5 rounded-2xl flex items-center justify-between gap-3 transition-all active:scale-[0.98]"
-        style={{
-          background: noFreezeLeft
-            ? 'linear-gradient(135deg, rgba(251,191,36,0.18), rgba(168,85,247,0.10))'
-            : 'linear-gradient(135deg, rgba(251,191,36,0.10), rgba(168,85,247,0.08))',
-          border: noFreezeLeft ? '1.5px solid rgba(251,191,36,0.55)' : '1px solid rgba(251,191,36,0.30)',
-          boxShadow: '0 0 18px rgba(251,191,36,0.15)',
-        }}
+        className="w-full mb-2 px-3 py-1.5 rounded-xl flex items-center justify-between gap-2 transition-all active:scale-[0.98] glass border border-night-700/30"
       >
-        <div className="flex items-center gap-3">
-          <span className="text-lg leading-none" aria-hidden="true">🛡️</span>
-          <div className="text-left">
-            {noFreezeLeft ? (
-              <>
-                <p className="text-gold-200 text-xs font-semibold leading-tight">
-                  Protège ton streak de {streak} jours
-                </p>
-                <p className="text-night-400 text-[10px] mt-0.5">
-                  Ajoute un freeze — s'active auto si tu rates une journée
-                </p>
-              </>
-            ) : (
-              <>
-                <p className="text-gold-200 text-xs font-medium leading-tight">
-                  {status.freezesAvailable === 1
-                    ? '1 freeze prêt à protéger ton streak'
-                    : `${status.freezesAvailable} freezes prêts à protéger ton streak`}
-                </p>
-                <p className="text-night-400 text-[10px] mt-0.5">
-                  Un freeze s'active automatiquement si tu rates une journée
-                </p>
-              </>
-            )}
-          </div>
+        <div className="flex items-center gap-2">
+          <span className="text-sm leading-none opacity-70" aria-hidden="true">🛡️</span>
+          <p className="text-night-300 text-[11px] leading-tight">
+            {noFreezeLeft
+              ? `Protège ta série de ${streak} jours`
+              : status.freezesAvailable === 1
+                ? '1 bouclier prêt'
+                : `${status.freezesAvailable} boucliers prêts`}
+          </p>
         </div>
-        <span className="text-gold-400 text-xs shrink-0 font-semibold">
-          {noFreezeLeft ? '0,99 €' : '+ 1 · 0,99€'}
-        </span>
+        <span className="text-gold-400/70 text-[10px] shrink-0">→</span>
       </button>
 
       {showBuyModal && (
