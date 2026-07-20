@@ -112,6 +112,66 @@ export default function HeroPrediction({ chart, sunSignKey, firstName, streak }:
       <div className="absolute -top-24 -right-24 w-72 h-72 rounded-full bg-gold-500/25 blur-3xl pointer-events-none animate-pulse-slow" />
       <div className="absolute -bottom-24 -left-24 w-72 h-72 rounded-full bg-cosmic-500/25 blur-3xl pointer-events-none animate-pulse-slow" />
 
+      {/* v12 polish — Mini-thème natal orbital en filigrane arrière-plan.
+          Soleil/Lune/Ascendant orbitent doucement avec leurs glyphes et couleurs.
+          Opacité très faible pour ne pas distraire de la phrase. */}
+      <svg className="absolute top-1/2 right-0 -translate-y-1/2 translate-x-1/3 opacity-[0.07] pointer-events-none"
+           width="320" height="320" viewBox="0 0 320 320" aria-hidden="true">
+        <defs>
+          <radialGradient id="hero-orbit-glow" cx="50%" cy="50%" r="50%">
+            <stop offset="0%" stopColor="#fcd34d" stopOpacity="0.4" />
+            <stop offset="100%" stopColor="transparent" />
+          </radialGradient>
+        </defs>
+        <circle cx="160" cy="160" r="140" fill="url(#hero-orbit-glow)" />
+        {/* 3 orbites concentriques */}
+        <circle cx="160" cy="160" r="120" fill="none" stroke="#fbbf24" strokeWidth="0.3" opacity="0.5" />
+        <circle cx="160" cy="160" r="80" fill="none" stroke="#a855f7" strokeWidth="0.3" opacity="0.4" />
+        <circle cx="160" cy="160" r="45" fill="none" stroke="#c084fc" strokeWidth="0.3" opacity="0.3" />
+        {/* Ligne des nœuds */}
+        <line x1="20" y1="160" x2="300" y2="160" stroke="#fbbf24" strokeWidth="0.2" opacity="0.3" strokeDasharray="2 4" />
+        <line x1="160" y1="20" x2="160" y2="300" stroke="#fbbf24" strokeWidth="0.2" opacity="0.3" strokeDasharray="2 4" />
+        {/* Ascendant en rotation lente */}
+        {chart.rising && ZODIAC_SIGNS[chart.rising] && (
+          <g>
+            <circle cx="280" cy="160" r="8" fill="none"
+                    stroke={ZODIAC_SIGNS[chart.rising].color} strokeWidth="1" opacity="0.6" />
+            <text x="280" y="160" textAnchor="middle" dominantBaseline="central"
+                  fontSize="8" fill={ZODIAC_SIGNS[chart.rising].color} opacity="0.7">
+              {ZODIAC_SIGNS[chart.rising].symbol}
+            </text>
+            <animateTransform attributeName="transform" type="rotate"
+              from="0 160 160" to="360 160 160" dur="60s" repeatCount="indefinite" />
+          </g>
+        )}
+        {/* Lune en rotation inverse */}
+        {chart.moon && ZODIAC_SIGNS[chart.moon] && (
+          <g>
+            <circle cx="240" cy="160" r="6" fill="none"
+                    stroke={ZODIAC_SIGNS[chart.moon].color} strokeWidth="1" opacity="0.6" />
+            <text x="240" y="160" textAnchor="middle" dominantBaseline="central"
+                  fontSize="6" fill={ZODIAC_SIGNS[chart.moon].color} opacity="0.7">
+              {ZODIAC_SIGNS[chart.moon].symbol}
+            </text>
+            <animateTransform attributeName="transform" type="rotate"
+              from="120 160 160" to="-240 160 160" dur="45s" repeatCount="indefinite" />
+          </g>
+        )}
+        {/* Soleil central fixe pulsant */}
+        {sunSignKey && ZODIAC_SIGNS[sunSignKey as ZodiacSign] && (
+          <g>
+            <circle cx="160" cy="160" r="10" fill="none"
+                    stroke={ZODIAC_SIGNS[sunSignKey as ZodiacSign].color} strokeWidth="1" opacity="0.5">
+              <animate attributeName="r" values="9;11;9" dur="4s" repeatCount="indefinite" />
+            </circle>
+            <text x="160" y="160" textAnchor="middle" dominantBaseline="central"
+                  fontSize="10" fill={ZODIAC_SIGNS[sunSignKey as ZodiacSign].color} opacity="0.6">
+              {ZODIAC_SIGNS[sunSignKey as ZodiacSign].symbol}
+            </text>
+          </g>
+        )}
+      </svg>
+
       <div className="relative p-6 pb-7">
         {/* Header strip — signe + énergie */}
         <div className="flex items-center justify-between mb-5">

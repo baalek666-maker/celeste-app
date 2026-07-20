@@ -531,59 +531,106 @@ export function Horoscope({ user, onNavigate }: { user: User; onNavigate: (s: Sc
           }}
         >
         {activeSection === 'general' && (
-          <div className="glass rounded-3xl p-5 animate-fade-in card-glow" key="general">
-            <div className="flex items-center justify-between mb-3">
-              <div className="flex items-center gap-2">
-                <span className="text-xl">✦</span>
-                <p className="text-gold-400 text-xs uppercase tracking-widest">Général</p>
+          <div className="relative rounded-3xl overflow-hidden animate-fade-in card-glow" key="general">
+            {/* Gradient thématique Général — or/cosmique */}
+            <div className="absolute inset-0 bg-gradient-to-br from-gold-500/15 via-cosmic-500/8 to-transparent pointer-events-none" />
+            <div className="absolute -top-12 -right-12 w-40 h-40 rounded-full bg-gold-500/20 blur-2xl pointer-events-none" />
+            {/* SVG décoratif — étoile filante */}
+            <svg className="absolute top-3 right-3 opacity-20 pointer-events-none" width="60" height="60" viewBox="0 0 60 60" aria-hidden="true">
+              <circle cx="45" cy="15" r="3" fill="#fbbf24" />
+              <path d="M42 18 L15 45" stroke="#fbbf24" strokeWidth="0.8" opacity="0.5" strokeDasharray="2 3" />
+              <circle cx="15" cy="45" r="1.5" fill="#fbbf24" opacity="0.6" />
+            </svg>
+            <div className="relative glass border border-gold-500/20 rounded-3xl p-5">
+              <div className="flex items-center justify-between mb-3">
+                <div className="flex items-center gap-2">
+                  <div className="w-8 h-8 rounded-xl bg-gold-500/15 flex items-center justify-center">
+                    <span className="text-base">✦</span>
+                  </div>
+                  <div>
+                    <p className="text-gold-400 text-xs uppercase tracking-widest font-semibold">Général</p>
+                    <p className="text-night-500 text-[10px]">L'énergie du jour</p>
+                  </div>
+                </div>
+                <button
+                  onClick={() => handleToggleFav('general', horoscope.general)}
+                  className="text-lg px-2 py-1 rounded-lg hover:bg-night-800/50 active:scale-90 transition-all"
+                  aria-label={isFavorited('general') ? 'Retirer des favoris' : 'Ajouter aux favoris'}
+                >
+                  {isFavorited('general') ? '★' : '☆'}
+                </button>
               </div>
-              <button
-                onClick={() => handleToggleFav('general', horoscope.general)}
-                className="text-lg px-2 py-1 rounded-lg hover:bg-night-800/50 active:scale-90 transition-all"
-                aria-label={isFavorited('general') ? 'Retirer des favoris' : 'Ajouter aux favoris'}
-              >
-                {isFavorited('general') ? '★' : '☆'}
-              </button>
+              <p className="text-night-100 leading-relaxed">{horoscope.general || '—'}</p>
             </div>
-            <p className="text-night-100 leading-relaxed">{horoscope.general || '—'}</p>
           </div>
         )}
 
         {activeSection === 'love' && (
-          <div className="glass rounded-3xl p-5 animate-fade-in card-glow" key="love" style={{ animationDelay: '0.05s' }}>
-            <div className="flex items-center justify-between mb-3">
-              <div className="flex items-center gap-2">
-                <span className="text-xl">♥</span>
-                <p className="text-cosmic-300 text-xs uppercase tracking-widest">Amour</p>
+          <div className="relative rounded-3xl overflow-hidden animate-fade-in card-glow" key="love" style={{ animationDelay: '0.05s' }}>
+            {/* Gradient thématique Amour — rose/cosmique */}
+            <div className="absolute inset-0 bg-gradient-to-br from-rose-500/15 via-pink-500/8 to-transparent pointer-events-none" />
+            <div className="absolute -top-12 -right-12 w-40 h-40 rounded-full bg-rose-500/20 blur-2xl pointer-events-none" />
+            {/* SVG décoratif — Vénus */}
+            <svg className="absolute top-3 right-3 opacity-20 pointer-events-none" width="60" height="60" viewBox="0 0 60 60" aria-hidden="true">
+              <circle cx="30" cy="22" r="12" fill="none" stroke="#f472b6" strokeWidth="0.8" />
+              <line x1="30" y1="34" x2="30" y2="52" stroke="#f472b6" strokeWidth="0.8" />
+              <line x1="22" y1="44" x2="38" y2="44" stroke="#f472b6" strokeWidth="0.8" />
+            </svg>
+            <div className="relative glass border border-rose-500/20 rounded-3xl p-5">
+              <div className="flex items-center justify-between mb-3">
+                <div className="flex items-center gap-2">
+                  <div className="w-8 h-8 rounded-xl bg-rose-500/15 flex items-center justify-center">
+                    <span className="text-base">♥</span>
+                  </div>
+                  <div>
+                    <p className="text-rose-300 text-xs uppercase tracking-widest font-semibold">Amour</p>
+                    <p className="text-night-500 text-[10px]">Les liens du cœur</p>
+                  </div>
+                </div>
+                <button
+                  onClick={() => handleToggleFav('love', horoscope.love)}
+                  className="text-lg px-2 py-1 rounded-lg hover:bg-night-800/50 active:scale-90 transition-all"
+                  aria-label={isFavorited('love') ? 'Retirer des favoris' : 'Ajouter aux favoris'}
+                >
+                  {isFavorited('love') ? '★' : '☆'}
+                </button>
               </div>
-              <button
-                onClick={() => handleToggleFav('love', horoscope.love)}
-                className="text-lg px-2 py-1 rounded-lg hover:bg-night-800/50 active:scale-90 transition-all"
-                aria-label={isFavorited('love') ? 'Retirer des favoris' : 'Ajouter aux favoris'}
-              >
-                {isFavorited('love') ? '★' : '☆'}
-              </button>
+              <p className="text-night-100 leading-relaxed">{horoscope.love || '—'}</p>
             </div>
-            <p className="text-night-100 leading-relaxed">{horoscope.love || '—'}</p>
           </div>
         )}
 
         {activeSection === 'career' && (
-          <div className="glass rounded-3xl p-5 animate-fade-in card-glow" key="career" style={{ animationDelay: '0.05s' }}>
-            <div className="flex items-center justify-between mb-3">
-              <div className="flex items-center gap-2">
-                <span className="text-xl">★</span>
-                <p className="text-gold-400 text-xs uppercase tracking-widest">Carrière</p>
-              </div>
+          <div className="relative rounded-3xl overflow-hidden animate-fade-in card-glow" key="career" style={{ animationDelay: '0.05s' }}>
+            {/* Gradient thématique Carrière — bleu/cosmique */}
+            <div className="absolute inset-0 bg-gradient-to-br from-blue-500/15 via-cyan-500/8 to-transparent pointer-events-none" />
+            <div className="absolute -top-12 -right-12 w-40 h-40 rounded-full bg-blue-500/20 blur-2xl pointer-events-none" />
+            {/* SVG décoratif — Saturne */}
+            <svg className="absolute top-3 right-3 opacity-20 pointer-events-none" width="60" height="60" viewBox="0 0 60 60" aria-hidden="true">
+              <ellipse cx="30" cy="30" rx="18" ry="6" fill="none" stroke="#93c5fd" strokeWidth="0.8" transform="rotate(-20 30 30)" />
+              <circle cx="30" cy="30" r="10" fill="none" stroke="#93c5fd" strokeWidth="0.8" />
+            </svg>
+            <div className="relative glass border border-blue-500/20 rounded-3xl p-5">
+              <div className="flex items-center justify-between mb-3">
+                <div className="flex items-center gap-2">
+                  <div className="w-8 h-8 rounded-xl bg-blue-500/15 flex items-center justify-center">
+                    <span className="text-base">★</span>
+                  </div>
+                  <div>
+                    <p className="text-blue-300 text-xs uppercase tracking-widest font-semibold">Carrière</p>
+                    <p className="text-night-500 text-[10px]">Ton élan professionnel</p>
+                  </div>
+                </div>
               <button
-                onClick={() => handleToggleFav('career', horoscope.career)}
-                className="text-lg px-2 py-1 rounded-lg hover:bg-night-800/50 active:scale-90 transition-all"
-                aria-label={isFavorited('career') ? 'Retirer des favoris' : 'Ajouter aux favoris'}
-              >
-                {isFavorited('career') ? '★' : '☆'}
-              </button>
+                  onClick={() => handleToggleFav('career', horoscope.career)}
+                  className="text-lg px-2 py-1 rounded-lg hover:bg-night-800/50 active:scale-90 transition-all"
+                  aria-label={isFavorited('career') ? 'Retirer des favoris' : 'Ajouter aux favoris'}
+                >
+                  {isFavorited('career') ? '★' : '☆'}
+                </button>
+              </div>
+              <p className="text-night-100 leading-relaxed">{horoscope.career || '—'}</p>
             </div>
-            <p className="text-night-100 leading-relaxed">{horoscope.career || '—'}</p>
           </div>
         )}
         </div>

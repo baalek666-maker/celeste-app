@@ -17,6 +17,7 @@
  *   6. Pricing teaser (annual vs weekly)
  *   7. Footer CTA + auth link
  */
+import { useEffect, useState } from 'react';
 import type { Screen } from '../App';
 import CelesteLogo from '../components/CelesteLogo';
 
@@ -65,6 +66,74 @@ const TESTIMONIALS = [
   { name: 'Inès', sign: '♊', role: 'Gémeaux', text: "Le portrait astral m'a fait pleurer. C'est comme si quelqu'un me lisait de l'intérieur." },
 ];
 
+/**
+ * Piste carousel — Aperçu horoscope animé
+ * Cycle automatique entre 4 exemples de lectures personnalisées sur 12s,
+ * pour capter l'attention dès l'arrivée (réduit le bounce Rate sur Landing).
+ */
+const PREVIEWS = [
+  { sign: 'Bélier', symbol: '♈', color: '#ef4444', text: 'Ton feu intérieur brûle fort aujourd\u2019hui — agis, mais choisis ta bataille avec discernement.' },
+  { sign: 'Taureau', symbol: '♉', color: '#84cc16', text: 'Une journée pour ancrer, ralentir, savourer. La patience paie aujourd\u2019hui plus que l\u2019élan.' },
+  { sign: 'Lion', symbol: '♌', color: '#fbbf24', text: 'Rayonne sans écraser. Le leadership aujourd\u2019hui, c\u2019est inspirer les autres à briller aussi.' },
+  { sign: 'Verseau', symbol: '♒', color: '#a855f7', text: 'Ta vision décalée est ton super-pouvoir aujourd\u2019hui. Ose penser à l\u2019envers.' },
+];
+
+function HoroscopePreview() {
+  const [idx, setIdx] = useState(0);
+  useEffect(() => {
+    const id = setInterval(() => setIdx(i => (i + 1) % PREVIEWS.length), 4000);
+    return () => clearInterval(id);
+  }, []);
+  const current = PREVIEWS[idx];
+  return (
+    <div className="relative max-w-xs mx-auto mb-8">
+      {/* Dots indicators */}
+      <div className="absolute -top-3 left-1/2 -translate-x-1/2 flex gap-1.5 z-20">
+        {PREVIEWS.map((_, i) => (
+          <button
+            key={i}
+            aria-label={`Aperçu ${i + 1}`}
+            onClick={() => setIdx(i)}
+            className={`w-1.5 h-1.5 rounded-full transition-all ${
+              i === idx ? 'bg-gold-400 w-4' : 'bg-night-600 hover:bg-night-400'
+            }`}
+          />
+        ))}
+      </div>
+      <div className="glass rounded-2xl p-4 border border-gold-500/30 bg-gradient-to-br from-gold-500/10 to-cosmic-500/10 relative overflow-hidden min-h-[140px]">
+        {/* Halo de couleur du signe courant */}
+        <div
+          className="absolute -top-8 -right-8 w-32 h-32 rounded-full blur-2xl opacity-25 pointer-events-none transition-colors duration-700"
+          style={{ background: current.color }}
+        />
+        {/* Symbole astro en filigrane */}
+        <div className="absolute top-2 right-2 text-4xl opacity-15 transition-all duration-500" key={`sym-${idx}`}>
+          {current.symbol}
+        </div>
+        <div className="flex items-center justify-between mb-2">
+          <span className="text-[10px] uppercase tracking-widest text-gold-400 font-semibold">
+            Aperçu — {current.sign}
+          </span>
+          <span className="text-xs text-night-500">Aujourd'hui</span>
+        </div>
+        <div className="relative h-[68px] overflow-hidden">
+          {PREVIEWS.map((p, i) => (
+            <p
+              key={p.sign}
+              className={`absolute inset-0 text-night-100 text-sm italic leading-relaxed transition-opacity duration-500 ${
+                i === idx ? 'opacity-100' : 'opacity-0'
+              }`}
+            >
+              « {p.text} »
+            </p>
+          ))}
+        </div>
+        <p className="text-night-500 text-[11px] mt-2 italic">— Exemple de lecture personnalisée</p>
+      </div>
+    </div>
+  );
+}
+
 export function Landing({ onStart, onLogin, onGuest }: LandingProps) {
   return (
     <div className="cosmic-bg star-field min-h-screen text-night-100 relative overflow-x-hidden">
@@ -106,21 +175,8 @@ export function Landing({ onStart, onLogin, onGuest }: LandingProps) {
           Une carte du ciel calculée aux données astronomiques NASA. Des lectures qui parlent de toi, pas d'un signe générique. L'astrologie comme elle aurait dû être.
         </p>
 
-        {/* P1 — Aperçu horoscope inline avant le CTA (« wow instantané ») */}
-        <div className="max-w-xs mx-auto mb-8 animate-fade-in-up" style={{ animationDelay: '0.42s' }}>
-          <div className="glass rounded-2xl p-4 border border-gold-500/30 bg-gradient-to-br from-gold-500/10 to-cosmic-500/10 relative overflow-hidden">
-            <div className="absolute -top-6 -right-6 text-6xl opacity-10 select-none">✦</div>
-            <div className="flex items-center justify-between mb-2">
-              <span className="text-[10px] uppercase tracking-widest text-gold-400 font-semibold">Aperçu — Lion</span>
-              <span className="text-xs text-night-500">Aujourd'hui</span>
-            </div>
-            <p className="text-night-100 text-sm italic leading-relaxed">
-              « Ta lumière intérieure cherche un cadre pour s'exprimer —<br />
-              l'inspiration du jour se cache dans le silence, pas dans le mouvement. »
-            </p>
-            <p className="text-night-500 text-[11px] mt-3 italic">— Exemple de lecture personnalisée</p>
-          </div>
-        </div>
+        {/* Piste carousel — Aperçu horoscope rotatif automatique */}
+        <HoroscopePreview />
 
         <button
           onClick={onStart}

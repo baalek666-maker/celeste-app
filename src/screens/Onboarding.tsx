@@ -231,29 +231,102 @@ export function Onboarding({ onComplete }: { onComplete: (u: User) => void }) {
       </div>
     </div>,
 
-    // Step 3: Calculating (was step 4)
-    <div key="3" className="flex flex-col items-center justify-center min-h-screen px-8 text-center animate-fade-in">
+    // Step 3: Calculating — cercle zodiacal animé
+    // 12 signes orbitent pendant que les planètes se placent. Effet wow.
+    <div key="3" className="flex flex-col items-center justify-center min-h-screen px-8 text-center animate-fade-in relative">
       {calculating ? (
         <>
-          <div className="relative mb-8">
-            <svg width="120" height="120" viewBox="0 0 120 120" className="animate-spin-slow">
-              <circle cx="60" cy="60" r="50" fill="none" stroke="#383964" strokeWidth="1" />
-              <circle cx="60" cy="60" r="35" fill="none" stroke="#56589c" strokeWidth="1" />
-              <circle cx="60" cy="60" r="20" fill="none" stroke="#a855f7" strokeWidth="1" />
-              <circle cx="60" cy="10" r="3" fill="#fbbf24" />
-              <circle cx="60" cy="60" r="4" fill="#fcd34d" opacity="0.8" />
-              <circle cx="90" cy="60" r="2" fill="#c084fc" />
-              <circle cx="60" cy="95" r="2" fill="#a855f7" />
-              <circle cx="25" cy="60" r="2" fill="#757bc4" />
+          {/* Cercle zodiacal animé — 12 segments + planètes en orbite */}
+          <div className="relative mb-8 w-64 h-64 mx-auto">
+            {/* Halo radial doré pulsant */}
+            <div className="absolute inset-0 rounded-full animate-glow"
+                 style={{ background: 'radial-gradient(circle, rgba(251,191,36,0.15) 0%, transparent 70%)' }} />
+
+            <svg width="256" height="256" viewBox="0 0 256 256" className="relative z-10">
+              <defs>
+                <radialGradient id="calc-glow" cx="50%" cy="50%" r="50%">
+                  <stop offset="0%" stopColor="#fcd34d" stopOpacity="0.3" />
+                  <stop offset="70%" stopColor="#c084fc" stopOpacity="0.1" />
+                  <stop offset="100%" stopColor="transparent" />
+                </radialGradient>
+              </defs>
+
+              {/* Cercle de fond */}
+              <circle cx="128" cy="128" r="120" fill="url(#calc-glow)" />
+              <circle cx="128" cy="128" r="110" fill="none" stroke="#383964" strokeWidth="0.5" opacity="0.5" />
+
+              {/* 12 segments zodiacaux (30° chacun) qui s'allument progressivement */}
+              {Array.from({ length: 12 }, (_, i) => {
+                const angle = (i * 30 - 90) * Math.PI / 180;
+                const x1 = 128 + 100 * Math.cos(angle);
+                const y1 = 128 + 100 * Math.sin(angle);
+                const x2 = 128 + 110 * Math.cos(angle);
+                const y2 = 128 + 110 * Math.sin(angle);
+                const sx = 128 + 85 * Math.cos(angle);
+                const sy = 128 + 85 * Math.sin(angle);
+                const signs = ['♈','♉','♊','♋','♌','♍','♎','♏','♐','♑','♒','♓'];
+                return (
+                  <g key={i}
+                     className="animate-fade-in"
+                     style={{ animationDelay: `${i * 0.08}s`, transformOrigin: '128px 128px' }}>
+                    <line x1={x1} y1={y1} x2={x2} y2={y2} stroke="#fbbf24" strokeWidth="0.5" opacity="0.3" />
+                    <text x={sx} y={sy} textAnchor="middle" dominantBaseline="central"
+                          fontSize="11" fill="#fbbf24" opacity="0.6">{signs[i]}</text>
+                  </g>
+                );
+              })}
+
+              {/* Orbites planétaires concentriques */}
+              <circle cx="128" cy="128" r="70" fill="none" stroke="#56589c" strokeWidth="0.4" opacity="0.4" />
+              <circle cx="128" cy="128" r="50" fill="none" stroke="#757bc4" strokeWidth="0.4" opacity="0.3" />
+              <circle cx="128" cy="128" r="30" fill="none" stroke="#a855f7" strokeWidth="0.4" opacity="0.3" />
+
+              {/* Soleil central */}
+              <circle cx="128" cy="128" r="6" fill="#fcd34d" opacity="0.9">
+                <animate attributeName="r" values="5;7;5" dur="2s" repeatCount="indefinite" />
+              </circle>
+
+              {/* Planètes en orbite — rotation continue */}
+              <g className="animate-spin-slow" style={{ transformOrigin: '128px 128px' }}>
+                <circle cx="198" cy="128" r="3" fill="#fbbf24">
+                  <animateTransform attributeName="transform" type="rotate"
+                    from="0 128 128" to="360 128 128" dur="8s" repeatCount="indefinite" />
+                </circle>
+                <circle cx="178" cy="128" r="2.5" fill="#e0e0e0">
+                  <animateTransform attributeName="transform" type="rotate"
+                    from="0 128 128" to="-360 128 128" dur="6s" repeatCount="indefinite" />
+                </circle>
+                <circle cx="158" cy="128" r="2" fill="#c084fc">
+                  <animateTransform attributeName="transform" type="rotate"
+                    from="60 128 128" to="420 128 128" dur="10s" repeatCount="indefinite" />
+                </circle>
+                <circle cx="148" cy="128" r="1.5" fill="#a855f7">
+                  <animateTransform attributeName="transform" type="rotate"
+                    from="180 128 128" to="540 128 128" dur="7s" repeatCount="indefinite" />
+                </circle>
+              </g>
             </svg>
           </div>
+
           <h2 className="text-xl font-bold mb-3 text-gold-gradient">Calcul de ton thème natal</h2>
-          <p className="text-night-400 text-sm">Analyse des positions planétaires...</p>
-          <div className="mt-8 space-y-2 text-night-500 text-xs">
-            <p className="animate-fade-in" style={{ animationDelay: '0.3s' }}>◆ Position du Soleil</p>
-            <p className="animate-fade-in" style={{ animationDelay: '0.8s' }}>◆ Position de la Lune</p>
-            <p className="animate-fade-in" style={{ animationDelay: '1.3s' }}>◆ Calcul de l'Ascendant</p>
-            <p className="animate-fade-in" style={{ animationDelay: '1.8s' }}>◆ Répartition des Maisons</p>
+          <p className="text-night-400 text-sm mb-8">Les planètes se placent dans ton ciel...</p>
+
+          {/* Étapes de calcul — apparition séquencée avec checkmarks */}
+          <div className="space-y-3 text-left max-w-xs mx-auto">
+            {[
+              { label: 'Position du Soleil', delay: '0.3s', icon: '☉' },
+              { label: 'Position de la Lune', delay: '0.8s', icon: '☽' },
+              { label: 'Calcul de l\'Ascendant', delay: '1.3s', icon: '↑' },
+              { label: 'Répartition des Maisons', delay: '1.8s', icon: '⌂' },
+            ].map((step) => (
+              <div key={step.label}
+                   className="flex items-center gap-3 animate-fade-in"
+                   style={{ animationDelay: step.delay }}>
+                <span className="text-gold-400 text-base w-5">{step.icon}</span>
+                <span className="text-night-300 text-sm">{step.label}</span>
+                <span className="ml-auto text-gold-400/60 text-xs animate-pulse">...</span>
+              </div>
+            ))}
           </div>
         </>
       ) : null}
