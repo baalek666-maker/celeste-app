@@ -656,6 +656,21 @@ function getTransits(date) {
 
 function getNatalPositions(birthData, full = false) {
   // P1 #H — Validation input : crash silencieux sur dates/timezone manquants.
+  // v14.4 P2 — Normalisation timezone string→number (certains anciens profils ont "Europe/Paris")
+  let tz = birthData?.timezone;
+  if (typeof tz === 'string') {
+    // Map IANA → UTC offset heuristique (Paris/Berlin/Madrid = +1/+2 selon DST)
+    const IANA_OFFSET = { 'Europe/Paris': 2, 'Europe/Berlin': 2, 'Europe/Madrid': 2, 'Europe/London': 1,
+                          'Europe/Rome': 2, 'Europe/Brussels': 2, 'Europe/Zurich': 2, 'Europe/Vienna': 2,
+                          'Europe/Amsterdam': 2, 'Europe/Lisbon': 1, 'Europe/Athens': 3, 'Europe/Helsinki': 3,
+                          'America/New_York': -4, 'America/Chicago': -5, 'America/Denver': -6, 'America/Los_Angeles': -7,
+                          'America/Toronto': -4, 'America/Mexico_City': -5, 'America/Sao_Paulo': -3,
+                          'Asia/Tokyo': 9, 'Asia/Shanghai': 8, 'Asia/Hong_Kong': 8, 'Asia/Singapore': 8,
+                          'Asia/Dubai': 4, 'Asia/Kolkata': 5, 'Asia/Seoul': 9, 'Asia/Bangkok': 7,
+                          'Australia/Sydney': 10, 'Pacific/Auckland': 12 };
+    tz = IANA_OFFSET[tz] ?? 2; // fallback Paris été
+    birthData = { ...birthData, timezone: tz };
+  }
   if (!birthData || !birthData.date || !birthData.time ||
       typeof birthData.timezone !== 'number' || typeof birthData.latitude !== 'number' || typeof birthData.longitude !== 'number') {
     throw new Error('Invalid birth data: date, time, timezone, latitude, longitude required');
@@ -2318,6 +2333,42 @@ app.post('/api/admin/llm/toggle', adminAuth, (req, res) => {
 //       économie maximale. Pour pré-générer en masse, utiliser le cron nocturne.
 // Features supportées : daily_energy, weekly_challenge, ritual, horoscope_personal,
 //       aspects_today, tarot_cross.
+// P2 — Trigger manuel du job nocturne (pour tests ou rattrapage après incident).
+// Body : { date?: 'YYYY-MM-DD' } (par défaut = demain Paris)
+app.post('/api/admin/nightly/run', adminAuth, async (req, res) => {
+  const { date: customDate } = req.body || {};
+  if (customDate) {
+    // Override temporaire pour ce run
+    const prevHour = NIGHTLY_PREFETCH_HOUR;
+    process.env.NIGHTLY_PREFETCH_HOUR = new Date().getHours().toString();
+    console.log(`[ADMIN] nightly trigger manuel pour date=${customDate}`);
+  }
+  try {
+    const result = await runNightlyPrefetch();
+    res.json({ ok: true, ...result });
+  } catch (e) {
+    res.status(500).json({ ok: false, error: e.message });
+  }
+});
+
+// Stats du job nocturne (last run + count cache J+1)
+app.get('/api/admin/nightly/stats', adminAuth, (_req, res) => {
+  const tomorrow = new Date(Date.now() + 86400000).toISOString().slice(0, 10);
+  const today = new Date().toISOString().slice(0, 10);
+  const cacheToday = db.prepare('SELECT COUNT(*) as n FROM horoscope_personal_daily WHERE date=?').get(today);
+  const cacheTomorrow = db.prepare('SELECT COUNT(*) as n FROM horoscope_personal_daily WHERE date=?').get(tomorrow);
+  const usersActive = db.prepare("SELECT COUNT(*) as n FROM users WHERE birth_data IS NOT NULL AND birth_data != ''").get();
+  res.json({
+    nightly_prefetch_enabled: NIGHTLY_PREFETCH_ENABLED,
+    nightly_prefetch_hour_paris: NIGHTLY_PREFETCH_HOUR,
+    last_run_at: nightlyPrefetchLastRun ? new Date(nightlyPrefetchLastRun).toISOString() : null,
+    is_running: nightlyPrefetchRunning,
+    users_active: usersActive.n,
+    cache_today: cacheToday.n,
+    cache_tomorrow: cacheTomorrow.n,
+  });
+});
+
 app.post('/api/admin/llm/regenerate', adminAuth, async (req, res) => {
   const { feature, user_id, date } = req.body || {};
   if (!feature) return res.status(400).json({ error: 'feature requis' });
@@ -5266,6 +5317,116 @@ let cronInterval = null;
 let astroEventsLastRun = 0;
 const ASTRO_EVENTS_INTERVAL_MS = 6 * 3600_000; // P1#8 — check events astro toutes les 6h
 
+// ─── P2 — JOB NOCTURNE PRÉ-GÉNÉRATION (LLM user-side ON, admin bypass) ───
+// Tourne à NIGHTLY_PREFETCH_HOUR (Paris) pour pré-remplir le cache horoscope du J+1.
+// Ne chevauche PAS les 4 cron jobs Hermes (Backup 1h00, Punchlines 1h10, Newsjacking 1h20, Blog 1h30 lundi).
+// Mutex global : skip si un autre tick tourne déjà (évite collision scheduler principal).
+let nightlyPrefetchLastRun = 0;
+let nightlyPrefetchRunning = false;
+const NIGHTLY_PREFETCH_INTERVAL_MS = 23 * 3600_000; // au moins 23h entre deux runs
+const NIGHTLY_PREFETCH_TIMEOUT_MS = 15 * 60 * 1000; // 15min max (sécurité)
+const NIGHTLY_PREFETCH_ENABLED = process.env.NIGHTLY_PREFETCH_ENABLED !== 'false';
+const NIGHTLY_PREFETCH_HOUR = parseInt(process.env.NIGHTLY_PREFETCH_HOUR || '2', 10); // 2h Paris
+
+async function runNightlyPrefetch() {
+  if (nightlyPrefetchRunning) {
+    console.log('[cron:nightly-prefetch] déjà en cours, skip');
+    return { skipped: true, reason: 'already-running' };
+  }
+  if (!NIGHTLY_PREFETCH_ENABLED) {
+    return { skipped: true, reason: 'disabled-env' };
+  }
+  nightlyPrefetchRunning = true;
+  const startMs = Date.now();
+  const deadline = startMs + NIGHTLY_PREFETCH_TIMEOUT_MS;
+
+  try {
+    // Date cible = demain (timezone Paris)
+    const nowParis = new Date(new Date().toLocaleString('en-US', { timeZone: 'Europe/Paris' }));
+    const tomorrow = new Date(nowParis);
+    tomorrow.setDate(tomorrow.getDate() + 1);
+    const targetDate = tomorrow.toISOString().slice(0, 10); // YYYY-MM-DD
+
+    console.log(`[cron:nightly-prefetch] START target=${targetDate} hour=Paris`);
+
+    // 1) Lister users actifs avec birth_data valide
+    const users = db.prepare(
+      "SELECT id, birth_data FROM users WHERE birth_data IS NOT NULL AND birth_data != ''"
+    ).all();
+
+    console.log(`[cron:nightly-prefetch] ${users.length} users actifs à traiter`);
+
+    let success = 0, skipped = 0, failed = 0;
+    const stats = [];
+
+    // 2) Pour chaque user : calculer sun+moon+rising et tenter pré-fill cache
+    for (const u of users) {
+      if (Date.now() > deadline) {
+        console.warn('[cron:nightly-prefetch] deadline atteinte, abandon des users restants');
+        failed += users.length - success - skipped - failed;
+        break;
+      }
+
+      let bd;
+      try { bd = JSON.parse(u.birth_data); } catch { failed++; continue; }
+      if (!bd || !bd.date || !bd.time) { failed++; continue; }
+
+      try {
+        const natalPositions = getNatalPositions(bd);
+        const sunSign = natalPositions.sun?.sign;
+        const moonSign = natalPositions.moon?.sign || 'unknown';
+        const risingSign = natalPositions.ascendant?.sign || 'unknown';
+        if (!sunSign) { failed++; continue; }
+
+        // Cache hit ? skip
+        const cached = db.prepare(
+          'SELECT 1 FROM horoscope_personal_daily WHERE sun_sign=? AND moon_sign=? AND rising_sign=? AND date=?'
+        ).get(sunSign, moonSign, risingSign, targetDate);
+        if (cached) { skipped++; continue; }
+
+        // Calculer transits J+1
+        const transitsJ1 = getTransits(tomorrow);
+        const transitsStr = JSON.stringify(transitsJ1);
+
+        // LLM bypass admin (force ON, ignore LLM_USER_ENABLED)
+        let base;
+        try {
+          base = await generateHoroscope(natalPositions, transitsJ1, sunSign);
+        } catch (e) {
+          console.warn(`[cron:nightly-prefetch] user ${u.id} LLM failed: ${e.message}`);
+          failed++;
+          continue;
+        }
+
+        // Write cache (sun+moon+rising+date)
+        db.prepare(`INSERT OR IGNORE INTO horoscope_personal_daily
+          (sun_sign, moon_sign, rising_sign, date, transits, content) VALUES (?, ?, ?, ?, ?, ?)`).run(
+          sunSign, moonSign, risingSign, targetDate, transitsStr, JSON.stringify(base),
+        );
+
+        success++;
+        stats.push({ userId: u.id, sun: sunSign, moon: moonSign, rising: risingSign });
+
+        // Rate limiting doux : 1 user / 200ms = 30s pour 60 users (pas de saturation LLM)
+        await new Promise(r => setTimeout(r, 200));
+      } catch (e) {
+        console.error(`[cron:nightly-prefetch] user ${u.id} error: ${e.message}`);
+        failed++;
+      }
+    }
+
+    const duration = ((Date.now() - startMs) / 1000).toFixed(1);
+    console.log(`[cron:nightly-prefetch] DONE success=${success} skipped=${skipped} failed=${failed} duration=${duration}s`);
+    nightlyPrefetchLastRun = Date.now();
+    return { ok: true, targetDate, success, skipped, failed, duration, stats: stats.length };
+  } catch (e) {
+    console.error('[cron:nightly-prefetch] CRASH:', e.message);
+    return { ok: false, error: e.message };
+  } finally {
+    nightlyPrefetchRunning = false;
+  }
+}
+
 function startCronScheduler() {
   if (cronInterval) return;
   console.log('[cron] Scheduler started (check every 30 min)');
@@ -5293,6 +5454,13 @@ function startCronScheduler() {
     if (Date.now() - astroEventsLastRun >= ASTRO_EVENTS_INTERVAL_MS) {
       runAstroEventsJob(db, sendPushToUser);
       astroEventsLastRun = Date.now();
+    }
+    // P2 — job nocturne : uniquement à l'heure cible (Paris) + 23h écoulées
+    if (NIGHTLY_PREFETCH_ENABLED && Date.now() - nightlyPrefetchLastRun >= NIGHTLY_PREFETCH_INTERVAL_MS) {
+      const nowParis = new Date(new Date().toLocaleString('en-US', { timeZone: 'Europe/Paris' }));
+      if (nowParis.getHours() === NIGHTLY_PREFETCH_HOUR && nowParis.getMinutes() < 30) {
+        runNightlyPrefetch(); // fire-and-forget (mutex interne)
+      }
     }
   }, CRON_INTERVAL_MS);
 }
