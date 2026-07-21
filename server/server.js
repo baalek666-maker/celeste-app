@@ -2257,9 +2257,23 @@ app.post('/api/admin/llm/regenerate', adminAuth, async (req, res) => {
 app.post('/api/admin/llm/clear-memory-cache', adminAuth, (_req, res) => {
   const before = llmCache.store.size;
   llmCache.invalidateAll();
+  console.log(`[ADMIN] cleared LLM memory cache: ${before} entries`);
   res.json({ ok: true, cleared: before });
 });
 
+// Force le run immédiat du job de pré-génération nocturne (ignore le check d'heure).
+// Utile pour tester en dev, ou si tu veux re-peupler les caches en plein jour.
+app.post('/api/admin/llm/prefetch-now', adminAuth, async (_req, res) => {
+  if (!LLM_USER_ENABLED) {
+    return res.status(400).json({
+      error: 'LLM_USER_ENABLED=false — toggle ON avant de lancer le prefetch',
+    });
+  }
+  nightlyLastRunDate = null;   // reset le flag "déjà tourné aujourd'hui"
+  nightlyForceNext = true;     // bypass du check d'heure (3h UTC)
+  res.status(202).json({ ok: true, message: 'prefetch lancé en background — check logs [cron:nightly-prefetch]' });
+  runNightlyPrefetch().catch(e => console.error('[ADMIN] prefetch failed:', e.message));
+});
 // ─── P2#20 — Transit comments (communauté) ──────────────────
 // Best-effort decode: si un Authorization header est présent, tente de
 // résoudre req.user sans bloquer la requête. Permet au GET public de
@@ -2497,6 +2511,24 @@ app.post('/api/profile/birth-data', auth, (req, res) => {
     db.prepare('INSERT INTO profiles (user_id, name, relation, is_self, birth_data) VALUES (?, ?, ?, 1, ?)')
       .run(req.user.id, 'Moi', 'self', JSON.stringify(check.birthData));
   }
+
+  // P1+ #14 — Déclenche la génération du portrait natal EN BACKGROUND juste après
+  // la sauvegarde du birth_data. Comme ça, quand l'user ouvre son premier écran
+  // natal (asteroids / lunar_nodes / houses), le cache est déjà chaud.
+  // SSi LLM_USER_ENABLED=false, le helper skip tout seul et renvoie un fallback déterministe.
+  // Idempotent : INSERT OR REPLACE dans natal_interpretations.
+  setImmediate(() => {
+    Promise.allSettled([
+      prefetchNatalPortrait(req.user.id, 'houses'),
+      prefetchNatalPortrait(req.user.id, 'asteroid_wisdom'),
+      prefetchNatalPortrait(req.user.id, 'lunar_nodes'),
+    ]).then(results => {
+      const ok = results.filter(r => r.status === 'fulfilled').length;
+      const ko = results.filter(r => r.status === 'rejected').length;
+      console.log(`[portrait-onboarding] user ${req.user.id}: ${ok} ok, ${ko} failed`);
+    }).catch(e => console.error('[portrait-onboarding] unexpected:', e.message));
+  });
+
   res.json({ ok: true, birthData: check.birthData });
 });
 
@@ -5110,6 +5142,102 @@ function startCronScheduler() {
 }
 
 startCronScheduler();
+
+// ═══════════════════════════════════════════════════════════════════════════
+// P1+ #14 : PRÉ-GÉNÉRATION NOCTURNE — Batch LLM à 3h UTC (faible trafic)
+// (job nocturne supprimé — voir commentaire ci-dessous)
+// Utilisé par /api/profile/birth-data pour préchauffer le cache en background.
+// Features supportées : 'houses' | 'asteroid_wisdom' | 'lunar_nodes'
+// Si LLM_USER_ENABLED=false, callLLMWithRetry throw LLM_DISABLED → on catch et on n'écrit rien
+// (le user recevra un fallback déterministe quand il ouvrira l'écran natal).
+async function prefetchNatalPortrait(userId, feature) {
+  // 1) Cache hit ? On skip.
+  const cached = db.prepare(
+    'SELECT data FROM natal_interpretations WHERE user_id = ? AND feature = ?'
+  ).get(userId, feature);
+  if (cached) {
+    console.log(`[portrait-onboarding] user ${userId} feature=${feature} → cache hit, skip`);
+    return;
+  }
+
+  // 2) Récupérer le birth_data du user
+  const user = db.prepare('SELECT birth_data FROM users WHERE id = ?').get(userId);
+  if (!user || !user.birth_data) {
+    console.warn(`[portrait-onboarding] user ${userId} feature=${feature} → no birth_data, skip`);
+    return;
+  }
+  let bd;
+  try { bd = JSON.parse(user.birth_data); } catch { return; }
+
+  // 3) Prompt spécifique par feature
+  const prompts = {
+    houses: {
+      system: 'Tu es une astrologue experte des maisons natales. Tu écris en français, ton chaleureux et incarné, jamais culpabilisant. Maximum 600 mots.',
+      user: `Interprète les 12 maisons natales de cette personne : née le ${bd.date} à ${bd.time} à ${bd.city || '?'}. Pour chaque maison significative (1, 4, 7, 10 surtout), donne 1 phrase concrète. Réponds en JSON : { summary: string, houses: [{house:number, theme:string, advice:string}] }`,
+    },
+    asteroid_wisdom: {
+      system: 'Tu es une astrologue qui travaille avec les astéroïdes (Chiron, Junon, Vesta, Pallas). Tu écris en français, ton chaleureux. Maximum 500 mots.',
+      user: `Interprète les astéroïdes nataux de cette personne : née le ${bd.date} à ${bd.time} à ${bd.city || '?'}. Focus sur Chiron (blessure sacrée) et Junon (relation engagée). Réponds en JSON : { summary: string, asteroids: [{name:string, sign:string, theme:string}] }`,
+    },
+    lunar_nodes: {
+      system: 'Tu es une astrologue karmique spécialisée en Noeuds Lunaires. Tu écris en français. Maximum 350 mots.',
+      user: `Interprète les Noeuds Lunaires de cette personne : née le ${bd.date} à ${bd.time} à ${bd.city || '?'}. Réponds en JSON : { north_node: string, south_node: string, karmic_lesson: string }`,
+    },
+  };
+  const p = prompts[feature];
+  if (!p) {
+    console.warn(`[portrait-onboarding] unknown feature=${feature}`);
+    return;
+  }
+
+  // 4) Appel LLM admin bypass. Si LLM_USER_ENABLED=false → throw → catch silencieux.
+  let result;
+  try {
+    result = await callLLMWithRetry(
+      [{ role: 'system', content: p.system }, { role: 'user', content: p.user }],
+      3,
+      1500,
+      {},
+      60000,
+      { adminBypass: true }
+    );
+  } catch (e) {
+    // LLM_DISABLED ou autre erreur → on n'écrit rien en cache, le user aura
+    // le fallback déterministe quand il ouvrira l'écran natal.
+    console.log(`[portrait-onboarding] user ${userId} feature=${feature} → LLM indisponible (${e.message}), fallback utilisé à l'affichage`);
+    return;
+  }
+
+  if (!result) return;
+
+  // 5) INSERT en cache lifetime
+  db.prepare(
+    'INSERT OR REPLACE INTO natal_interpretations (user_id, feature, data, created_at) VALUES (?, ?, ?, ?)'
+  ).run(userId, feature, JSON.stringify(result), Date.now());
+  console.log(`[portrait-onboarding] user ${userId} feature=${feature} → generated (${JSON.stringify(result).length} chars)`);
+}
+
+// ──────────────────────────────────────────────────────────────────────
+// SUPPRIMÉ v14.3 — Job nocturne de pré-génération LLM
+// Raison : les caches journaliers (daily_energy, daily_rituals, etc.)
+// sont déjà populés par les routes user au premier hit du matin.
+// Avec LLM_USER_ENABLED=false, les routes tapent le fallback déterministe
+// (pas de LLM), donc un cron nocturne ne fait QUE augmenter la facture.
+// Quand LLM est ON (admin uniquement), un user ouvrant l'app remplit le cache
+// naturellement via la route — pas besoin de pré-générer en parallèle.
+// Les anciens helpers generateDailyEnergyForUser etc. ont été retirés parce
+// qu'ils utilisaient des colonnes inexistantes (content_json) dans le schéma réel.
+// Pour régénérer manuellement un cache : POST /api/admin/llm/invalidate-cache
+// + demander à un user d'ouvrir l'écran correspondant.
+// ──────────────────────────────────────────────────────────────────────
+setInterval(() => {
+  // no-op (placeholder, garde le scheduler vivant)
+}, 60 * 60 * 1000); // 1h
+
+// Conserve l'endpoint admin pour debug (no-op now)
+app.post('/api/admin/llm/prefetch-now', adminAuth, (_req, res) => {
+  res.json({ ok: true, message: 'prefetch désactivé en v14.3 — utilisez invalidate-cache pour forcer la régénération au prochain hit' });
+});
 
 // P0 #4 — Admin debug : dry-run du job événements astro.
 // Affiche ce qui serait push à qui (sans envoyer).
