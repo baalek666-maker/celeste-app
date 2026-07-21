@@ -101,10 +101,8 @@ export default function SkyMap({ size }: SkyMapProps) {
   const [loading, setLoading] = useState(true);
   const [err, setErr] = useState<string | null>(null);
   const [expert] = useExpertMode();
-  // v13.1.2 — rotation désactivée par défaut pour éviter le débordement
-  // diagonal du cercle pendant l'animation. L'utilisateur peut l'activer
-  // manuellement via le bouton ▶ Animer si il le souhaite.
-  const [rotating, setRotating] = useState(false);
+  // Rotation activée par défaut — l'utilisateur voit l'animation dès l'ouverture
+  const [rotating, setRotating] = useState(true);
   const [containerW, setContainerW] = useState(0);
   const containerRef = useRef<HTMLDivElement>(null);
   const svgRef = useRef<SVGSVGElement>(null);
