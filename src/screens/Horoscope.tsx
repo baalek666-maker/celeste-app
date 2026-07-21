@@ -740,12 +740,34 @@ export function Horoscope({ user, onNavigate }: { user: User; onNavigate: (s: Sc
                         {mood && <span className="text-night-500 text-[10px] italic">{mood}</span>}
                       </div>
 
-                      {/* Texte : PAS de troncature. line-clamp-2 replié, expand-on-tap */}
+                      {/* Texte général */}
                       <p className={`text-night-300 text-sm leading-relaxed ${expandedDays.has(day.date) ? '' : 'line-clamp-2'}`}>
                         {summary.general}
                       </p>
 
-                      {summary.general && summary.general.length > 100 && (
+                      {/* Sections amour + carrière visibles quand étendu */}
+                      {expandedDays.has(day.date) && (summary.love || summary.career) && (
+                        <div className="mt-3 space-y-2 pt-3 border-t border-night-700/30">
+                          {summary.love && (
+                            <p className="text-night-300 text-sm leading-relaxed">
+                              <span className="text-rose-300 text-xs">♥ Amour : </span>
+                              {summary.love}
+                            </p>
+                          )}
+                          {summary.career && (
+                            <p className="text-night-300 text-sm leading-relaxed">
+                              <span className="text-blue-300 text-xs">★ Carrière : </span>
+                              {summary.career}
+                            </p>
+                          )}
+                        </div>
+                      )}
+
+                      {/* Bouton déplier/replier : visible dès qu'il y a du contenu détaillé (amour/carrière)
+                          à révéler, OU si le texte général est long. Avant, le bouton n'apparaissait que
+                          si general > 100 caractères, ce qui masquait amour/carrière sans recours quand
+                          general était court. */}
+                      {(summary.love || summary.career || (summary.general && summary.general.length > 100)) && (
                         <button
                           onClick={() => toggleExpand(day.date)}
                           className="text-cosmic-300 text-xs mt-1 hover:text-cosmic-200 transition-colors"

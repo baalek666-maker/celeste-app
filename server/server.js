@@ -89,7 +89,7 @@ const LLM_MODEL = process.env.LLM_MODEL || 'gpt-4o-mini';
 // Objectif : budget LLM sous contrôle total — les users n'appellent JAMAIS le LLM
 // en temps réel. Le contenu est servi depuis les caches DB (daily_aspects_cache,
 // horoscope_personal_daily, natal_interpretations, daily_energy, etc.).
-const LLM_USER_ENABLED = (process.env.LLM_USER_ENABLED || 'false').toLowerCase() === 'true';
+let LLM_USER_ENABLED = (process.env.LLM_USER_ENABLED || 'false').toLowerCase() === 'true';
 const PORT = process.env.PORT || 3001;
 
 // CORS: en production, restreindre aux origines autorisées via CORS_ORIGIN (CSV).
@@ -752,6 +752,7 @@ function getNatalPositions(birthData, full = false) {
 // v11.5 — Circuit breaker : si 3 échecs consécutifs en 2 min, on coupe 5 min et toutes
 //         les routes servent leur fallback déterministe immédiatement.
 let llmQueue = Promise.resolve();
+let llmActiveCount = 0;
 let llmFailureStreak = 0;
 let llmCircuitOpenedAt = 0;
 const LLM_CIRCUIT_THRESHOLD = 3;
@@ -770,10 +771,13 @@ function isLLMCircuitOpen() {
 }
 
 function withLLMMutex(fn) {
+  llmActiveCount++;
   const next = llmQueue.then(() => fn(), () => fn());
-  llmQueue = next.catch(() => {});
+  llmQueue = next.finally(() => { llmActiveCount--; });
   return next;
 }
+
+function llmMutexDepth() { return llmActiveCount; }
 
 function recordLLMSuccess() {
   llmFailureStreak = 0;
@@ -947,6 +951,55 @@ async function getGenericLLMFallback(key, err) {
     avoid: ['décisions hâtives'],
     reflectionPrompt: 'Qu\'est-ce qui te demande du repos en ce moment ?',
   };
+}
+
+// ─── v14.1 — Invalidation cache DB par feature (admin) ─────────────────
+// Vide la ligne de cache correspondante pour forcer une re-génération au prochain
+// appel user. La route user, à son tour, appliquera son fallback si LLM_USER_ENABLED=false
+// ou appellera le LLM (coût 1×) si LLM_USER_ENABLED=true.
+// Retourne { deleted, remaining } — deleted = lignes supprimées, remaining = restantes.
+function invalidateCacheFor(feature, userId, date) {
+  // Mapping feature → { table, whereUser, whereDate, whereContent }
+  const MAP = {
+    daily_energy:       { table: 'daily_energy',         dateCol: 'date' },
+    weekly_challenge:   { table: 'weekly_challenges',    dateCol: 'week_start' },
+    ritual:             { table: 'daily_rituals',        dateCol: 'date' },
+    horoscope_personal: { table: 'horoscope_personal_daily', dateCol: 'date' },
+    aspects_today:      { table: 'daily_aspects_cache',  dateCol: 'date' },
+    tarot_cross:        { table: 'tarot_personal_cross', dateCol: 'created_at' /* date de création = date du tirage */ },
+  };
+  const cfg = MAP[feature];
+  if (!cfg) throw new Error(`feature inconnue: ${feature}`);
+
+  // 1) Cache mémoire
+  let memDeleted = 0;
+  if (llmCache && llmCache.store) {
+    const toDelete = [];
+    for (const k of llmCache.store.keys()) {
+      if (k.startsWith(feature + ':')) {
+        if (!userId || k.includes(`:${userId}:`)) {
+          toDelete.push(k);
+        }
+      }
+    }
+    for (const k of toDelete) { llmCache.store.delete(k); memDeleted++; }
+  }
+
+  // 2) Cache DB (SQLite)
+  let dbDeleted = 0;
+  try {
+    if (userId) {
+      const info = db.prepare(`DELETE FROM ${cfg.table} WHERE ${cfg.dateCol} = ? AND user_id = ?`).run(date, userId);
+      dbDeleted = info.changes || 0;
+    } else {
+      const info = db.prepare(`DELETE FROM ${cfg.table} WHERE ${cfg.dateCol} = ?`).run(date);
+      dbDeleted = info.changes || 0;
+    }
+  } catch (e) {
+    console.warn(`[ADMIN] invalidateCacheFor ${feature} DB error:`, e.message);
+  }
+
+  return { deleted: dbDeleted + memDeleted, remaining: null, db_deleted: dbDeleted, mem_deleted: memDeleted };
 }
 
 // ─── FALLBACK horoscopes (par signe, pré-écrits) ─────────────────
@@ -2153,6 +2206,58 @@ app.get('/api/admin/weekly-content', adminAuth, (req, res) => {
     'SELECT * FROM weekly_content ORDER BY week_start DESC LIMIT 50'
   ).all();
   res.json(rows);
+});
+
+// ─── v14.1 — Admin LLM : contrôle coupe-circuit + régénération manuelle ──
+// Objectif : (a) voir l'état du flag LLM_USER_ENABLED, (b) le toggle,
+//       (c) forcer un call LLM via adminBypass (pour régénérer un portrait natal,
+//       une ritu­elle, un horoscope quotidien quand l'admin le souhaite).
+app.get('/api/admin/llm/status', adminAuth, (_req, res) => {
+  res.json({
+    llm_user_enabled: LLM_USER_ENABLED,
+    llm_model: LLM_MODEL,
+    circuit_breaker_open: isLLMCircuitOpen(),
+    mutex_depth: llmMutexDepth(),
+  });
+});
+
+app.post('/api/admin/llm/toggle', adminAuth, (req, res) => {
+  const { enabled } = req.body || {};
+  if (typeof enabled !== 'boolean') {
+    return res.status(400).json({ error: 'enabled (boolean) requis' });
+  }
+  LLM_USER_ENABLED = enabled;
+  console.log(`[ADMIN] LLM_USER_ENABLED → ${enabled}`);
+  res.json({ ok: true, llm_user_enabled: LLM_USER_ENABLED });
+});
+
+// Force-regenerate une entrée de cache via call LLM admin-bypass.
+// Body : { feature, user_id?: number, date?: 'YYYY-MM-DD' }
+// Stratégie v14.1 (light) : on supprime la ligne de cache DB correspondante. La
+//       prochaine requête user la re-générera via la route normale (qui appellera
+//       le LLM si LLM_USER_ENABLED=true, sinon le fallback). Aucun appel LLM ici —
+//       économie maximale. Pour pré-générer en masse, utiliser le cron nocturne.
+// Features supportées : daily_energy, weekly_challenge, ritual, horoscope_personal,
+//       aspects_today, tarot_cross.
+app.post('/api/admin/llm/regenerate', adminAuth, async (req, res) => {
+  const { feature, user_id, date } = req.body || {};
+  if (!feature) return res.status(400).json({ error: 'feature requis' });
+  const targetDate = date || new Date().toISOString().slice(0, 10);
+
+  try {
+    const result = invalidateCacheFor(feature, user_id, targetDate);
+    res.json({ ok: true, feature, user_id: user_id || 'all', date: targetDate, deleted: result.deleted, remaining: result.remaining });
+  } catch (e) {
+    console.error(`[ADMIN] regenerate ${feature} failed:`, e.message);
+    res.status(500).json({ ok: false, feature, error: e.message });
+  }
+});
+
+// Vide le cache mémoire LLM in-process (utile après un toggle ou un déploiement).
+app.post('/api/admin/llm/clear-memory-cache', adminAuth, (_req, res) => {
+  const before = llmCache.store.size;
+  llmCache.invalidateAll();
+  res.json({ ok: true, cleared: before });
 });
 
 // ─── P2#20 — Transit comments (communauté) ──────────────────

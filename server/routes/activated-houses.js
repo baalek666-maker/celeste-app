@@ -200,30 +200,43 @@ export function createActivatedHousesRouter({ db, auth, getNatalPositions, getTr
 
 ${housesSummary}
 
-Génère un JSON:
+Génère un JSON strict:
 {
   "headline": "Une phrase qui résume quel domaine de vie est mis en lumière aujourd'hui. Max 120 caractères. Personnel.",
   "houses": [
-    Pour CHAQUE maison listée ci-dessus:
     {
-      "insight": "Ce que l'activation de cette maison signifie concrètement aujourd'hui. 2 phrases. Relie les planètes en transit au thème de la maison. Style: 'Saturne traverse ta Maison 7 — c'est le moment de...'",
+      "insight": "Ce que l'activation de cette maison signifie concrètement aujourd'hui. 2-3 phrases. Relie les planètes en transit au thème de la maison. Style: 'Saturne traverse ta Maison 7 — c'est le moment de...'",
       "action": "Une action concrète à faire aujourd'hui dans ce domaine. 1 phrase qui commence par un verbe."
     }
   ]
 }
 
+Le tableau houses doit contenir EXACTEMENT ${topHouses.length} objets, dans le même ordre que les maisons ci-dessus.
+
 Règles:
 - Pas de jargon astrologique dans insights
 - Sois pratique: "range ton bureau", "appelle ta sœur", "pose une limite"
-- Réponds UNIQUEMENT avec le JSON`
+- Réponds UNIQUEMENT avec le JSON, sans markdown ni backticks.`
         }
-      ], 3, 1000, { temperature: 0.85 }, 30000);
+      ], 3, 4000, { temperature: 0.7, reasoning_effort: 'low' }, 90000);
 
       const llmText = llmResponse.choices?.[0]?.message?.content || '';
       let parsed;
       try {
-        const jsonMatch = llmText.match(/\{[\s\S]*\}/);
-        parsed = JSON.parse(jsonMatch ? jsonMatch[0] : llmText);
+        // Extract the FIRST balanced JSON object — LLM sometimes adds trailing text.
+        const startIdx = llmText.indexOf('{');
+        if (startIdx === -1) throw new Error('no { in LLM response');
+        let depth = 0;
+        let endIdx = -1;
+        for (let i = startIdx; i < llmText.length; i++) {
+          if (llmText[i] === '{') depth++;
+          else if (llmText[i] === '}') {
+            depth--;
+            if (depth === 0) { endIdx = i; break; }
+          }
+        }
+        if (endIdx === -1) throw new Error('no balanced JSON in LLM response');
+        parsed = JSON.parse(llmText.slice(startIdx, endIdx + 1));
       } catch {
         parsed = {
           headline: 'Certaines zones de ta vie sont mises en lumière aujourd\'hui.',
@@ -257,17 +270,14 @@ Règles:
 
       return res.json(result);
     } catch (err) {
-      console.error('[activated-houses] error:', err.message);
+      console.error('[activated-houses] error:', err.message, err.stack?.split('\n').slice(0,3).join('\n'));
       const result = {
         date: today,
         headline: 'Le ciel a ses propres rythmes. Écoute ce qui émerge.',
         houses: [],
       };
-      try {
-        const id = `${userId}-${today}`;
-        db.prepare(`INSERT OR REPLACE INTO activated_houses (id, user_id, date, headline, houses_json) VALUES (?, ?, ?, ?, ?)`)
-          .run(id, userId, today, result.headline, '[]');
-      } catch {}
+      // Do NOT cache the empty fallback — let next call retry the calculation.
+      // Caching [] would poison the user for the rest of the day.
       return res.json(result);
     }
   });

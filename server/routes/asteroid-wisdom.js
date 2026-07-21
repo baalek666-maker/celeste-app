@@ -168,13 +168,25 @@ Règles:
 - gift/shadow/practice: court, percutant
 - Réponds UNIQUEMENT avec le JSON`
         }
-      ], 3, 2000, { temperature: 0.9 }, 45000);
+      ], 3, 4000, { temperature: 0.9, reasoning_effort: 'low' }, 90000);
 
       const llmText = llmResponse.choices?.[0]?.message?.content || '';
       let parsed;
       try {
-        const jsonMatch = llmText.match(/\{[\s\S]*\}/);
-        parsed = JSON.parse(jsonMatch ? jsonMatch[0] : llmText);
+        // Extract the FIRST balanced JSON object — LLM sometimes adds trailing text.
+        const startIdx = llmText.indexOf('{');
+        if (startIdx === -1) throw new Error('no { in LLM response');
+        let depth = 0;
+        let endIdx = -1;
+        for (let i = startIdx; i < llmText.length; i++) {
+          if (llmText[i] === '{') depth++;
+          else if (llmText[i] === '}') {
+            depth--;
+            if (depth === 0) { endIdx = i; break; }
+          }
+        }
+        if (endIdx === -1) throw new Error('no balanced JSON in LLM response');
+        parsed = JSON.parse(llmText.slice(startIdx, endIdx + 1));
       } catch {
         parsed = {
           headline: 'Tes archétypes intérieurs racontent une histoire de guérison et de pouvoir.',

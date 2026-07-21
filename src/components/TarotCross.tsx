@@ -12,14 +12,29 @@ import { useEffect, useState } from 'react';
 import { api } from '../lib/api';
 import { startConsumableCheckout } from '../lib/payment';
 import { toast } from '../components/Toast';
+import { getTarotImage } from '../data/tarotImages';
 
 interface Card {
   position: 'past' | 'present' | 'future';
   id: number; name: string; roman: string; emoji: string;
   archetype: string; upright: string; reversed: string; isReversed: boolean;
 }
+interface CardReading {
+  symbol: string;
+  reading: string;
+  advice: string;
+  keywords: string[];
+}
+interface SynthesisReading {
+  filRouge: string;
+  aFaire: string;
+  aLacher: string;
+}
 interface Reading {
-  past: string; present: string; future: string; synthesis: string;
+  past: CardReading;
+  present: CardReading;
+  future: CardReading;
+  synthesis: SynthesisReading;
   _deterministic?: boolean;
 }
 interface DrawResult {
@@ -35,6 +50,7 @@ const POSITION_LABELS: Record<Card['position'], { label: string; sub: string }> 
 export default function TarotCross() {
   const [quota, setQuota] = useState<{ freeUsed: number; paidCount: number; isPremium: boolean; canDraw: boolean } | null>(null);
   const [loading, setLoading] = useState(false);
+  const [progressMsg, setProgressMsg] = useState<string>('');
   const [result, setResult] = useState<DrawResult | null>(null);
   const [showBuyModal, setShowBuyModal] = useState(false);
   const [question, setQuestion] = useState('');
@@ -53,6 +69,12 @@ export default function TarotCross() {
       return;
     }
     setLoading(true);
+    setProgressMsg('Je tire les cartes et je t\'écris ta lecture personnalisée...');
+    const startedAt = Date.now();
+    // Message de réconfort après 20s pour éviter que l'user croit que c'est bloqué
+    const comfortTimer = window.setTimeout(() => {
+      setProgressMsg('Je prends mon temps pour une lecture dense — encore ~1min en général.');
+    }, 20000);
     try {
       const r = await api.drawTarotCross(question.trim() || undefined);
       setResult(r);
@@ -61,7 +83,9 @@ export default function TarotCross() {
       const msg = err instanceof Error ? err.message : 'Tirage impossible';
       toast.error(msg);
     } finally {
+      window.clearTimeout(comfortTimer);
       setLoading(false);
+      setProgressMsg('');
     }
   };
 
@@ -101,54 +125,181 @@ export default function TarotCross() {
           </p>
         )}
 
-        <div className="space-y-3">
+        {/* Visual cards row — vraies miniatures d'arcane */}
+        <div className="grid grid-cols-3 gap-2 mb-4">
           {result.cards.map((card) => (
             <div
               key={card.position}
-              className="rounded-2xl p-4"
-              style={{
-                background: 'linear-gradient(135deg, rgba(197,160,89,0.15) 0%, rgba(40,30,15,0.95) 100%)',
-                border: '2px solid rgba(197,160,89,0.35)',
-              }}
+              className="flex flex-col items-center animate-fade-in"
             >
-              <div className="flex items-start gap-4">
-                <div
-                  className="flex-shrink-0 w-16 h-24 rounded-lg flex items-center justify-center"
-                  style={{
-                    background: 'linear-gradient(135deg, rgba(197,160,89,0.2) 0%, rgba(20,15,8,0.98) 100%)',
-                    border: '1.5px solid rgba(197,160,89,0.4)',
-                    transform: card.isReversed ? 'rotate(180deg)' : 'none',
-                  }}
-                >
-                  <span className="text-3xl">{card.emoji}</span>
-                </div>
-                <div className="flex-1 min-w-0">
-                  <div className="flex items-baseline gap-2 mb-1">
-                    <span className="text-gold-400 text-[10px] uppercase tracking-widest font-semibold">
-                      {POSITION_LABELS[card.position].label}
-                    </span>
-                    <span className="text-night-500 text-[10px]">·</span>
-                    <span className="text-night-500 text-[10px]">{POSITION_LABELS[card.position].sub}</span>
-                  </div>
-                  <h3 className="text-gold-gradient font-bold text-sm leading-tight mb-0.5">
-                    {card.name} {card.isReversed && <span className="text-[10px] opacity-75">⟲</span>}
-                  </h3>
-                  <p className="text-night-400 text-[10px] italic mb-2">{card.archetype}</p>
-                  <p className="text-night-100 text-xs leading-relaxed">
-                    {card.position === 'past' && result.reading.past}
-                    {card.position === 'present' && result.reading.present}
-                    {card.position === 'future' && result.reading.future}
-                  </p>
-                </div>
+              <div
+                className="relative w-full aspect-[2/3] rounded-xl overflow-hidden"
+                style={{
+                  border: '1.5px solid rgba(197,160,89,0.5)',
+                  boxShadow: '0 4px 20px rgba(197,160,89,0.25), inset 0 0 12px rgba(197,160,89,0.1)',
+                  transform: card.isReversed ? 'rotate(180deg)' : 'none',
+                  transition: 'transform 0.4s ease',
+                }}
+              >
+                <img
+                  src={getTarotImage(card.id) || card.emoji}
+                  alt={card.name}
+                  className="w-full h-full object-cover"
+                  loading="lazy"
+                />
+              </div>
+              <div className="mt-2 text-center w-full">
+                <p className="text-gold-400 text-[9px] uppercase tracking-widest font-semibold">
+                  {POSITION_LABELS[card.position].label}
+                </p>
+                <p className="text-gold-200 text-[11px] font-semibold leading-tight mt-0.5 truncate">
+                  {card.name}
+                </p>
+                {card.isReversed && (
+                  <p className="text-night-400 text-[9px] italic">renversée</p>
+                )}
               </div>
             </div>
           ))}
         </div>
 
-        {/* Synthèse */}
-        <div className="mt-4 p-4 glass rounded-xl border border-night-700/30">
-          <p className="text-night-500 text-[10px] uppercase tracking-widest mb-2">Synthèse</p>
-          <p className="text-night-100 text-sm leading-relaxed">{result.reading.synthesis}</p>
+        {/* Connecteur visuel Passé → Futur */}
+        <div className="flex items-center justify-between px-4 mb-4 -mt-2">
+          {[0, 1, 2].map(i => (
+            <div key={i} className="flex items-center flex-1 last:flex-none">
+              <div className="w-2 h-2 rounded-full bg-gold-500/50 flex-shrink-0" />
+              {i < 2 && (
+                <div className="flex-1 h-px mx-1" style={{
+                  background: 'linear-gradient(90deg, rgba(197,160,89,0.5), rgba(197,160,89,0.1))'
+                }} />
+              )}
+            </div>
+          ))}
+        </div>
+
+        {/* Interprétations détaillées */}
+        <div className="space-y-3">
+          {result.cards.map((card) => {
+            const cardReading: CardReading =
+              card.position === 'past' ? result.reading.past :
+              card.position === 'present' ? result.reading.present :
+              result.reading.future;
+            return (
+              <div
+                key={`${card.position}-text`}
+                className="rounded-2xl p-4"
+                style={{
+                  background: 'linear-gradient(135deg, rgba(197,160,89,0.12) 0%, rgba(30,22,12,0.95) 100%)',
+                  border: '1px solid rgba(197,160,89,0.25)',
+                }}
+              >
+                {/* En-tête carte */}
+                <div className="flex items-baseline justify-between gap-2 mb-2">
+                  <div className="flex items-baseline gap-2 min-w-0">
+                    <span className="text-gold-400 text-[10px] uppercase tracking-widest font-semibold">
+                      {POSITION_LABELS[card.position].label}
+                    </span>
+                    <span className="text-night-500 text-[10px]">·</span>
+                    <span className="text-gold-200 text-[11px] font-semibold truncate">
+                      {card.name}{card.isReversed ? ' (renversée)' : ''}
+                    </span>
+                  </div>
+                  <span className="text-night-500 text-[10px] italic flex-shrink-0">
+                    {POSITION_LABELS[card.position].sub}
+                  </span>
+                </div>
+
+                {/* Symbolique */}
+                {cardReading?.symbol && (
+                  <p className="text-night-300 text-[11px] italic leading-relaxed mb-3 pb-3 border-b border-night-800/60">
+                    {cardReading.symbol}
+                  </p>
+                )}
+
+                {/* Lecture principale */}
+                <p className="text-night-100 text-sm leading-relaxed mb-3">
+                  {cardReading?.reading}
+                </p>
+
+                {/* Conseil concret */}
+                {cardReading?.advice && (
+                  <div className="mt-2 pt-3 border-t border-night-800/60">
+                    <p className="text-gold-400 text-[9px] uppercase tracking-widest font-semibold mb-1">
+                      → Ce que la carte t'invite à faire
+                    </p>
+                    <p className="text-night-200 text-[12px] leading-relaxed">
+                      {cardReading.advice}
+                    </p>
+                  </div>
+                )}
+
+                {/* Mots-clés */}
+                {cardReading?.keywords?.length > 0 && (
+                  <div className="flex flex-wrap gap-1.5 mt-3">
+                    {cardReading.keywords.map((kw, i) => (
+                      <span
+                        key={i}
+                        className="px-2 py-0.5 rounded-full text-[10px] font-medium"
+                        style={{
+                          background: 'rgba(197,160,89,0.12)',
+                          border: '1px solid rgba(197,160,89,0.3)',
+                          color: 'rgba(197,160,89,0.95)',
+                        }}
+                      >
+                        {kw}
+                      </span>
+                    ))}
+                  </div>
+                )}
+              </div>
+            );
+          })}
+        </div>
+
+        {/* Synthèse — le fil rouge */}
+        <div
+          className="mt-5 p-5 rounded-2xl relative overflow-hidden"
+          style={{
+            background: 'linear-gradient(135deg, rgba(197,160,89,0.22) 0%, rgba(40,30,15,0.95) 100%)',
+            border: '2px solid rgba(197,160,89,0.45)',
+            boxShadow: '0 0 32px rgba(197,160,89,0.15)',
+          }}
+        >
+          <div className="flex items-center gap-2 mb-3">
+            <span className="text-gold-300 text-base">✦</span>
+            <p className="text-gold-300 text-[10px] uppercase tracking-widest font-semibold">
+              Le fil rouge — ta trajectoire
+            </p>
+          </div>
+          <p className="text-night-100 text-sm leading-relaxed italic mb-4">
+            {result.reading.synthesis?.filRouge}
+          </p>
+
+          {result.reading.synthesis?.aFaire && (
+            <div className="mt-3 pt-3 border-t border-gold-700/40">
+              <p className="text-gold-300 text-[9px] uppercase tracking-widest font-semibold mb-1">
+                → À faire cette semaine
+              </p>
+              <p className="text-night-100 text-[12px] leading-relaxed">
+                {result.reading.synthesis.aFaire}
+              </p>
+            </div>
+          )}
+
+          {result.reading.synthesis?.aLacher && (
+            <div className="mt-3 pt-3 border-t border-gold-700/40">
+              <p className="text-gold-300 text-[9px] uppercase tracking-widest font-semibold mb-1">
+                → À lâcher pour avancer
+              </p>
+              <p className="text-night-100 text-[12px] leading-relaxed">
+                {result.reading.synthesis.aLacher}
+              </p>
+            </div>
+          )}
+
+          <p className="text-night-500 text-[10px] mt-4 pt-3 border-t border-night-800/60">
+            — Carte 1 : {result.cards[0].archetype} · Carte 2 : {result.cards[1].archetype} · Carte 3 : {result.cards[2].archetype}
+          </p>
         </div>
 
         {result.reading._deterministic && (
@@ -185,8 +336,9 @@ export default function TarotCross() {
           ))}
         </div>
         <p className="text-gold-300 text-sm tracking-widest uppercase animate-pulse">
-          Les cartes se révèlent…
+          {progressMsg || 'Les cartes se révèlent…'}
         </p>
+        <p className="text-cosmic-300 text-xs mt-2 opacity-70">Patiente 1 à 2 minutes, je t'écris une vraie lecture.</p>
         <style>{`
           @keyframes tarot-cross-flip {
             0%, 100% { transform: rotateY(0deg); }

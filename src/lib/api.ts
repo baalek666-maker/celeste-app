@@ -110,7 +110,7 @@ function isNetworkFailure(err: unknown): boolean {
 
 // ─── HTTP helper ───────────────────────────────────
 const DEFAULT_TIMEOUT_MS = 20_000; // 20s pour endpoints classiques
-const LLM_TIMEOUT_MS = 90_000;    // 90s pour les endpoints LLM (planet interpretation, horoscope)
+const LLM_TIMEOUT_MS = 180_000;   // 180s — le tirage 3 cartes LLM produit ~9000 chars (~80-100s réel)
 
 async function apiCall<T = any>(
   path: string,
@@ -359,6 +359,7 @@ export const api = {
     }),
 
   // Horoscope history (v13.1 — J-7 → J passé uniquement, pas de prédiction future)
+  // v13.2 — summary inclut aussi love + career pour l'affichage complet de l'historique.
   getWeekHoroscope: () =>
     apiCall<{
       days: Array<{
@@ -368,6 +369,8 @@ export const api = {
         weekdayLong?: string;
         summary: {
           general: string;
+          love?: string;
+          career?: string;
           energie: number;
           mood: string;
           luckyColor: string;
@@ -742,10 +745,7 @@ export const api = {
       id: number; name: string; roman: string; emoji: string;
       archetype: string; upright: string; reversed: string; isReversed: boolean;
     }>;
-    reading: {
-      past: string; present: string; future: string; synthesis: string;
-      _deterministic?: boolean;
-    };
+    reading: any;
     isPremiumDraw: boolean;
     sunSign: string;
   }>('/tarot/cross', {
