@@ -2557,6 +2557,27 @@ const TAROT_DECK = [
   { id: 21, name: 'Le Monde', roman: 'XXI', emoji: '🌍', archetype: 'Achèvement, plénitude, accomplissement', upright: 'Un cycle s\'achève dans la plénitude.', reversed: 'La finalité est proche.' },
 ];
 
+function getTarotSignAdvice(sunSign, isReversed) {
+  // Conseil personnalisé selon le signe solaire + position inversée/droite
+  const map = {
+    'Bélier': 'Ta nature impulsive peut te freiner : observe avant d\'agir.',
+    'Taureau': 'Ta stabilité est un atout : ne change rien aujourd\'hui, ancre-toi.',
+    'Gémeaux': 'Ta curiosité sera ta clé : explore, ne décide pas trop vite.',
+    'Cancer': 'Ton intuition est juste : écoute ton ventre avant ta tête.',
+    'Lion': 'Ton besoin de briller peut te desservir : laisse l\'autre exister.',
+    'Vierge': 'Ton perfectionnisme peut te bloquer : "mieux" est l\'ennemi de "bien".',
+    'Balance': 'Ton équilibre est précieux : tu peux rester au centre sans basculer.',
+    'Scorpion': 'Ton intensité est ta force : canalise-la, ne la réprime pas.',
+    'Sagittaire': 'Ta soif d\'horizon te guide : garde la vue large aujourd\'hui.',
+    'Capricorne': 'Ta discipline te rassure : lâche un peu le contrôle, ça tient sans toi.',
+    'Verseau': 'Ta distance émotionnelle est un atout aujourd\'hui : reste en observation.',
+    'Poissons': 'Ton intuition est amplifiée : fais confiance à ce que tu sens, pas à ce que tu penses.',
+  };
+  const base = map[sunSign] || 'Fais confiance à ton instinct.';
+  if (isReversed) return base + ' Mais attention : cette énergie est contrarée en ce moment. Prends du recul avant d\'agir.';
+  return base + ' Cette carte valide ton chemin naturel.';
+}
+
 app.get('/api/tarot/daily', auth, llmLimiter, async (req, res) => {
   const today = localISODate(); // Hoisted out of try so catch can use it
   let sunSign = 'inconnu';      // Hoisted so catch fallback works
@@ -2607,7 +2628,7 @@ Génère en JSON:
   "archetype": "${card.archetype}",
   "message": "2 phrases courtes et poétiques résumant l'énergie de la carte ${isReversed ? 'INVERSÉE' : 'droite'} pour aujourd'hui. ${isReversed ? 'L\'énergie est bloquée, retournée vers l\'intérieur, ou demande à être débloquée.' : 'L\'énergie circule naturellement.'}",
   "question": "une question de réflexion ouverte pour la journée${isReversed ? ' qui invite à débloquer ou intérioriser l\'énergie' : ''}",
-  "reading": "Un paragraphe détaillé (100-150 mots) reliant cette carte ${isReversed ? 'INVERSÉE' : 'droite'} à ton signe (${sunSign}), aux transits du moment, et à ce que cette énergie signifie concrètement pour ta journée. ${isReversed ? 'IMPORTANT : la position inversée signifie que l\'énergie est bloquée ou intériorisée — parle de ce qui freine, de ce qui demande à être retourné ou accueilli.' : 'Parle de ce qui s\'ouvre, de ce qui circule, de l\'énergie positive disponible.'} Des conseils pratiques, des choses à surveiller. Écris comme une amie qui te parle — pas de jargon, pas de style hermétique."
+  "reading": "Un texte détaillé (200-250 mots) reliant cette carte ${isReversed ? 'INVERSÉE' : 'droite'} à ton signe (${sunSign}), aux transits du moment, et à ce que cette énergie signifie concrètement pour ta journée. ${isReversed ? 'IMPORTANT : la position inversée signifie que l\'énergie est bloquée ou intériorisée — parle de ce qui freine, de ce qui demande à être retourné ou accueilli.' : 'Parle de ce qui s\'ouvre, de ce qui circule, de l\'énergie positive disponible.'} Donne des conseils pratiques, des choses à surveiller, un conseil pour le soir. Écris comme une amie qui te parle — pas de jargon, pas de style hermétique. Sois concrète et chaleureuse."
 }
 
 Réponds UNIQUEMENT avec le JSON.`;
@@ -2624,13 +2645,23 @@ Réponds UNIQUEMENT avec le JSON.`;
     if (jsonMatch) {
       result = JSON.parse(jsonMatch[0]);
     } else {
-      // Fallback: static card data
+      // Fallback: enriched deterministic reading (~180 mots)
+      const reversedIntro = isReversed
+        ? `Cette carte apparaît inversée aujourd'hui. L'énergie de ${card.name} est présente, mais elle se manifeste de façon bloquée, intériorisée ou contrariée. Quelque chose en toi résiste, et c'est précisément là que se trouve ton travail du jour.`
+        : `Cette carte apparaît droite aujourd'hui. Son énergie circule librement en toi — c'est un cadeau du moment, une force à accueillir et à utiliser.`;
+      const signAdvice = getTarotSignAdvice(sunSign, isReversed);
+      const eveningTip = isReversed
+        ? `Ce soir, prends un moment pour te demander : qu'est-ce que je refuse de voir ? La carte inversée ne punit pas — elle t'invite à regarder ce que tu as mis sous le tapis. Accueille-le sans jugement.`
+        : `Ce soir, savoure cette énergie. Note une chose que tu as accomplie aujourd'hui grâce à elle. La gratitude amplifie ce qui circule bien.`;
+
       result = {
         cardName: card.name, cardId: card.id, roman: card.roman, emoji: card.emoji,
         isReversed, archetype: card.archetype,
         message: isReversed ? card.reversed : card.upright,
-        question: 'Que te dit cette carte aujourd\'hui ?',
-        reading: `${card.archetype}. ${isReversed ? card.reversed : card.upright} En tant que ${sunSign}, cette énergie résonne particulièrement avec ton chemin solaire. Les configurations du moment t'invitent à intégrer pleinement ce message dans ta journée.`,
+        question: isReversed
+          ? 'Qu\'est-ce qui demande à être débloqué en toi aujourd\'hui ?'
+          : 'Comment cette énergie peut-elle te servir aujourd\'hui ?',
+        reading: `${reversedIntro}\n\nEn tant que ${sunSign}, cette carte résonne particulièrement avec ton chemin. ${signAdvice}\n\n${card.name} (${card.roman}) porte l'archétype de ${card.archetype}. ${isReversed ? `Quand cette énergie se bloque, c'est souvent parce que tu as peur de quelque chose — peur de perdre le contrôle, peur du changement, peur de te montrer. Identifie cette peur, nomme-la. Une peur nommée perd la moitié de son pouvoir.` : `Quand cette énergie circule, profite-en pour avancer vers ce qui compte vraiment. Les portes sont ouvertes — il suffit de franchir le seuil.`}\n\n${eveningTip}`,
       };
     }
 
