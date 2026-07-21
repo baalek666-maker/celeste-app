@@ -35,7 +35,7 @@ function ensurePdfGrants(db) {
   `);
 }
 
-export function createPortraitPdfRouter({ db, auth }) {
+export function createPortraitPdfRouter({ db, auth, getNatalPositions }) {
   ensurePdfGrants(db);
 
   const router = Router();
@@ -106,9 +106,27 @@ export function createPortraitPdfRouter({ db, auth }) {
       const userRow = db.prepare('SELECT email, display_name, birth_data FROM users WHERE id = ?').get(userId);
       const birthData = userRow?.birth_data ? safeParse(userRow.birth_data) : null;
       const name = userRow?.display_name || (userRow?.email ? userRow.email.split('@')[0] : 'Céleste voyageur');
-      const sun = birthData?.sun || birthData?.sunSign || 'sagittarius';
-      const moon = birthData?.moon || birthData?.moonSign || 'cancer';
-      const rising = birthData?.rising || birthData?.ascendant || 'libra';
+
+      // Fric-pdf-v3 — Calculer le natal chart complet pour enrichir le PDF
+      // (tableau planétaire, roue zodiacale, distribution éléments/modes).
+      let natalChart = null;
+      if (getNatalPositions && birthData?.date && birthData?.time) {
+        try {
+          natalChart = getNatalPositions(birthData, true);
+        } catch (e) {
+          console.warn('[portrait-pdf] getNatalPositions failed:', e.message);
+        }
+      }
+
+      const sun = natalChart?.sun?.sign
+        ? frSignToEn(natalChart.sun.sign)
+        : (birthData?.sun || birthData?.sunSign || 'sagittarius');
+      const moon = natalChart?.moon?.sign
+        ? frSignToEn(natalChart.moon.sign)
+        : (birthData?.moon || birthData?.moonSign || 'cancer');
+      const rising = natalChart?.ascendant?.sign
+        ? frSignToEn(natalChart.ascendant.sign)
+        : (birthData?.rising || birthData?.ascendant || 'libra');
 
       // Decrement quota
       if (canUseFree) {
@@ -123,6 +141,8 @@ export function createPortraitPdfRouter({ db, auth }) {
         sun,
         moon,
         rising,
+        birthData,
+        natalChart,
       });
 
       const filename = `portrait-astral-${sanitizeFilename(name)}.pdf`;
@@ -142,6 +162,15 @@ export function createPortraitPdfRouter({ db, auth }) {
 function safeParse(s) {
   try { return JSON.parse(s); } catch { return null; }
 }
+
+// FR sign name → EN key (matches ZODIAC_SIGNS keys)
+const FR_TO_EN_SIGNS = {
+  'Bélier': 'aries', 'Taureau': 'taurus', 'Gémeaux': 'gemini',
+  'Cancer': 'cancer', 'Lion': 'leo', 'Vierge': 'virgo',
+  'Balance': 'libra', 'Scorpion': 'scorpio', 'Sagittaire': 'sagittarius',
+  'Capricorne': 'capricorn', 'Verseau': 'aquarius', 'Poissons': 'pisces',
+};
+function frSignToEn(fr) { return FR_TO_EN_SIGNS[fr] || 'sagittarius'; }
 
 function sanitizeFilename(s) {
   return String(s || 'celeste')
