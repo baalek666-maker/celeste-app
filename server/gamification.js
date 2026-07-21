@@ -572,10 +572,37 @@ const PLANET_EXTRA = {
   saturn: { name: 'Saturne', title: 'Ta structure',
     intro: (s) => `Saturne en ${s} décrit tes défis, ta discipline, ce qui te demande de l'effort mais te rend solide. C'est ton épreuve, ton maître, ce qui te structure en profondeur.`,
     body: {
-      'Feu': `Ton défi : canaliser ton feu sans t'épuiser. Saturne te demande de transformer ton impulsivité en maîtrise. Ta structure vient de la passion canalisée. Le travail qui te rend solide : t'engager sur la durée, pas seulement sur le moment.`,
-      'Terre': `Ton défi : ne pas te figer dans la routine. Saturne te demande de rester souple tout en bâtissant. Ta structure vient de la patience et de la méthode. Le travail qui te rend solide : accepter que tout ne peut pas être contrôlé.`,
-      'Air': `Ton défi : concrétiser tes idées. Saturne te demande de passer du concept à la réalité. Ta structure vient de l'engagement et de la responsabilité. Le travail qui te rend solide : finir ce que tu commences.`,
-      'Eau': `Ton défi : gérer tes émotions sans te laisser submerger. Saturne te demande de structurer ta sensibilité. Ta structure vient de l'introspection disciplinée. Le travail qui te rend solide : poser des limites émotionnelles claires.`,
+      'Feu': `Ton défi : canaliser ton feu sans t'épuiser. Saturne te demande de transformer ton impulsivité en maîtrise. Ta structure vient de la passion canalisée. Le travail qui te rend solide : t'engager sur la durée, pas seulement sur le moment. Saturne en signe de Feu t'enseigne que le vrai courage n'est pas de foncer, mais de tenir. Tu peux avoir tendance à t'éparpiller dans mille projets — Saturne te demande d'en choisir un et de le pousser jusqu'au bout. C'est difficile, mais c'est ce qui transformera ton potentiel en réalisation concrète.`,
+      'Terre': `Ton défi : ne pas te figer dans la routine. Saturne te demande de rester souple tout en bâtissant. Ta structure vient de la patience et de la méthode. Le travail qui te rend solide : accepter que tout ne peut pas être contrôlé. Saturne en signe de Terre peut te rendre trop rigide, trop attaché aux règles. Apprends à faire confiance à l'imprévu. La vraie solidité n'est pas dans le contrôle total, mais dans la capacité à s'adapter tout en restant ancré.`,
+      'Air': `Ton défi : concrétiser tes idées. Saturne te demande de passer du concept à la réalité. Ta structure vient de l'engagement et de la responsabilité. Le travail qui te rend solide : finir ce que tu commences. Saturne en signe d'Air peut te faire douter de tes capacités mentales. Apprends que tes idées ont de la valeur — mais seulement si tu leur donnes forme. Le monde a besoin de ta vision, à condition que tu la rendes tangible.`,
+      'Eau': `Ton défi : gérer tes émotions sans te laisser submerger. Saturne te demande de structurer ta sensibilité. Ta structure vient de l'introspection disciplinée. Le travail qui te rend solide : poser des limites émotionnelles claires. Saturne en signe d'Eau peut te donner le sentiment de devoir gérer seul tes émotions. Apprends à les partager, à demander de l'aide. Ta sensibilité est une force — Saturne t'apprend à la protéger avec des structures saines.`,
+    },
+  },
+  uranus: { name: 'Uranus', title: 'Ton éveil',
+    intro: (s) => `Uranus en ${s} représente ton besoin de liberté, ton côté rebelle, ce qui te pousse à innover et à briser les conventions.`,
+    body: {
+      'Feu': `Tu te révoltes avec passion. Ton besoin d'indépendance est viscéral. Tu inventes des nouvelles façons d'être et d'agir, souvent en rupture avec ce qui existait avant. Ta créativité est électrique, imprévisible.`,
+      'Terre': `Tu réinventes les structures. Tu trouves des solutions pratiques que personne n'avait imaginées. Ton besoin de liberté s'exprime dans la construction de systèmes nouveaux, plus justes, plus efficaces.`,
+      'Air': `Tu es un·e visionnaire des idées. Tu vois l'avenir avant les autres. Ton besoin de liberté passe par la pensée, la communication, les réseaux. Tu connectes les gens et les concepts de façon inédite.`,
+      'Eau': `Ton intuition est révolutionnaire. Tu ressens les changements avant qu'ils arrivent. Ton besoin de liberté s'exprime dans ta vie intérieure — tu refuses les moules émotionnels conventionnels.`,
+    },
+  },
+  neptune: { name: 'Neptune', title: 'Tes rêves',
+    intro: (s) => `Neptune en ${s} représente ton monde de rêves, ton idéal, ta spiritualité, ta créativité la plus pure. C'est ce qui te connecte à l'invisible.`,
+    body: {
+      'Feu': `Tu rêves d'un monde meilleur, plus généreux, plus vivant. Ton idéal est lumineux et enthousiaste. Ta créativité est inspirante. Attention à ne pas confondre le rêve et la réalité — ancre ta vision dans l'action.`,
+      'Terre': `Tu cherches le sacré dans le concret. Ton idéal est de rendre le monde plus beau, plus harmonieux, matériellement. Ta créativité est artisanale, patiente. Tu peux perdre pied si tu te déconnectes du réel.`,
+      'Air': `Tu rêves par les idées et les concepts. Ton idéal est un monde de connaissance partagée. Ta créativité est intellectuelle, poétique. Attention à ne pas te perdre dans les abstractions.`,
+      'Eau': `Ta sensibilité est océanique. Tu ressens ce que les autres ne voient pas. Ton idéal est la fusion, la compassion universelle. Ta créativité est mystique, artistique. Protège-toi des énergies qui ne sont pas les tiennes.`,
+    },
+  },
+  pluto: { name: 'Pluton', title: 'Ta transformation',
+    intro: (s) => `Pluton en ${s} représente ta capacité de transformation, de renaissance, de guérison profonde. C'est ta puissance cachée, celle que tu ne montres pas mais qui te définit.`,
+    body: {
+      'Feu': `Tu te transformes par la crise et le renouveau. Quand tout s'effondre, tu renais plus fort. Ta puissance est volcanique. Tu as la capacité de régénérer les autres par ta simple présence. Apprends à utiliser ce pouvoir avec conscience.`,
+      'Terre': `Tu te transformes par le travail profond et patient. Tu as le pouvoir de changer les structures, les institutions, ce qui dure. Ta puissance est souterraine, comme une racine qui fend la pierre. Apprends à laisser mourir ce qui doit mourir.`,
+      'Air': `Tu te transformes par la pensée et la communication. Tu as le pouvoir de changer les mentalités, de révéler les vérités cachées. Ta puissance est dans ta parole. Apprends à utiliser ta voix pour guérir, pas pour détruire.`,
+      'Eau': `Tu te transformes par les émotions et l'intuition. Tu as le pouvoir de guérir les blessures les plus profondes — les tiennes et celles des autres. Ta puissance est dans ta vulnérabilité assumée. Apprends à plonger dans l'ombre pour en ramener la lumière.`,
     },
   },
 };
@@ -649,8 +676,35 @@ function generateRichPortrait(natal, bd) {
   portrait += `## Ta dominante\n\n${elementTexts[dominantElement] || elementTexts.Feu}\n\n`;
   portrait += `Répartition de tes planètes : Feu ${counts.Feu} · Terre ${counts.Terre} · Air ${counts.Air} · Eau ${counts.Eau}.\n\n`;
 
-  // Conclusion
-  portrait += `## Ton chemin\n\nCe portrait n'est pas une boîte mais une boussole. Tes planètes indiquent des tendances, des énergies, des potentiels — jamais des certitudes. Tu es libre de ce que tu fais de ce ciel. L'astrologie ne prédit pas l'avenir : elle t'aide à te comprendre pour mieux choisir.\n\nReviens consulter ce portrait quand tu te sens perdu·e. Il est là pour te rappeler qui tu es, dans les moments où tu l'oublies.`;
+  // Forces et défis basés sur les éléments
+  const elementStrengths = {
+    Feu: 'Ton plus grand atout est ta capacité à insuffler de l énergie et de l enthousiasme autour de toi. Tu es un moteur, une étincelle. Les gens te suivent parce que tu les fais rêver et avancer.',
+    Terre: 'Ton plus grand atout est ta fiabilité. Tu construis pour durer, tu tiens tes promesses, tu es là quand ça compte. Les gens te font confiance parce que tu incarnes la stabilité.',
+    Air: 'Ton plus grand atout est ta capacité à voir les choses sous un angle nouveau. Tu connectes les idées, les gens, les possibilities. Les gens viennent te voir parce que tu ouvres des perspectives.',
+    Eau: 'Ton plus grand atout est ta profondeur de cœur. Tu ressens ce que les autres ne voient pas, tu comprends sans qu on ait besoin de t expliquer. Les gens se sentent vus et compris auprès de toi.',
+  };
+  const elementChallenges = {
+    Feu: 'Ton plus grand défi est la patience. Tu veux tout, tout de suite. Apprends que les plus belles choses prennent du temps à grandir. Canalise ton feu dans la durée, pas seulement dans l instant.',
+    Terre: 'Ton plus grand défi est le lâcher-prise. Tu veux tout contrôler, tout sécuriser. Apprends que la vie est imprévisible et que c est dans l inconnu que se trouvent les plus belles surprises.',
+    Air: 'Ton plus grand défi est l ancrage. Tu voles haut, tu vois large, mais tu peux oublier de poser les pieds sur terre. Apprends à transformer tes idées en actions concrètes.',
+    Eau: 'Ton plus grand défi est la frontière. Tu ressens tout, tu absorbes tout, tu peux te noyer dans les émotions des autres. Apprends à dire non, à te protéger, à garder ton espace.',
+  };
+
+  portrait += `## Tes forces\n\n${elementStrengths[dominantElement]}\n\nAvec un Soleil en ${sunSign} et une Lune en ${moonSign}, tu possèdes une combinaison unique. Ton Ascendant ${risingSign} ajoute une couche supplémentaire : c est la première chose que les gens remarquent chez toi, et souvent la plus difficile à vivre pleinement. Quand tu alignes ton Soleil (ce que tu es), ta Lune (ce que tu ressens) et ton Ascendant (comment tu apparaîs), tu deviens irrésistible.\n\n`;
+
+  portrait += `## Tes défis\n\n${elementChallenges[dominantElement]}\n\nLa bonne nouvelle ? Tes défis ne sont pas des faiblesses, mais des zones de croissance. Chaque fois que tu fais l effort de travailler un défi, tu débloques une nouvelle force. C est comme un muscle : plus tu l utilises, plus il devient puissant.\n\n`;
+
+  // Compatibilités
+  const elementMatches = {
+    Feu: 'Feu (Bélier, Lion, Sagittaire) et Air (Gémeaux, Balance, Verseau)',
+    Terre: 'Terre (Taureau, Vierge, Capricorne) et Eau (Cancer, Scorpion, Poissons)',
+    Air: 'Air (Gémeaux, Balance, Verseau) et Feu (Bélier, Lion, Sagittaire)',
+    Eau: 'Eau (Cancer, Scorpion, Poissons) et Terre (Taureau, Vierge, Capricorne)',
+  };
+  portrait += `## Tes affinités\n\nTu es naturellement en harmonie avec les personnes qui ont une dominante ${elementMatches[dominantElement]}. Ces combinaisons créent une complémentarité naturelle — l un apporte ce qui manque à l autre. Mais attention : les plus grandes croissances viennent souvent des opposés. Une personne très différente de toi peut te faire grandir bien plus qu un clone.\n\n`;
+
+  // Conclusion enrichie
+  portrait += `## Ton chemin\n\nCe portrait n'est pas une boîte mais une boussole. Tes planètes indiquent des tendances, des énergies, des potentiels — jamais des certitudes. Tu es libre de ce que tu fais de ce ciel.\n\nL'astrologie ne prédit pas l'avenir : elle t'aide à te comprendre pour mieux choisir. Connaître ton thème, c est comme avoir une carte quand tu te promènes en forêt. La carte ne décide pas du chemin à ta place — mais elle t évite de tourner en rond.\n\nReviens consulter ce portrait quand tu te sens perdu·e, quand tu doutes, quand tu te demandes pourquoi tu réagis d une certaine façon. Il est là pour te rappeler qui tu es, dans les moments où tu l'oublies. Tu es né·e sous un ciel unique, et ce ciel t appartient.`;
 
   return portrait;
 }
