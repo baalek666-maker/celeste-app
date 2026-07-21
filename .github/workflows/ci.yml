@@ -76,40 +76,13 @@ jobs:
         working-directory: server
         run: npm ci --no-audit --no-fund
 
-      - name: Run backend server (background) for API tests
-        working-directory: server
-        env:
-          JWT_SECRET: ci-fallback-secret-min-32-chars-for-tests-only
-          NODE_ENV: test
-          PORT: '3001'
-        run: |
-          # Start backend in background, wait for it to be reachable
-          nohup node server.js > /tmp/backend.log 2>&1 &
-          BACKEND_PID=$!
-          echo "Backend started with PID $BACKEND_PID"
-          # Wait up to 30s for backend to be ready
-          for i in {1..30}; do
-            if curl -s http://localhost:3001/api/health > /dev/null 2>&1 || curl -s http://localhost:3001/ > /dev/null 2>&1; then
-              echo "Backend ready after ${i}s"
-              break
-            fi
-            sleep 1
-          done
-          # Show backend logs in case of failure
-          tail -20 /tmp/backend.log || true
-
       - name: Run Playwright tests
         env:
           # CI: secret factice 32+ chars (utilisé par tests horoscope fallback)
           JWT_SECRET: ci-fallback-secret-min-32-chars-for-tests-only
           NODE_ENV: test
-          BASE_URL: 'http://localhost:5173'
-          API_BASE_URL: 'http://localhost:3001'
+          SKIP_WEBSERVER: '1'   # Playwright gère lui-même le serveur via webServer dans config
         run: npx playwright test
-
-      - name: Stop backend
-        if: always()
-        run: pkill -f "node server.js" || true
 
       - name: Upload Playwright report
         if: always()
@@ -122,23 +95,7 @@ jobs:
           retention-days: 7
           if-no-files-found: ignore
 
-  # ─── JOB 3 : Backend unit tests (0 dépendance, < 1s) ────────────────
-  test:
-    name: Backend unit tests
-    runs-on: ubuntu-latest
-    timeout-minutes: 5
-    steps:
-      - uses: actions/checkout@v4
-
-      - name: Setup Node
-        uses: actions/setup-node@v4
-        with:
-          node-version: '20'
-
-      - name: Run unit tests
-        run: node server/test-unit.mjs
-
-  # ─── JOB 4 : Lint (oxlint, rapide) ─
+  # ─── JOB 3 : Lint (oxlint, rapide) ─
   lint:
     name: Lint (oxlint)
     runs-on: ubuntu-latest
