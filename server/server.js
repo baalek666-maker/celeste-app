@@ -1327,6 +1327,11 @@ UNIQUEMENT le JSON, rien d'autre. Pas de markdown, pas de texte avant/après.`;
 
 // ─── LLM Compatibility Generation ──────────────────────────
 async function generateCompatibility(chart1, chart2, sign1, sign2, context = 'romantic') {
+  // v14.4 — Garde coupe-circuit LLM : si flag off, utilise la synastrie déterministe
+  // (computeCompatDeterministic existe déjà en top-level, basé sur aspects + éléments).
+  if (!LLM_USER_ENABLED) {
+    return computeCompatDeterministic(chart1, chart2, sign1, sign2, context);
+  }
   const systemPrompt = celesteSystemPrompt("Tu analyses la compatibilité entre deux personnes avec nuance et chaleur — tu soulignes les forces ET les tensions, sans jamais être cruelle. Tu écris en français, ton vivant et humain.");
 
   const ctxConfig = {
@@ -1849,6 +1854,22 @@ async function generatePlanetInterpretation(planet, natal) {
       keywords: JSON.parse(tmpl.keywords),
       source: 'template-cache',
       cacheHit: true,
+    };
+  }
+
+  // v14.4 — Garde coupe-circuit LLM : si flag off ET pas de template dispo,
+  // on synthétise un fallback déterministe à partir des métadonnées (signe + élément + maison).
+  if (!LLM_USER_ENABLED) {
+    return {
+      ...metadata,
+      general: `${planetName}${retroStr} dans ton thème natal occupe la maison ${houseNum} en signe ${signName}. Cette position parle de la facette de toi-même qui s'exprime à travers ${element}. ${retroStr ? 'La rétrogradation invite à intérioriser cette énergie plutôt qu\'à la projeter vers l\'extérieur.' : 'L\'énergie est directe et disponible, prête à être déployée.'}`,
+      inSign: `${planetName} en ${signName} colore la maison ${houseNum} avec les qualités propres à ce signe : une manière ${element} d'habiter ce domaine de vie. C'est ici que tu apprends, que tu doutes parfois, et que tu trouves aussi un espace familier.`,
+      degreeSymbolic: `Le degré ${deg} en ${signName} marque une étape dans ton cheminement — ni début ni fin, mais un palier. La symbolique de ce degré invite à intégrer ce qui a déjà été vécu avant de viser l'étape suivante.`,
+      temperament: element === 'Feu' ? 'Sanguin' : element === 'Terre' ? 'Lymphatique' : element === 'Air' ? 'Nerveux' : 'Bilieux',
+      characterology: 'Émotif, Actif, Primaire',
+      keywords: [signName.toLowerCase(), element.toLowerCase(), `maison${houseNum}`, planet, retroStr ? 'intériorisation' : 'expression'].slice(0, 5),
+      source: 'llm-off-fallback',
+      cacheHit: false,
     };
   }
 
@@ -3969,8 +3990,69 @@ function computeDailyAspects(date) {
   return aspects.slice(0, 5); // top 5
 }
 
+// v14.4 — Helpers de fallback déterministe pour interpretAspects (coupe-circuit LLM off)
+// Génère une interprétation générique mais contextuelle basée sur la nature et les planètes impliquées.
+const ASPECT_FALLBACK_TEMPLATES = {
+  conjunction: { light: 'unifie', shadow: 'amplifie' },
+  opposition: { light: 'tire vers', shadow: 'tire vers' },
+  trine: { light: 'harmonise avec', shadow: 'soutient' },
+  square: { light: 'défie', shadow: 'frictionne' },
+  sextile: { light: 'soutient', shadow: 'invite à' },
+  quincunx: { light: 'demande d\'ajustement avec', shadow: 'irrite' },
+};
+
+const ASPECT_NATURE_TONE = {
+  harmonious: { adv: 'Profite de cette fluidité pour avancer.', noun: 'soutien' },
+  challenging: { adv: 'Prends un moment pour observer cette tension intérieure.', noun: 'défi' },
+  neutral: { adv: 'Observe ce que cette dynamique t\'apporte aujourd\'hui.', noun: 'mouvement' },
+};
+
+function _generateAspectFallback(a) {
+  const tone = ASPECT_FALLBACK_TEMPLATES[a.aspect] || ASPECT_FALLBACK_TEMPLATES.conjunction;
+  const p1 = PLANET_NAMES_FR[a.p1] || a.p1;
+  const p2 = PLANET_NAMES_FR[a.p2] || a.p2;
+  const nature = a.nature || 'neutral';
+  const tk = (nature === 'harmonious') ? 'light' : 'shadow';
+  return `${p1} ${tone[tk]} ${p2} — énergie à canaliser aujourd'hui.`;
+}
+
+function _generateAspectConseil(a) {
+  const nature = a.nature || 'neutral';
+  const tone = ASPECT_NATURE_TONE[nature] || ASPECT_NATURE_TONE.neutral;
+  return tone.adv;
+}
+
+// v14.4 — Helper fallback pour interpretAsteroids (route /api/chart/asteroids)
+// Synthèse déterministe basée sur les thèmes des astéroïdes et leurs signes.
+function _generateAsteroidsFallback(positions) {
+  if (!positions || positions.length === 0) return null;
+  const themes = positions.slice(0, 3).map(p => {
+    return `${p.name} en ${p.sign} éclaire ton rapport à ${p.theme}`;
+  }).join(', ');
+  return `Tes astéroïdes dessinent une cartographie intime : ${themes}. Ces petits corps racontent la manière unique dont tu prends soin, stratégises, t'engages et trouves ton foyer intérieur.`;
+}
+
+// v14.4 — Helper fallback pour interpretLunarNodes (route /api/chart/lunar-nodes)
+// Interprétation déterministe de l'axe nodal.
+function _generateLunarNodesFallback(north, south) {
+  return `Ton axe nodal relie ${south.sign} (ce que tu maîtrises déjà, ton terrain connu) à ${north.sign} (vers où ton âme cherche à grandir). Le Sud t'apporte confort et expertise ; le Nord t'invite à un chemin moins familier mais plus aligné avec ta mission. L'équilibre se joue dans l'honnêteté : accepter ce que tu sais faire sans t'y réfugier, et oser ce qui te fait grandir même quand ça déstabilise.`;
+}
+
 async function interpretAspects(aspects, date) {
   if (aspects.length === 0) return aspects;
+  // v14.4 — Garde coupe-circuit LLM : si flag off, on sert directement le fallback
+  // déterministe (interprétation générique basée sur la nature de l'aspect).
+  // Sinon, on paie un appel LLM inutile.
+  if (!LLM_USER_ENABLED) {
+    return aspects.map(a => ({
+      ...a,
+      p1Name: PLANET_NAMES_FR[a.p1], p2Name: PLANET_NAMES_FR[a.p2],
+      p1Glyph: PLANET_GLYPHS[a.p1], p2Glyph: PLANET_GLYPHS[a.p2],
+      aspectFr: ASPECT_NAMES_FR[a.aspect], aspectGlyph: ASPECT_GLYPHS[a.aspect],
+      interpretation: _generateAspectFallback(a),
+      conseil: _generateAspectConseil(a),
+    }));
+  }
   const lines = aspects.map((a, i) =>
     `${i + 1}. ${PLANET_NAMES_FR[a.p1]} ${ASPECT_NAMES_FR[a.aspect]} ${PLANET_NAMES_FR[a.p2]} (orbe ${a.orb}°, ${a.nature})`
   ).join('\n');
@@ -4179,9 +4261,13 @@ app.get('/api/chart/asteroids', auth, async (req, res) => {
         absDeg: Number(lon.toFixed(2))
       };
     });
-    // LLM interpretation grouped
+    // LLM interpretation grouped (v14.4 : skippé si coupe-circuit LLM off)
     const summary = positions.map(p => `${p.name} en ${p.sign} (${p.degree}°)`).join(', ');
     let interpretation = null;
+    if (!LLM_USER_ENABLED) {
+      // Pas d'appel LLM, fallback déterministe basé sur les positions
+      interpretation = _generateAsteroidsFallback(positions);
+    } else {
     try {
       const ctrl = new AbortController();
       const to = setTimeout(() => ctrl.abort(), 8000);
@@ -4204,6 +4290,7 @@ app.get('/api/chart/asteroids', auth, async (req, res) => {
       interpretation = dj.choices?.[0]?.message?.content?.trim() || null;
     } catch (e) {
       console.warn('asteroids LLM fail (fallback null):', e?.name || e?.message);
+    }
     }
     const responseData = {
       positions,
@@ -4254,9 +4341,12 @@ app.get('/api/chart/lunar-nodes', auth, async (req, res) => {
     const north = { ...degToSign(northLon), role: 'north' };
     const south = { ...degToSign(southLon), role: 'south' };
 
-    // LLM interpretation with 8s timeout
+    // LLM interpretation with 8s timeout (v14.4 : skippé si coupe-circuit LLM off)
     const summary = `Nœud Nord en ${north.sign} (${north.degree}°), Nœud Sud en ${south.sign} (${south.degree}°)`;
     let interpretation = null;
+    if (!LLM_USER_ENABLED) {
+      interpretation = _generateLunarNodesFallback(north, south);
+    } else {
     try {
       const ctrl = new AbortController();
       const to = setTimeout(() => ctrl.abort(), 8000);
@@ -4279,6 +4369,7 @@ app.get('/api/chart/lunar-nodes', auth, async (req, res) => {
       interpretation = dj.choices?.[0]?.message?.content?.trim() || null;
     } catch (e) {
       console.warn('lunar-nodes LLM fail (fallback null):', e?.name || e?.message);
+    }
     }
 
     const responseData = {
@@ -4335,6 +4426,8 @@ app.get('/api/challenge/week', auth, async (req, res) => {
     } catch {}
 
     let theme = 'Ouverture', action = 'Dis « je t\'écoute » à quelqu\'un qui parle peu aujourd\'hui.', explanation = 'Une pause d\'écoute aide à laisser émerger ce qui cherche à être entendu.';
+    // v14.4 — si LLM off, on garde les seed defaults directement (skip fetch)
+    if (LLM_USER_ENABLED) {
     try {
       const ctrl = new AbortController();
       const to = setTimeout(() => ctrl.abort(), 8000);
@@ -4364,6 +4457,7 @@ app.get('/api/challenge/week', auth, async (req, res) => {
       }
     } catch (e) {
       console.warn('weekly-challenge LLM fail (using seed defaults):', e?.name || e?.message);
+    }
     }
 
     db.prepare('INSERT INTO weekly_challenges (user_id, week_id, theme, action, explanation) VALUES (?, ?, ?, ?, ?)')
@@ -4452,6 +4546,10 @@ const HOUSE_THEMES = {
 
 async function interpretHouses(asc, sunSign) {
   const theme = HOUSE_THEMES[1];
+  // v14.4 — Garde coupe-circuit LLM : fallback déterministe si flag off.
+  if (!LLM_USER_ENABLED) {
+    return `Ton Ascendant ${asc.sign} colore ta manière d'aborder la vie : tu avances avec ce que ce signe insuffle en toi. Le conseil du jour : laisse la maison 1 (${theme}) guider ton premier réflexe, plutôt que de répondre à l'injonction extérieure.`;
+  }
   const prompt = `Tu es Celeste, astrologue chaleureuse. L'Ascendant natal d'un utilisateur est en ${asc.sign} (${asc.degree.toFixed(1)}°), son Soleil en ${sunSign}.
 En 2 phrases max (40 mots), explique ce que l'Ascendant ${asc.sign} révèle sur sa manière d'aborder la vie, et quel est le conseil du jour lié à la maison 1 (${theme}).`;
   try {
