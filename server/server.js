@@ -816,6 +816,11 @@ async function callLLMWithRetry(messages, maxRetries = 3, maxTokens = 4096, extr
         lastErr = new Error(`LLM ${response.status}`);
         recordLLMFailure();
         if (response.status === 429 || response.status >= 500) {
+          // 429 = rate-limit gateway Telegram: NE PAS retry (ça multiplie les notifs "rate-limiting")
+          if (response.status === 429) {
+            console.warn(`[LLM] 429 rate-limit — fallback immédiat (no retry, pas de spam Telegram)`);
+            throw lastErr;
+          }
           if (attempt < maxRetries) {
             const delayMs = 1000 * Math.pow(2, attempt); // 1s, 2s, 4s
             console.warn(`[LLM] attempt ${attempt + 1} ${response.status}, retry in ${delayMs}ms`);
@@ -845,6 +850,88 @@ async function callLLMWithRetry(messages, maxRetries = 3, maxTokens = 4096, extr
   });
 }
 
+// ─── v14.0 — Utilitaires LLM avec cache + timestamp trompeur ───────────────
+// Objectif : un user qui ouvre l'app voit un contenu "frais" (timestamp = fetch time),
+//            mais en interne on sait quand le LLM a vraiment généré.
+//            Si le contenu est en cache → on ressert le cache (0 appel LLM).
+//            Sinon → on génère, on cache, on sert.
+//
+// Pourquoi "timestamp trompeur" : Co-Star, The Pattern, Sanctuary, CHANI font tous
+// pareil. Le contenu est pré-calculé (la nuit) ou caché. Montrer "généré il y a 3 jours"
+// casse l'illusion de fraîcheur. On montre l'heure du fetch, on garde la vraie heure
+// dans une colonne séparée (debug only, jamais envoyée au front).
+const llmCache = {
+  // cache: { key: { content, real_generated_at, expires_at } }
+  store: new Map(),
+  // Durée de vie par défaut du cache : 24h
+  TTL_MS: 24 * 60 * 60 * 1000,
+
+  // Récupère ou génère
+  async fetch(key, generator, ttlMs = this.TTL_MS) {
+    const now = Date.now();
+    const cached = this.store.get(key);
+    if (cached && cached.expires_at > now) {
+      // Cache HIT — on ressert le contenu existant avec un NOUVEAU timestamp
+      return {
+        ...cached.content,
+        _cache: 'hit',
+        _real_generated_at: cached.real_generated_at,
+      };
+    }
+    // Cache MISS — on génère (1 appel LLM)
+    try {
+      const content = await generator();
+      this.store.set(key, {
+        content,
+        real_generated_at: now,
+        expires_at: now + ttlMs,
+      });
+      return {
+        ...content,
+        _cache: 'miss',
+        _real_generated_at: now,
+      };
+    } catch (e) {
+      // LLM a échoué : on sert un fallback déterministe et on cache ce fallback pour 1h
+      // (pour pas spammer le LLM si tous les users tombent en même temps)
+      const fallback = await getGenericLLMFallback(key, e);
+      this.store.set(key, {
+        content: fallback,
+        real_generated_at: now,
+        expires_at: now + 60 * 60 * 1000, // 1h seulement pour fallback
+      });
+      return {
+        ...fallback,
+        _cache: 'fallback',
+        _real_generated_at: now,
+      };
+    }
+  },
+
+  // Invalider manuellement (utile pour regénérer après changement de config)
+  invalidate(key) { this.store.delete(key); },
+  invalidateAll() { this.store.clear(); },
+  stats() {
+    let hits = 0, misses = 0, fallbacks = 0;
+    for (const v of this.store.values()) {
+      if (v.expires_at > Date.now()) hits++;
+    }
+    return { entries: this.store.size, live: hits };
+  }
+};
+
+// Fallback générique si LLM échoue — texte honnête, jamais culpabilisant
+async function getGenericLLMFallback(key, err) {
+  console.warn(`[LLM-CACHE] fallback déterministe pour ${key} (LLM down: ${err.message})`);
+  return {
+    headline: 'Une journée pour respirer.',
+    energy: { score: 4, label: 'Stable', emoji: '🌿', advice: 'Prends ton temps.' },
+    goodFor: ['introspection', 'douceur', 'rythme lent'],
+    avoid: ['décisions hâtives'],
+    reflectionPrompt: 'Qu\'est-ce qui te demande du repos en ce moment ?',
+  };
+}
+
 // ─── FALLBACK horoscopes (par signe, pré-écrits) ─────────────────
 // ─── v11.2 — Garde-fous process : une ReferenceError async ne doit plus tuer le serveur. ───
 process.on('uncaughtException', (err) => {
@@ -859,21 +946,90 @@ process.on('unhandledRejection', (reason) => {
   console.error('[FATAL] unhandledRejection:', String(reason).slice(0, 200));
   if (SENTRY_DSN && reason instanceof Error) Sentry.captureException(reason);
 });
+
+// ─── FALLBACK horoscopes (par signe, pré-écrits) ─────────────────
 // Utilisés si le LLM rate-limit ou panne. Garantit un horoscope TOUJOURS disponible.
+// v13.2 — Chaque signe a 3 VARIANTES qui tournent selon le jour de l'année.
+//         Avant : 1 texte fixe par signe → si le LLM tombait plusieurs jours
+//         d'affilée (circuit breaker), l'utilisateur voyait le MÊME horoscope
+//         se répéter → impression de "pattern" suspect. Maintenant, la variante
+//         est déterministe (jour_jour_de_lannée % 3), donc :
+//           (a) stable pour la journée (pas de surprise au refresh),
+//           (b) differente du lendemain,
+//         (c) reproductible pour debug.
 const FALLBACK_HOROSCOPES = {
-  Aries: { general: "Le feu intérieur brûle fort aujourd'hui — agis, mais choisis ta bataille avec discernement.", amour: "Ta magnétise, mais l'autre a besoin d'être rassuré(e) autant qu'impressionné(e).", carriere: "Lance-toi sur le projet qui te trotte dans la tête depuis des semaines.", energie: 4, mood: "Combatif", luckyNumber: 7, luckyColor: "Rouge" },
-  Taurus: { general: "Une journée pour ancrer, ralentir, savourer. La patience paie aujourd'hui plus que l'élan.", amour: "Les gestes tendres comptent plus que les grandes déclarations. Présence.", carriere: "Avance méthodique. Tu poses les bases solides.", energie: 3, mood: "Stable", luckyNumber: 4, luckyColor: "Vert forêt" },
-  Gemini: { general: "Ton esprit vole d'idée en idée — canalise-le sur un seul sujet à la fois.", amour: "Communication, dialogue, légèreté. La curiosité nourrit le lien.", carriere: "Multiples pistes s'ouvrent — choisis, engage-toi.", energie: 4, mood: "Curieux", luckyNumber: 5, luckyColor: "Jaune" },
-  Cancer: { general: "Lune en phase sensible aujourd'hui — écoute ton ventre plus que ta tête.", amour: "Coquille protectrice ou cœur ouvert ? Les deux à la fois.", carriere: "Ta sensibilité est un super-pouvoir, pas une faiblesse.", energie: 3, mood: "Introspectif", luckyNumber: 2, luckyColor: "Blanc argenté" },
-  Leo: { general: "Rayonne sans écraser. Le leadership aujourd'hui, c'est inspirer.", amour: "Cœur en scène — sois généreux(se), mais laisse l'autre briller aussi.", carriere: "Visibilité, reconnaissance. Assume ta place au centre.", energie: 5, mood: "Lumineux", luckyNumber: 1, luckyColor: "Or" },
-  Virgo: { general: "Le détail qui te sauve aujourd'hui. Prends le temps de bien faire.", amour: "L'attention aux petits gestes fait toute la différence.", carriere: "Organisation, méthode, clarté — c'est ton terrain de jeu.", energie: 3, mood: "Concentré", luckyNumber: 3, luckyColor: "Beige" },
-  Libra: { general: "Équilibre, harmonie, mais aussi : sache dire ton vrai oui et ton vrai non.", amour: "Le lien se nourrit d'authenticité autant que de douceur.", carriere: "Négociations facilitées. Trouve l'accord élégant.", energie: 4, mood: "Harmonieux", luckyNumber: 6, luckyColor: "Rose poudré" },
-  Scorpio: { general: "Plongée en profondeur. Tout ce qui est superficiel ne t'intéresse pas aujourd'hui.", amour: "Intensité magnétique. Laisse l'autre respirer dans ton espace.", carriere: "Stratégie, intuition, percée. Tu vois ce que d'autres ne voient pas.", energie: 4, mood: "Mystérieux", luckyNumber: 8, luckyColor: "Bordeaux" },
-  Sagittarius: { general: "Élan d'aventure, besoin d'horizon. Une idée t'appelle au loin.", amour: "Liberté et engagement ne sont pas ennemis — dialogue.", carriere: "Vise haut, lance-toi, apprends de l'élan même imparfait.", energie: 4, mood: "Aventurier", luckyNumber: 9, luckyColor: "Bleu indigo" },
-  Capricorn: { general: "Discipline et patience. Chaque pas compte. Le long terme t'appartient.", amour: "Construire, durable. La tendresse peut rimer avec constance.", carriere: "Avancement concret, reconnaissance du travail bien fait.", energie: 4, mood: "Déterminé", luckyNumber: 10, luckyColor: "Gris anthracite" },
-  Aquarius: { general: "Vision décalée, idées qui sortent du cadre. Ose penser à l'envers.", amour: "Indépendance chérie, mais le lien vrai se construit.", carriere: "Innovation, originalité. Ton regard neuf est précieux.", energie: 4, mood: "Visionnaire", luckyNumber: 11, luckyColor: "Turquoise" },
-  Pisces: { general: "Vague intuitive forte. Écoute tes rêves, ton imagination sait des choses.", amour: "Romantisme, compassion, fusion. Mais garde ton centre.", carriere: "Créativité, art, intuition. Laisse parler ta part sensible.", energie: 3, mood: "Rêveur", luckyNumber: 12, luckyColor: "Lavande" },
+  Aries: [
+    { general: "Le feu intérieur brûle fort aujourd'hui — agis, mais choisis ta bataille avec discernement.", amour: "Tu magnétises, mais l'autre a besoin de tendresse autant que d'admiration.", carriere: "Lance-toi sur le projet qui te trotte dans la tête depuis des semaines.", energie: 4, mood: "Combatif", luckyNumber: 7, luckyColor: "Rouge" },
+    { general: "Une étincelle d'impatience te pousse en avant. C'est ton élan — apprends seulement à freiner avant les virages.", amour: "Tu risques de brûler les étapes. Laisse au lien le temps de respirer.", carriere: "Ton instinct te dit de foncer. Écoute-le, mais vérifie tes bases avant.", energie: 5, mood: "Déterminé", luckyNumber: 21, luckyColor: "Corail" },
+    { general: "Mars te souffle une énergie claire, presque tranchante. C'est le bon moment pour trancher ce qui traîne.", amour: "Tu as besoin de clarté, pas de demi-mesures. Dis ce que tu veux vraiment.", carriere: "Une décision repoussée depuis trop longtemps demande ton attention aujourd'hui.", energie: 4, mood: "Direct", luckyNumber: 14, luckyColor: "Écarlate" },
+  ],
+  Taurus: [
+    { general: "Une journée pour ancrer, ralentir, savourer. La patience paie aujourd'hui plus que l'élan.", amour: "Les gestes tendres comptent plus que les grandes déclarations. Présence.", carriere: "Avance méthodique. Tu poses les bases solides.", energie: 3, mood: "Stable", luckyNumber: 4, luckyColor: "Vert forêt" },
+    { general: "La Terre te demande de ralentir le rythme. Pas par fatigue — par sagesse sensorielle.", amour: "Un repas, un contact peau à peau, une marche ensemble valent mieux que mille mots.", carriere: "Ce qui prend du temps aujourd'hui rapportera plus tard. Ne cède pas à l'urgence.", energie: 3, mood: "Ancré", luckyNumber: 22, luckyColor: "Mousse" },
+    { general: "Vénus te touche en plein cœur des sens. Tout ce qui est beau, bon, doux t'appelle.", amour: "Ton corps parle plus fort que ta tête aujourd'hui. Écoute-le dans le lien.", carriere: "Reste sur tes marques. Ta persévérance silencieuse impressionne plus que tu ne le crois.", energie: 4, mood: "Serein", luckyNumber: 33, luckyColor: "Terre cuite" },
+  ],
+  Gemini: [
+    { general: "Ton esprit vole d'idée en idée — canalise-le sur un seul sujet à la fois.", amour: "Communication, dialogue, légèreté. La curiosité nourrit le lien.", carriere: "Multiples pistes s'ouvrent — choisis, engage-toi.", energie: 4, mood: "Curieux", luckyNumber: 5, luckyColor: "Jaune" },
+    { general: "Mercure te donne mille voix aujourd'hui. Choisis-en une, et fais-la entendre.", amour: "Un échange en profondeur vaut mieux que dix conversations en surface.", carriere: "Ta capacité à relier des idées éloignées est ton atout du jour.", energie: 5, mood: "Vif", luckyNumber: 23, luckyColor: "Citron" },
+    { general: "Besoin de mouvement, d'air, d'horizons neufs. La routine t'étouffe un peu aujourd'hui.", amour: "Va voir ailleurs si tu y es — mais reviens. La nouveauté nourrit, l'errance épuise.", carriere: "Apprends quelque chose de nouveau aujourd'hui. Ta plasticité est ta richesse.", energie: 4, mood: "Inventif", luckyNumber: 14, luckyColor: "Aqua" },
+  ],
+  Cancer: [
+    { general: "Lune en phase sensible aujourd'hui — écoute ton ventre plus que ta tête.", amour: "Coquille protectrice ou cœur ouvert ? Les deux à la fois.", carriere: "Ta sensibilité est un super-pouvoir, pas une faiblesse.", energie: 3, mood: "Introspectif", luckyNumber: 2, luckyColor: "Blanc argenté" },
+    { general: "La Lune te tire vers l'intérieur, vers les racines, vers ce qui te sécurise.", amour: "Un besoin de tendresse sans condition. Offre-la d'abord à toi-même.", carriere: "Travaille depuis ton intuition, pas depuis la pression externe.", energie: 3, mood: "Doux", luckyNumber: 11, luckyColor: "Nacre" },
+    { general: "Tes émotions remontent comme une marée — pas pour t'enfoncer, pour te rappeler d'où tu viens.", amour: "Tu te souviens de tout. C'est ta force et ta fragilité dans le lien.", carriere: "Prends soin de ton nid aujourd'hui — l'extérieur tiendra mieux si l'intérieur est solide.", energie: 4, mood: "Mélancolique", luckyNumber: 20, luckyColor: "Bleu pâle" },
+  ],
+  Leo: [
+    { general: "Rayonne sans écraser. Le leadership aujourd'hui, c'est inspirer.", amour: "Cœur en scène — sois généreux·se, mais laisse l'autre briller aussi.", carriere: "Visibilité, reconnaissance. Assume ta place au centre.", energie: 5, mood: "Lumineux", luckyNumber: 1, luckyColor: "Or" },
+    { general: "Le Soleil tape fort aujourd'hui — pas pour te brûler, pour te rappeler que tu existes.", amour: "Tu as besoin d'être vu·e. Dis-le simplement, sans le faire payer à l'autre.", carriere: "Ose te mettre en avant. Le monde a besoin de ta lumière, pas de ton effacement.", energie: 5, mood: "Radieux", luckyNumber: 10, luckyColor: "Ambre" },
+    { general: "Une fierté saine te traverse aujourd'hui. Celle qui dit : j'ai parcouru un chemin.", amour: "Générosité du cœur, sans calcul. Tu offres parce que c'est ta nature.", carriere: "Ta présence catalyse l'attention. Ne t'excuse pas d'occuper l'espace.", energie: 4, mood: "Fier", luckyNumber: 19, luckyColor: "Soleil" },
+  ],
+  Virgo: [
+    { general: "Le détail qui te sauve aujourd'hui. Prends le temps de bien faire.", amour: "L'attention aux petits gestes fait toute la différence.", carriere: "Organisation, méthode, clarté — c'est ton terrain de jeu.", energie: 3, mood: "Concentré", luckyNumber: 3, luckyColor: "Beige" },
+    { general: "Mercure structuré te donne une clarté chirurgicale. Coupe le superflu.", amour: "Les actes concrets comptent plus que les promesses aujourd'hui.", carriere: "Range, classe, priorise. L'ordre matériel apaise ton mental.", energie: 4, mood: "Méthodique", luckyNumber: 12, luckyColor: "Sable" },
+    { general: "Tu vois ce qui cloche avant tout le monde. C'est un don — pas une malédiction.", amour: "Attention à ne pas corriger l'autre : aime-le tel qu'il est, d'abord.", carriere: "Ta capacité d'analyse fine est recherchée aujourd'hui. Fais-la connaître.", energie: 3, mood: "Précis", luckyNumber: 30, luckyColor: "Lin" },
+  ],
+  Libra: [
+    { general: "Équilibre, harmonie, mais aussi : sache dire ton vrai oui et ton vrai non.", amour: "Le lien se nourrit d'authenticité autant que de douceur.", carriere: "Négociations facilitées. Trouve l'accord élégant.", energie: 4, mood: "Harmonieux", luckyNumber: 6, luckyColor: "Rose poudré" },
+    { general: "Vénus te pousse à rechercher la beauté dans tout — y compris dans le conflit évité de justesse.", amour: "Cherche l'équilibre entre plaire et être vrai·e. Les deux sont possibles.", carriere: "Tu vois le juste milieu que les autres ne voient pas. Propose-le.", energie: 4, mood: "Diplomate", luckyNumber: 15, luckyColor: "Rose ancien" },
+    { general: "Besoin d'harmonie aujourd'hui — mais pas à n'importe quel prix.", amour: "Ton écoute est précieuse. N'oublie pas d'écouter aussi ta voix intérieure.", carriere: "Un accord se dessine. Ta voix compte pour le sceller.", energie: 3, mood: "Élégant", luckyNumber: 24, luckyColor: "Pêche" },
+  ],
+  Scorpio: [
+    { general: "Plongée en profondeur. Tout ce qui est superficiel ne t'intéresse pas aujourd'hui.", amour: "Intensité magnétique. Laisse l'autre respirer dans ton espace.", carriere: "Stratégie, intuition, percée. Tu vois ce que d'autres ne voient pas.", energie: 4, mood: "Mystérieux", luckyNumber: 8, luckyColor: "Bordeaux" },
+    { general: "Pluton remue ce que tu avais enfoui. Pas pour te faire mal — pour te libérer.", amour: "Une vérité demande à sortir. Le lien en sortira transformé, ou renforcé.", carriere: "Ta perspicacité perçante voit à travers les masques. Utilise-la avec justesse.", energie: 5, mood: "Intense", luckyNumber: 17, luckyColor: "Noir bleuté" },
+    { general: "Ton radar aux émotions cachées est à pleine puissance aujourd'hui.", amour: "Tu sens ce qui n'est pas dit. Pose la question, doucement.", carriere: "Une stratégie secrète peut devenir officielle. C'est le moment.", energie: 4, mood: "Pénétrant", luckyNumber: 26, luckyColor: "Prune" },
+  ],
+  Sagittarius: [
+    { general: "Élan d'aventure, besoin d'horizon. Une idée t'appelle au loin.", amour: "Liberté et engagement ne sont pas ennemis — dialogue.", carriere: "Vise haut, lance-toi, apprends de l'élan même imparfait.", energie: 4, mood: "Aventurier", luckyNumber: 9, luckyColor: "Bleu indigo" },
+    { general: "Jupiter gonfle tes ambitions aujourd'hui. Attention aux promesses trop grandes.", amour: "Tu rêves loin — mais l'autre est là, près de toi. Regarde-le aussi.", carriere: "Une opportunité d'expansion se présente. Vérifie l'atterrissage avant le décollage.", energie: 5, mood: "Enthousiaste", luckyNumber: 18, luckyColor: "Indigo" },
+    { general: "Soif d'apprendre, besoin de sens. La routine te semble étriquée aujourd'hui.", amour: "Explique à l'autre où tu veux aller. Il pourrait te suivre.", carriere: "Ta vision large inspire. Trouve un canal concret pour l'exprimer.", energie: 4, mood: "Explorateur", luckyNumber: 27, luckyColor: "Lapis" },
+  ],
+  Capricorn: [
+    { general: "Discipline et patience. Chaque pas compte. Le long terme t'appartient.", amour: "Construire, durable. La tendresse peut rimer avec constance.", carriere: "Avancement concret, reconnaissance du travail bien fait.", energie: 4, mood: "Déterminé", luckyNumber: 10, luckyColor: "Gris anthracite" },
+    { general: "Saturne te demande de poser une pierre de plus sur l'édifice. Pas spectaculaire, mais solide.", amour: "Ta loyauté est ton langage d'amour. Dis-le à l'autre, il ne le devine pas.", carriere: "Un investissement patient commence à porter. Reste sur la trajectoire.", energie: 3, mood: "Constant", luckyNumber: 28, luckyColor: "Ardoise" },
+    { general: "Ambition maîtrisée. Tu grimpes sans bruit, mais sûrement.", amour: "Montre ta tendresse autrement que par des actes concrets. Les mots comptent aussi.", carriere: "Ta réputation se construit aujourd'hui sur un détail. Sois impeccable.", energie: 4, mood: "Sobre", luckyNumber: 19, luckyColor: "Granite" },
+  ],
+  Aquarius: [
+    { general: "Vision décalée, idées qui sortent du cadre. Ose penser à l'envers.", amour: "Indépendance chérie, mais le lien vrai se construit.", carriere: "Innovation, originalité. Ton regard neuf est précieux.", energie: 4, mood: "Visionnaire", luckyNumber: 11, luckyColor: "Turquoise" },
+    { general: "Uranus te souffle une intuition disruptive. Ne la repousse pas par peur du jugement.", amour: "Ton besoin d'air est légitime. Explique-le, ne disparaîs pas.", carriere: "Une idée en avance sur son temps germe. Note-la, partage-la.", energie: 5, mood: "Inventif", luckyNumber: 20, luckyColor: "Électrique" },
+    { general: "Tu vois les systèmes, les patterns, les futurs possibles. C'est rare — fais-en quelque chose.", amour: "L'intellect te séduit plus que le romantisme aujourd'hui. Trouve quelqu'un qui pense avec toi.", carriere: "Ta capacité à anticiper les tendances est ton or noir.", energie: 4, mood: "Anticipatif", luckyNumber: 29, luckyColor: "Cyan" },
+  ],
+  Pisces: [
+    { general: "Vague intuitive forte. Écoute tes rêves, ton imagination sait des choses.", amour: "Romantisme, compassion, fusion. Mais garde ton centre.", carriere: "Créativité, art, intuition. Laisse parler ta part sensible.", energie: 3, mood: "Rêveur", luckyNumber: 12, luckyColor: "Lavande" },
+    { general: "Neptune brouille les frontières aujourd'hui — entre toi et les autres, entre rêve et réel.", amour: "Tu peux fondre dans l'autre. C'est beau. Garde aussi un fil vers toi.", carriere: "Une intuition créatrice demande un canal concret pour ne pas se dissiper.", energie: 2, mood: "Flottant", luckyNumber: 21, luckyColor: "Nuit" },
+    { general: "Ta sensibilité est une antenne aujourd'hui. Elle capte tout — protège-la aussi.", amour: "Ta compassion est ta richesse. Ne te noie pas dans les émotions des autres.", carriere: "Le passage par l'imaginaire est productif aujourd'hui. Crée, écris, peins.", energie: 3, mood: "Empathique", luckyNumber: 30, luckyColor: "Aqua-marine" },
+  ],
 };
+
+// v13.2 — Sélectionne une variante déterministe selon le jour.
+// Retourne un horoscope stable pour la journée, différent du lendemain.
+function getFallbackHoroscope(sign) {
+  const variants = FALLBACK_HOROSCOPES[sign] || FALLBACK_HOROSCOPES.Aries;
+  // Jour de l'année (1-366) — déterministe, varie chaque jour
+  const now = new Date();
+  const dayOfYear = Math.floor((now - new Date(now.getFullYear(), 0, 0)) / 86400000);
+  const variantIdx = dayOfYear % variants.length;
+  return { ...variants[variantIdx], isFallback: true };
+}
 function personalizeHoroscope(base, natalPositions, transits, birthData) {
   const out = { ...base };
   const rising = natalPositions.rising?.sign;
@@ -936,37 +1092,99 @@ Réponds UNIQUEMENT avec le JSON.`;
 async function generateHoroscope(natalPositions, transits, sign) {
   const today = new Date().toLocaleDateString('fr-FR', { weekday: 'long', day: 'numeric', month: 'long' });
 
-  const systemPrompt = celesteSystemPrompt("Tu écris l'horoscope de quelqu'un qui te fait confiance. Tu te bases sur les vraies positions planétaires, pas sur du blabla générique. Ton ton est psychologique et humain — jamais prédictif, jamais moralisateur. Tu écris en français.");
+  // v13.5 — Le LLM backend consomme 1496 tokens sur 1500 en reasoning (finish_reason: length).
+  // enable_thinking:false est IGNORÉ par glm-5.2 quand il y a un system prompt long.
+  // Solution : on n'utilise PAS celesteSystemPrompt (qui fait 1795 chars) pour la génération,
+  // on met un system prompt court et on laisse LLM_MODEL définir le ton.
+  const systemPrompt = `Tu es Céleste, astrologue française. Tu écris en français, ton chaleureux et humain. Tu te bases sur les vraies positions planétaires. Jamais prédictif, jamais moralisateur.
 
-  const userPrompt = `Voici le thème natal de la personne:
-${Object.entries(natalPositions).map(([k,v]) => `${k}: ${v.sign} ${v.degree}°${v.retrograde ? ' ℞' : ''}`).join('\n')}
+Réponds UNIQUEMENT en JSON valide avec ce format:
+{"general":"2-3 phrases","amour":"1-2 phrases","carriere":"1-2 phrases","energie":1-5,"mood":"2 mots","luckyNumber":1-99,"luckyColor":"couleur FR"}
 
-Voici les transits actuels (positions planétaires d'aujourd'hui ${today}):
-${Object.entries(transits).map(([k,v]) => `${k}: ${v.sign} ${v.degree}°${v.retrograde ? ' ℞' : ''}`).join('\n')}
+Aucun texte avant ou après le JSON.`;
 
-Le signe solaire est ${sign}.
+  // v13.4 — Prompt minimaliste : seulement les positions essentielles (signes), pas le dump JSON complet.
+  // Le LLM perdait du temps à "lire" 14 planètes détaillées (~10k chars de prompt) → timeout 30s.
+  // On ne garde que les planètes personnelles + aspects principaux → prompt ~1k chars, réponse en ~12-18s.
+  const natalSummary = [
+    `Soleil: ${natalPositions.sun?.sign} (${natalPositions.sun?.degree}°)`,
+    `Lune: ${natalPositions.moon?.sign} (${natalPositions.moon?.degree}°)`,
+    `Mercure: ${natalPositions.mercury?.sign}`,
+    `Vénus: ${natalPositions.venus?.sign}`,
+    `Mars: ${natalPositions.mars?.sign}`,
+    `Jupiter: ${natalPositions.jupiter?.sign}`,
+    `Saturne: ${natalPositions.saturn?.sign}`,
+    `Ascendant: ${natalPositions.ascendant?.sign}`,
+  ].join(', ');
 
-Génère un horoscope PERSONNALISÉ en JSON avec ce format exact:
+  const transitSummary = [
+    `Soleil: ${transits.sun?.sign}`,
+    `Lune: ${transits.moon?.sign}`,
+    `Mercure: ${transits.mercury?.sign}`,
+    `Vénus: ${transits.venus?.sign}`,
+    `Mars: ${transits.mars?.sign}`,
+    `Jupiter: ${transits.jupiter?.sign}`,
+    `Saturne: ${transits.saturn?.sign}`,
+  ].join(', ');
+
+  const userPrompt = `Date: ${today}
+Thème natal: ${natalSummary}
+Transits du jour: ${transitSummary}
+Signe solaire: ${sign}
+
+Génère un horoscope PERSONNALISÉ en JSON strict:
 {
-  "general": "2-3 phrases sur l'énergie générale de la journée, basées sur les aspects réels entre le thème natal et les transits",
-  "amour": "1-2 phrase sur les relations, basée sur Vénus et la Lune",
-  "carriere": "1-2 phrase sur le travail/projet, basée sur Saturne et Mercure",
-  "energie": un nombre de 1 à 5,
-  "mood": "1-2 mots décrivant l'humeur dominante",
-  "luckyNumber": un nombre de 1 à 99,
-  "luckyColor": "une couleur en français"
+  "general": "2-3 phrases qui croisent les transits et le thème natal de cette personne spécifiquement",
+  "amour": "1-2 phrases, basées sur Vénus/Lune natale × transits",
+  "carriere": "1-2 phrases, basées sur Mars/Mercure natale × transits",
+  "energie": 4,
+  "mood": "2 mots",
+  "luckyNumber": 7,
+  "luckyColor": "bleu"
 }
 
-Réponds UNIQUEMENT avec le JSON, aucun texte avant ou après.`;
+UNIQUEMENT le JSON, rien d'autre. Pas de markdown, pas de texte avant/après.`;
 
-  // P1-5 — Cap LLM latency at 15s total. Horoscope is non-critical content:
-  // the deterministic FALLBACK_HOROSCOPES is served instantly on timeout/failure.
-  // Before: 3 retries × 45s = ~150s worst case. Now: 15s single attempt.
-  const data = await callLLMWithRetry([
-    { role: 'system', content: systemPrompt },
-    { role: 'user', content: userPrompt },
-  ], 0, 4096, {}, 15000);
+  // v13.5 — fetch direct, max_tokens=3000 (le LLM consomme ~1500 tokens en reasoning même avec system prompt court)
+  // + timeout=60s. enable_thinking:false peut être ignoré par l'API selon contexte.
+  console.log(`[horoscope] LLM direct call START sign=${sign}`);
+  const t0 = Date.now();
+  const controller = new AbortController();
+  const timeout = setTimeout(() => controller.abort(), 60000);
+  let response;
+  try {
+    response = await fetch(LLM_API_URL, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${LLM_API_KEY}`,
+      },
+      body: JSON.stringify({
+        model: LLM_MODEL,
+        messages: [
+          { role: 'system', content: systemPrompt },
+          { role: 'user', content: userPrompt },
+        ],
+        temperature: 0.85,
+        max_tokens: 3000,
+        enable_thinking: false,
+      }),
+      signal: controller.signal,
+    });
+  } finally {
+    clearTimeout(timeout);
+  }
+  const elapsed = ((Date.now() - t0) / 1000).toFixed(1);
+  console.log(`[horoscope] LLM direct call HTTP ${response.status} in ${elapsed}s`);
+  if (!response.ok) {
+    const errText = await response.text().catch(() => '');
+    throw new Error(`LLM direct ${response.status}: ${errText.slice(0, 200)}`);
+  }
+  const data = await response.json();
+  console.log(`[horoscope] LLM usage: ${JSON.stringify(data.usage || {})}`);
+  console.log(`[horoscope] LLM finish_reason: ${data.choices?.[0]?.finish_reason}`);
   const msg = data.choices?.[0]?.message || {};
+  console.log(`[horoscope] LLM content len=${(msg.content||'').length} reasoning len=${(msg.reasoning_content||'').length}`);
   // Try content first, then reasoning_content (some reasoning models put JSON there)
   let content = msg.content || msg.reasoning_content || '';
 
@@ -2375,7 +2593,7 @@ app.post('/api/horoscope', auth, async (req, res) => {
         base = await generateHoroscope(natalPositions, transits, sunSign);
       } catch (llmErr) {
         console.warn(`[horoscope] LLM failed (${llmErr.message}), using FALLBACK for sign=${sunSign}`);
-        base = { ...FALLBACK_HOROSCOPES[sunSign] || FALLBACK_HOROSCOPES.Aries, isFallback: true };
+        base = getFallbackHoroscope(sunSign);
         usedFallbackLLM = true;
       }
 
@@ -2410,18 +2628,24 @@ app.post('/api/horoscope', auth, async (req, res) => {
       db.prepare('UPDATE users SET scans_remaining = scans_remaining - 1 WHERE id = ?').run(req.user.id);
     }
 
-    // Helper: extrait le summary (general+energie+mood+luckyColor) depuis le content JSON
+    // Helper: extrait le summary (general+amour+carriere+energie+mood+luckyColor) depuis le content JSON
+    // v13.2 — on inclut love + career dans l'historique (avant, seul general était sauvegardé → le frontend
+    //         n'affichait que la catégorie "général" dans la semaine, amour & carrière manquaient).
     function extractSummary(contentJson) {
       try {
         const c = JSON.parse(contentJson);
         return {
           general: String(c.general ?? '').slice(0, 600),
+          // Le backend génère en français (amour/carriere), le frontend attend love/career.
+          // On normalise côté summary pour que l'historique soit directement consommable.
+          love: String(c.love ?? c.amour ?? '').slice(0, 400),
+          career: String(c.career ?? c.carriere ?? '').slice(0, 400),
           energie: Number(c.energie ?? 3),
           mood: String(c.mood ?? '').slice(0, 60),
           luckyColor: String(c.luckyColor ?? '').slice(0, 30),
         };
       } catch (e) {
-        return { general: '', energie: 3, mood: '', luckyColor: '' };
+        return { general: '', love: '', career: '', energie: 3, mood: '', luckyColor: '' };
       }
     }
 
@@ -2463,13 +2687,19 @@ app.get('/api/horoscope/week', auth, async (req, res) => {
     const offsetEnd = 0;
 
     const results = [];
+    // FIX timezone : setHours(0,0,0,0) + toISOString() recule/décale la date selon
+    // l'offset UTC du serveur (ex: UTC+2 → minuit local = 22h la veille en UTC →
+    // toISOString() retourne la veille). On calcule donc la date ISO en local direct.
     const today = new Date();
-    today.setHours(0, 0, 0, 0);
+    const todayISO = new Date(today.getTime() - today.getTimezoneOffset() * 60000)
+      .toISOString().split('T')[0];
 
     for (let offset = offsetStart; offset <= offsetEnd; offset++) {
       const day = new Date(today);
       day.setDate(today.getDate() + offset);
-      const isoDate = day.toISOString().split('T')[0];
+      // FIX timezone : utiliser la date locale, pas toISOString() qui décale en UTC
+      const isoDate = new Date(day.getTime() - day.getTimezoneOffset() * 60000)
+        .toISOString().split('T')[0];
 
       // Lecture cache : on a déjà tout dans horoscope_cache
       const row = db.prepare('SELECT content, summary FROM horoscope_cache WHERE user_id = ? AND date = ?')
@@ -2522,7 +2752,9 @@ function computedConsultedStreak(userId, today) {
   let streak = 0;
   const cursor = new Date(today);
   while (true) {
-    const iso = cursor.toISOString().split('T')[0];
+    // FIX timezone : toISOString() décale selon l'offset UTC — on calcule en local
+    const iso = new Date(cursor.getTime() - cursor.getTimezoneOffset() * 60000)
+      .toISOString().split('T')[0];
     const row = db.prepare('SELECT 1 FROM horoscope_cache WHERE user_id = ? AND date = ?').get(userId, iso);
     if (!row) break;
     streak++;
@@ -2730,7 +2962,8 @@ db.exec(`CREATE TABLE IF NOT EXISTS tarot_grants (
 app.get('/api/tarot/cross/status', auth, (req, res) => {
   const row = db.prepare('SELECT free_used, paid_count FROM tarot_grants WHERE user_id = ?').get(req.user.id);
   const user = db.prepare('SELECT is_premium, premium_until FROM users WHERE id = ?').get(req.user.id);
-  const isPremium = !!user?.is_premium && (!user.premium_until || user.premium_until > Date.now());
+  const nowSec = Math.floor(Date.now() / 1000);
+  const isPremium = !!user?.is_premium && (!user.premium_until || user.premium_until > nowSec);
   if (!row) {
     db.prepare('INSERT INTO tarot_grants (user_id) VALUES (?)').run(req.user.id);
     return res.json({ freeUsed: 0, paidCount: 0, isPremium, canDraw: isPremium });
@@ -2754,7 +2987,8 @@ app.post('/api/tarot/cross', auth, llmLimiter, async (req, res) => {
   try {
     const user = db.prepare('SELECT * FROM users WHERE id = ?').get(req.user.id);
     if (!user) return res.status(404).json({ error: 'user_not_found' });
-    const isPremium = !!user.is_premium && (!user.premium_until || user.premium_until > Date.now());
+    const nowSec = Math.floor(Date.now() / 1000);
+    const isPremium = !!user.is_premium && (!user.premium_until || user.premium_until > nowSec);
 
     // Quota check
     const grant = db.prepare('SELECT free_used, paid_count FROM tarot_grants WHERE user_id = ?').get(req.user.id)
@@ -2789,30 +3023,107 @@ app.post('/api/tarot/cross', auth, llmLimiter, async (req, res) => {
       } catch (e) { /* fallback silencieux */ }
     }
 
-    // LLM call (avec fallback si LLM down)
-    const prompt = `Tu es tarologue. Tire 3 cartes pour un(e) ${sunSign}.
-Question: "${question || 'guidance générale'}"
-Carte Passé: ${cards[0].name} ${cards[0].isReversed ? '(renversée)' : ''}
-Carte Présent: ${cards[1].name} ${cards[1].isReversed ? '(renversée)' : ''}
-Carte Futur: ${cards[2].name} ${cards[2].isReversed ? '(renversée)' : ''}
-Donne en JSON: {"past":"<50 mots>","present":"<50 mots>","future":"<50 mots>","synthesis":"<80 mots, le fil rouge>"}.
-Ton: bienveillant, sans jargon, images concrètes.`;
+    // LLM call (avec fallback si LLM down) — glm-5.2 reasoning: max_tokens 32000 + timeout 240s
+        // (À fort max_tokens, glm-5.2 produit du contenu réel ; à bas max_tokens, il consomme tout en reasoning interne)
+        const prompt = `Tu es une tarologue française chevronnée, intuitive, chaleureuse et précise. Tu tutoies, tu parles avec des images concrètes, jamais de jargon ésotérique inutile. Tu es réputée pour la densité et la pertinence de tes lectures.
+
+Tu tires **3 cartes en croix (Passé → Présent → Futur)** pour une personne **née sous le signe ${sunSign}**.
+
+Sa question : « ${question || "Guidance générale pour aujourd'hui"} »
+
+🃏 **Carte Passé** : ${cards[0].name} ${cards[0].isReversed ? '(renversée)' : ''} — archétype : ${cards[0].archetype}
+🃏 **Carte Présent** : ${cards[1].name} ${cards[1].isReversed ? '(renversée)' : ''} — archétype : ${cards[1].archetype}
+🃏 **Carte Futur** : ${cards[2].name} ${cards[2].isReversed ? '(renversée)' : ''} — archétype : ${cards[2].archetype}
+
+Cette personne a payé pour cette lecture : elle attend une vraie profondeur, pas un horoscope générique. Apporte-lui de la valeur concrète qu'elle ne trouve pas ailleurs.
+
+Pour CHAQUE carte, tu rédiges **4 champs distincts** qui ensemble brossent un portrait complet :
+
+**A) Symbolique de la carte (3–4 phrases)** : ce que la carte représente dans le tarot de Marseille — son arcane, ses figures, ce que son énergie évoque en général. Inclus l'orientation (droite/renversée) et ce qu'elle ajoute.
+
+**B) Lecture Passé/Présent/Futur (180–220 mots)** : c'est le cœur de l'interprétation. Tu dois :
+- t'adresser directement à la personne (« tu », « tu viens de », « tu traverses », « tu vas »)
+- ancrer le symbole de la carte dans une **situation concrète** (en t'appuyant sur son signe ${sunSign} et sur sa question)
+- évoquer au moins **une image sensorielle** précise (un lieu, un geste, une sensation, un moment de la journée)
+- nommer **une émotion spécifique** (« cette petite fierté qui ne suffit plus », « ce silence après l'effort »)
+- identifier **un blocage OU un levier** concret que la carte pointe
+- terminer par une phrase qui pourrait la **surprendre ou la faire sourire doucement** (un retournement, une image inattendue)
+
+**C) Conseil de la carte (2–3 phrases)** : un **micro-geste** très concret à poser dans les jours qui viennent (pas « médite », mais « ce soir, écris trois lignes sur ce qui te freine »).
+
+**D) Mots-clés (4–5 mots)** : un tableau de mots-clés symboliques qui résonnent avec la carte.
+
+Pour la **synthèse**, tu rédiges **3 champs** :
+
+**E) Fil rouge (150–180 mots)** : l'histoire que les 3 cartes racontent ensemble, comme un récit qui avance. Tu relies les archétypes entre eux (${cards[0].archetype} → ${cards[1].archetype} → ${cards[2].archetype}) et tu montres le mouvement.
+
+**F) Ce que les cartes t'invitent à faire (3–4 phrases)** : les 2–3 actions concrètes que la personne peut poser cette semaine en s'appuyant sur la lecture. Pas de généralités, des gestes précis.
+
+**G) Ce que les cartes t'invitent à lâcher (3–4 phrases)** : les croyances, schémas ou résistances qui freinent le mouvement identifié en E. Soit précis (« l'idée que tu dois tout porter seul(e) »), pas vague.
+
+⚠️ Réponds UNIQUEMENT en JSON strict :
+{
+  "past": {"symbol": "...", "reading": "...", "advice": "...", "keywords": ["...", "...", "...", "..."]},
+  "present": {"symbol": "...", "reading": "...", "advice": "...", "keywords": ["...", "...", "...", "..."]},
+  "future": {"symbol": "...", "reading": "...", "advice": "...", "keywords": ["...", "...", "...", "..."]},
+  "synthesis": {"filRouge": "...", "aFaire": "...", "aLacher": "..."}
+}`;
 
     let reading = null;
     try {
-      const llmResp = await callLLM(prompt, { json: true, maxTokens: 600 });
-      reading = typeof llmResp === 'string' ? safeJsonParse(llmResp, null, 'tarot-cross llm parse') : llmResp;
+      // glm-5.2 sur cheapestinference : max_tokens 32000 obligatoires sinon le modèle consomme tout en reasoning interne (bug API)
+      const llmResp = await callLLMWithRetry([{ role: 'user', content: prompt }], 0, 32000, { temperature: 0.9 }, 240000);
+      const msg = llmResp.choices?.[0]?.message;
+      const txt = msg?.content || msg?.reasoning_content || '';
+      console.log('[tarot-cross] raw LLM output length:', txt.length, 'preview:', txt.slice(0, 300));
+      // Extract the FIRST balanced JSON object — LLM sometimes adds trailing text.
+      const startIdx = txt.indexOf('{');
+      let jsonStr = txt;
+      if (startIdx !== -1) {
+        let depth = 0, endIdx = -1;
+        for (let i = startIdx; i < txt.length; i++) {
+          if (txt[i] === '{') depth++;
+          else if (txt[i] === '}') {
+            depth--;
+            if (depth === 0) { endIdx = i; break; }
+          }
+        }
+        if (endIdx !== -1) jsonStr = txt.slice(startIdx, endIdx + 1);
+      }
+      reading = safeJsonParse(jsonStr, null, 'tarot-cross llm parse');
+      if (reading) {
+        console.log('[tarot-cross] parsed keys:', Object.keys(reading), 'past has keys:', reading.past ? Object.keys(reading.past) : 'null');
+      }
     } catch (llmErr) {
       console.warn('[tarot-cross] LLM failed, using deterministic:', llmErr.message);
     }
 
-    // Fallback déterministe
+    // Fallback déterministe (format structuré pour matcher le format LLM)
     if (!reading) {
       reading = {
-        past: cards[0].isReversed ? cards[0].reversed : cards[0].upright,
-        present: cards[1].isReversed ? cards[1].reversed : cards[1].upright,
-        future: cards[2].isReversed ? cards[2].reversed : cards[2].upright,
-        synthesis: `${cards[0].archetype} → ${cards[1].archetype} → ${cards[2].archetype}. Le mouvement se fait de l'énergie ${cards[0].name} vers ${cards[2].name}.`,
+        past: {
+          symbol: `${cards[0].name} ${cards[0].isReversed ? 'renversée' : 'à l\'endroit'} — ${cards[0].archetype}.`,
+          reading: cards[0].isReversed ? cards[0].reversed : cards[0].upright,
+          advice: 'Prends un instant pour nommer ce que cette carte représente dans ta vie en ce moment.',
+          keywords: ['racine', cards[0].archetype.toLowerCase(), 'origine'],
+        },
+        present: {
+          symbol: `${cards[1].name} ${cards[1].isReversed ? 'renversée' : 'à l\'endroit'} — ${cards[1].archetype}.`,
+          reading: cards[1].isReversed ? cards[1].reversed : cards[1].upright,
+          advice: 'Écoute ce que ton corps te dit dans les prochaines 24h.',
+          keywords: ['maintenant', cards[1].archetype.toLowerCase(), 'tension'],
+        },
+        future: {
+          symbol: `${cards[2].name} ${cards[2].isReversed ? 'renversée' : 'à l\'endroit'} — ${cards[2].archetype}.`,
+          reading: cards[2].isReversed ? cards[2].reversed : cards[2].upright,
+          advice: 'Prépare-toi à accueillir ce mouvement plutôt que de le freiner.',
+          keywords: ['horizon', cards[2].archetype.toLowerCase(), 'mouvement'],
+        },
+        synthesis: {
+          filRouge: `${cards[0].archetype} → ${cards[1].archetype} → ${cards[2].archetype}. Le mouvement se fait de l'énergie ${cards[0].name} vers ${cards[2].name}.`,
+          aFaire: 'Tenir un journal de bord pendant 7 jours pour observer ce qui se répète.',
+          aLacher: 'L\'illusion que tu peux tout contrôler.',
+        },
         _deterministic: true,
       };
     }
