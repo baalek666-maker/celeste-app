@@ -791,21 +791,17 @@ function recordLLMFailure() {
 }
 
 async function callLLMWithRetry(messages, maxRetries = 3, maxTokens = 4096, extraBody = {}, timeoutMs = 45000, options = {}) {
-  // v14.1 — Garde coupe-circuit LLM côté user.
-  // Par défaut, `options.adminBypass = false` → si LLM_USER_ENABLED=false, on throw
-  // une erreur spéciale 'LLM_DISABLED' qui sera attrapée par les callers pour servir
-  // leur fallback déterministe (qui est déjà en place partout).
+  // v14.4 — Garde coupe-circuit LLM côté user.
+  // Par défaut, `options.adminBypass = false` → si LLM_USER_ENABLED=false, on RETOURNE
+  // un objet signal `{disabled: true}` au lieu de throw. Les callers testent `data?.disabled`
+  // et servent leur fallback déterministe. C'est moins de boilerplate qu'un try/catch LLM_DISABLED.
   // Si `adminBypass = true` (call admin), on appelle le LLM quoi qu'il arrive.
   if (!LLM_USER_ENABLED && !options.adminBypass) {
-    const err = new Error('LLM user-side disabled — fallback déterministe servi');
-    err.code = 'LLM_DISABLED';
-    throw err;
+    return { disabled: true, reason: 'LLM_USER_ENABLED=false' };
   }
-  // v11.5 — Circuit breaker : si on est en cooldown, throw immédiatement pour que la route serve son fallback.
+  // v11.5 — Circuit breaker : si on est en cooldown, on retourne aussi un signal.
   if (isLLMCircuitOpen() && !options.adminBypass) {
-    const err = new Error('LLM circuit open — fallback déterministe servi');
-    err.code = 'LLM_CIRCUIT_OPEN';
-    throw err;
+    return { disabled: true, reason: 'circuit_open' };
   }
   return withLLMMutex(async () => {
     let lastErr;
@@ -1151,6 +1147,21 @@ Réponds UNIQUEMENT avec le JSON.`;
     { role: 'system', content: systemPrompt },
     { role: 'user', content: userPrompt },
   ], 2, 4096); // P1 #E — 2048 trop juste pour JSON complet → 4096.
+
+  // v14.4 — Si LLM off ou erreur, on sert un résumé déterministe calculé
+  // localement à partir des vraies positions astro.
+  if (!data || !data.choices) {
+    const sun = natalPositions.sun?.sign || sign;
+    const moon = natalPositions.moon?.sign || 'équilibre';
+    const moodSeed = (natalPositions.moon?.degree || 0) + (transits.moon?.degree || 0);
+    return {
+      general: `L'énergie du jour croise ton soleil en ${sun} et ta lune en ${moon}. Accorde-toi un rythme doux, c'est le bon tempo aujourd'hui.`,
+      energie: ((moodSeed % 5) + 1),
+      mood:   ['curiosité', 'calme', 'élan', 'fougue', 'sérénité'][Math.floor(moodSeed) % 5],
+      luckyColor: ['bleu profond','or','rouge carmin','vert sauge','lavande','bordeaux','ivoire','turquoise'][Math.floor(moodSeed) % 8],
+    };
+  }
+
   const msg = data.choices?.[0]?.message || {};
   const content = msg.content || msg.reasoning_content || '';
   let cleaned = content.replace(/```json\s*/g, '').replace(/```\s*/g, '').trim();
@@ -1215,6 +1226,47 @@ Génère un horoscope PERSONNALISÉ en JSON strict:
 
 UNIQUEMENT le JSON, rien d'autre. Pas de markdown, pas de texte avant/après.`;
 
+  // v14.4 — Fallback déterministe (mécanisme d'illusion #4+#5) :
+  // Si le LLM est OFF (coupe-circuit) ou timeout/erreur, on génère un JSON
+  // local avec les VRAIES positions astro. Texte poématique mais reproductible
+  // par (natal × transits × date). Variables injectées : {today}, {sign},
+  // {sun_sign}, {moon_sign}, {venus_sign}, {mars_sign}. Le user reçoit un
+  // horoscope qui semble généré "maintenant" alors qu'il est calculé en 2 ms.
+  const fallback = () => {
+    const sun  = natalPositions.sun?.sign     || sign;
+    const moon = natalPositions.moon?.sign    || 'équilibre';
+    const ven  = natalPositions.venus?.sign   || 'équilibre';
+    const mar  = natalPositions.mars?.sign    || 'équilibre';
+    const ts   = transits.sun?.sign           || sun;
+    const tv   = transits.venus?.sign         || ven;
+    const tm   = transits.mars?.sign          || mar;
+    const moonInTransit = transits.moon?.sign || moon;
+    // Énergie : dérive lente basée sur la position lunaire du jour
+    const energyScore = ((moonInTransit.charCodeAt(0) + new Date().getDate()) % 5) + 1;
+    // Lucky number : dérivé de la date + signe, reproductible par jour
+    const luckyNum = ((new Date().getDate() * sun.charCodeAt(0)) % 98) + 1;
+    const colors = ['bleu profond', 'or', 'rouge carmin', 'vert sauge', 'lavande', 'bordeaux', 'ivoire', 'turquoise'];
+    const luckyColor = colors[(sun.charCodeAt(0) + new Date().getDate()) % colors.length];
+    // Mood : basé sur l'aspect Lune natale × Lune transit
+    const moods = ['curiosité vive', 'calme profond', 'élan créatif', 'fougue ardente', 'sérénité douce', 'intensité lucide'];
+    const mood = moods[(moonInTransit.charCodeAt(0) + moon.charCodeAt(0)) % moods.length];
+    return {
+      general: `Aujourd'hui, ton soleil en ${sun} rencontre le soleil en ${ts}. C'est une journée pour honorer ce qui te rend unique, ${today}. Prends un moment pour toi, sans culpabiliser.`,
+      amour:  `Vénus en ${ven} en transit dans ta maison intérieure invite à la douceur avec tes proches. Écoute plus que tu ne parles aujourd'hui, le courant passe mieux.`,
+      carriere: `Mars en ${tm} aiguise ton sens pratique. Une idée trotte dans ta tête depuis hier — écris-la avant ce soir.`,
+      energie: energyScore,
+      mood:   mood,
+      luckyNumber: luckyNum,
+      luckyColor:  luckyColor,
+    };
+  };
+
+  // v14.4 — Si LLM off, on sert directement le fallback. C'est le cas de 99%
+  // des requêtes en prod depuis le coupe-circuit.
+  if (!LLM_USER_ENABLED) {
+    return fallback();
+  }
+
   // v13.5 — fetch direct, max_tokens=3000 (le LLM consomme ~1500 tokens en reasoning même avec system prompt court)
   // + timeout=60s. enable_thinking:false peut être ignoré par l'API selon contexte.
   console.log(`[horoscope] LLM direct call START sign=${sign}`);
@@ -1247,8 +1299,8 @@ UNIQUEMENT le JSON, rien d'autre. Pas de markdown, pas de texte avant/après.`;
   const elapsed = ((Date.now() - t0) / 1000).toFixed(1);
   console.log(`[horoscope] LLM direct call HTTP ${response.status} in ${elapsed}s`);
   if (!response.ok) {
-    const errText = await response.text().catch(() => '');
-    throw new Error(`LLM direct ${response.status}: ${errText.slice(0, 200)}`);
+    console.warn(`[horoscope] LLM HTTP ${response.status}, serving fallback`);
+    return fallback();
   }
   const data = await response.json();
   console.log(`[horoscope] LLM usage: ${JSON.stringify(data.usage || {})}`);
@@ -1262,9 +1314,15 @@ UNIQUEMENT le JSON, rien d'autre. Pas de markdown, pas de texte avant/après.`;
   let cleaned = content.replace(/```json\s*/g, '').replace(/```\s*/g, '').trim();
   const jsonMatch = cleaned.match(/\{[\s\S]*\}/);
   if (!jsonMatch) {
-    throw new Error('No JSON in LLM response (content len=' + (content?.length || 0) + ')');
+    console.warn('[horoscope] No JSON in LLM response, serving fallback');
+    return fallback();
   }
-  return JSON.parse(jsonMatch[0]);
+  try {
+    return JSON.parse(jsonMatch[0]);
+  } catch (e) {
+    console.warn('[horoscope] JSON.parse failed, serving fallback:', e.message);
+    return fallback();
+  }
 }
 
 // ─── LLM Compatibility Generation ──────────────────────────
