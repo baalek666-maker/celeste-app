@@ -83,6 +83,13 @@ if (!JWT_SECRET || JWT_SECRET.length < 32) {
 const LLM_API_URL = process.env.LLM_API_URL || 'https://api.cheapestinference.com/v1/chat/completions';
 const LLM_API_KEY = process.env.LLM_API_KEY || '';
 const LLM_MODEL = process.env.LLM_MODEL || 'gpt-4o-mini';
+// v14.1 — Coupe-circuit LLM côté user.
+// Quand `false`, les requêtes user normales (sans X-Admin-Token) tombent sur le
+// fallback déterministe sans appeler le LLM. Seul un call admin peut forcer l'appel.
+// Objectif : budget LLM sous contrôle total — les users n'appellent JAMAIS le LLM
+// en temps réel. Le contenu est servi depuis les caches DB (daily_aspects_cache,
+// horoscope_personal_daily, natal_interpretations, daily_energy, etc.).
+const LLM_USER_ENABLED = (process.env.LLM_USER_ENABLED || 'false').toLowerCase() === 'true';
 const PORT = process.env.PORT || 3001;
 
 // CORS: en production, restreindre aux origines autorisées via CORS_ORIGIN (CSV).
@@ -779,9 +786,19 @@ function recordLLMFailure() {
   }
 }
 
-async function callLLMWithRetry(messages, maxRetries = 3, maxTokens = 4096, extraBody = {}, timeoutMs = 45000) {
+async function callLLMWithRetry(messages, maxRetries = 3, maxTokens = 4096, extraBody = {}, timeoutMs = 45000, options = {}) {
+  // v14.1 — Garde coupe-circuit LLM côté user.
+  // Par défaut, `options.adminBypass = false` → si LLM_USER_ENABLED=false, on throw
+  // une erreur spéciale 'LLM_DISABLED' qui sera attrapée par les callers pour servir
+  // leur fallback déterministe (qui est déjà en place partout).
+  // Si `adminBypass = true` (call admin), on appelle le LLM quoi qu'il arrive.
+  if (!LLM_USER_ENABLED && !options.adminBypass) {
+    const err = new Error('LLM user-side disabled — fallback déterministe servi');
+    err.code = 'LLM_DISABLED';
+    throw err;
+  }
   // v11.5 — Circuit breaker : si on est en cooldown, throw immédiatement pour que la route serve son fallback.
-  if (isLLMCircuitOpen()) {
+  if (isLLMCircuitOpen() && !options.adminBypass) {
     const err = new Error('LLM circuit open — fallback déterministe servi');
     err.code = 'LLM_CIRCUIT_OPEN';
     throw err;
