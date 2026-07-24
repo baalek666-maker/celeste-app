@@ -349,7 +349,7 @@ function TransitCard({
   const imageUrl = getTransitImage(aspect.transitPlanet, aspect.nature);
 
   return (
-    <div className="relative w-full h-[400px] max-h-[56vh] rounded-2xl overflow-hidden celeste-card animate-fade-in shadow-2xl">
+    <div className="relative w-full h-[460px] max-h-[64vh] rounded-2xl overflow-hidden celeste-card animate-fade-in shadow-2xl">
       {/* Image de fond (si dispo) ou fallback gradient */}
       {imageUrl ? (
         <div
@@ -367,70 +367,70 @@ function TransitCard({
         </div>
       )}
 
-      <div className="relative z-10 h-full flex flex-col p-5">
+      <div className="relative z-10 h-full flex flex-col p-4">
         {/* Top: glyphs + EXACT + counter */}
-        <div className="flex items-center justify-between mb-4">
-          <div className="flex items-center gap-2 text-3xl">
+        <div className="flex items-center justify-between mb-2">
+          <div className="flex items-center gap-1.5 text-2xl">
             <span title={aspect.transitPlanetFr} className="animate-glow drop-shadow-lg">{aspect.transitGlyph}</span>
             {aspect.transitRetrograde && <span className="text-xs text-amber-400 font-mono self-start">℞</span>}
-            <span className={`text-2xl ${style.text} drop-shadow-lg`}>{aspect.aspectGlyph}</span>
+            <span className={`text-xl ${style.text} drop-shadow-lg`}>{aspect.aspectGlyph}</span>
             <span title={aspect.natalPlanetFr} className="drop-shadow-lg">{aspect.natalGlyph}</span>
           </div>
           {aspect.exact && (
-            <span className="text-[10px] px-2 py-0.5 rounded-full bg-gold-500/40 text-gold-100 font-bold border border-gold-500/50 backdrop-blur-sm">
+            <span className="text-[9px] px-2 py-0.5 rounded-full bg-gold-500/40 text-gold-100 font-bold border border-gold-500/50 backdrop-blur-sm">
               EXACT
             </span>
           )}
         </div>
 
         {/* Hero emoji */}
-        <div className="flex justify-center mb-3">
-          <div className="w-16 h-16 rounded-full glass-gold flex items-center justify-center animate-glow backdrop-blur-sm">
-            <span className="text-3xl">{style.emoji}</span>
+        <div className="flex justify-center mb-2">
+          <div className="w-12 h-12 rounded-full glass-gold flex items-center justify-center animate-glow backdrop-blur-sm">
+            <span className="text-2xl">{style.emoji}</span>
           </div>
         </div>
 
         {/* Nature badge */}
-        <div className="flex justify-center mb-2">
-          <span className={`text-[10px] px-2.5 py-1 rounded-full bg-celeste-bg/50 ${style.text} font-semibold uppercase tracking-wider border ${style.border} backdrop-blur-sm`}>
+        <div className="flex justify-center mb-1.5">
+          <span className={`text-[9px] px-2 py-0.5 rounded-full bg-celeste-bg/50 ${style.text} font-semibold uppercase tracking-wider border ${style.border} backdrop-blur-sm`}>
             {style.emoji} {style.label}
           </span>
         </div>
 
         {/* Title */}
-        <h3 className="text-2xl font-bold text-center mb-2 text-cosmic-gradient leading-tight drop-shadow-lg">
+        <h3 className="text-xl font-bold text-center mb-1.5 text-cosmic-gradient leading-tight drop-shadow-lg">
           {makeHeroTitle(aspect.interpretation)}
         </h3>
 
         {/* Subtitle */}
-        <p className="text-sm text-celeste-text/90 text-center mb-3 leading-relaxed px-1 drop-shadow">
+        <p className="text-xs text-celeste-text/90 text-center mb-2 leading-snug px-1 drop-shadow line-clamp-3">
           {makeHeroSubtitle(aspect.interpretation)}
         </p>
 
         {/* Divider */}
-        <div className="flex items-center gap-3 mb-3">
+        <div className="flex items-center gap-2 mb-2">
           <div className="flex-1 h-px bg-gradient-to-r from-transparent via-cosmic-500/40 to-transparent" />
-          <span className="text-cosmic-400 text-xs">★</span>
+          <span className="text-cosmic-400 text-[10px]">★</span>
           <div className="flex-1 h-px bg-gradient-to-r from-transparent via-cosmic-500/40 to-transparent" />
         </div>
 
         {/* Conseil */}
         {aspect.conseil && (
-          <div className="rounded-xl bg-celeste-bg/40 border border-cosmic-500/30 p-2.5 mb-2 backdrop-blur-sm">
-            <p className="text-xs text-celeste-text/90 flex items-start gap-2">
-              <span className="not-italic text-base flex-shrink-0">💡</span>
-              <span className="italic">{aspect.conseil}</span>
+          <div className="rounded-lg bg-celeste-bg/40 border border-cosmic-500/30 p-2 mb-2 backdrop-blur-sm">
+            <p className="text-[11px] text-celeste-text/90 flex items-start gap-1.5">
+              <span className="not-italic text-sm flex-shrink-0">💡</span>
+              <span className="italic line-clamp-2">{aspect.conseil}</span>
             </p>
           </div>
         )}
 
         {/* Maison (petite ligne) */}
         {house && (
-          <div className="rounded-xl bg-celeste-bg/40 border border-celeste-primary/25 p-2 mb-3 backdrop-blur-sm">
-            <p className="text-xs text-celeste-text/80 flex items-center gap-2">
-              <span className="text-base">{house.icon}</span>
+          <div className="rounded-lg bg-celeste-bg/40 border border-celeste-primary/25 p-1.5 mb-2 backdrop-blur-sm">
+            <p className="text-[11px] text-celeste-text/80 flex items-center gap-1.5">
+              <span>{house.icon}</span>
               <span className="font-semibold">Maison {house.num}</span>
-              <span className="text-celeste-text/60">— {house.theme}</span>
+              <span className="text-celeste-text/60 truncate">— {house.theme}</span>
             </p>
           </div>
         )}
@@ -439,31 +439,32 @@ function TransitCard({
         <div className="flex-1" />
 
         {/* Actions Tinder-like : SAVE (gauche) | SHARE (centre) | SKIP (droite) */}
-        <div className="flex items-center justify-around gap-3 mb-2">
+        <div className="flex items-center justify-around gap-2">
           <button
             onClick={onSave}
             disabled={isSaved}
-            className={`w-12 h-12 rounded-full glass border-2 ${isSaved ? 'border-emerald-500/50 opacity-50' : 'border-emerald-500/60 hover:border-emerald-400'} flex items-center justify-center transition-all active:scale-90`}
+            className={`w-11 h-11 rounded-full glass border-2 ${isSaved ? 'border-emerald-500/50 opacity-50' : 'border-emerald-500/60 hover:border-emerald-400'} flex items-center justify-center transition-all active:scale-90`}
             aria-label="Sauvegarder (swipe droite long)"
           >
-            <span className="text-xl">{isSaved ? '✓' : '⭐'}</span>
+            <span className="text-lg">{isSaved ? '✓' : '⭐'}</span>
           </button>
           <button
             onClick={onShare}
-            className="w-14 h-14 rounded-full bg-gradient-to-br from-cosmic-500 to-cosmic-700 flex items-center justify-center transition-all active:scale-90 shadow-lg shadow-cosmic-900/60"
+            className="w-13 h-13 rounded-full bg-gradient-to-br from-cosmic-500 to-cosmic-700 flex items-center justify-center transition-all active:scale-90 shadow-lg shadow-cosmic-900/60"
+            style={{width: '52px', height: '52px'}}
             aria-label="Partager (swipe haut)"
           >
             <span className="text-2xl">📤</span>
           </button>
           <button
             onClick={onSkip}
-            className="w-12 h-12 rounded-full glass border-2 border-rose-500/60 hover:border-rose-400 flex items-center justify-center transition-all active:scale-90"
+            className="w-11 h-11 rounded-full glass border-2 border-rose-500/60 hover:border-rose-400 flex items-center justify-center transition-all active:scale-90"
             aria-label="Passer (swipe gauche long)"
           >
-            <span className="text-xl">✕</span>
+            <span className="text-lg">✕</span>
           </button>
         </div>
-        <div className="flex items-center justify-around text-[9px] text-celeste-text/40 uppercase tracking-wider">
+        <div className="flex items-center justify-around text-[8px] text-celeste-text/40 uppercase tracking-wider mt-1">
           <span>Sauver</span>
           <span>Partager</span>
           <span>Passer</span>
@@ -479,7 +480,7 @@ function HouseCard({
   const imageUrl = getHouseImage(house.transitPlanets, 'neutre');
 
   return (
-    <div className="relative w-full h-[500px] max-h-[70vh] rounded-2xl overflow-hidden celeste-card animate-fade-in shadow-2xl">
+    <div className="relative w-full h-[460px] max-h-[64vh] rounded-2xl overflow-hidden celeste-card animate-fade-in shadow-2xl">
       {imageUrl ? (
         <div
           className="absolute inset-0 bg-cover bg-center"
