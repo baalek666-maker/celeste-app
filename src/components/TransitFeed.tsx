@@ -112,21 +112,26 @@ export default function TransitFeed({
   const [swipeDx, setSwipeDx] = useState(0); // UI live transform (état OK pour render)
   const [isDragging, setIsDragging] = useState(false);
   const containerRef = useRef<HTMLDivElement>(null);
-  // Refs pour éviter re-bind (les valeurs live ne déclenchent PAS de re-render)
+  // Refs miroirs pour accès dans le handler (les valeurs live ne déclenchent PAS de re-render)
   const startX = useRef<number | null>(null);
   const startY = useRef<number | null>(null);
   const lastDx = useRef(0);
   const lastDy = useRef(0);
   const startTime = useRef(0);
+  // Refs miroirs pour activeIndex/cards — on les update à chaque render
+  const activeIndexRef = useRef(0);
+  const cardsRef = useRef<CardData[]>([]);
+  useEffect(() => { activeIndexRef.current = activeIndex; }, [activeIndex]);
+  useEffect(() => { cardsRef.current = cards; }, [cards]);
 
-  // Swipe horizontal handlers (Tinder-like) — bound UNE SEULE FOIS au mount
+  // Swipe horizontal handlers (Tinder-like) — bind UNE SEULE FOIS au mount
   useEffect(() => {
     const el = containerRef.current;
     if (!el) return;
 
-    const SWIPE_THRESHOLD = 140;       // swipe "normal" : 140px
-    const LONG_SWIPE_THRESHOLD = 260;  // swipe "long" : 260px (= action skip/save)
-    const VERTICAL_SWIPE_THRESHOLD = 160; // swipe haut : 160px
+    const SWIPE_THRESHOLD = 100;       // swipe "normal" : 100px (équilibré)
+    const LONG_SWIPE_THRESHOLD = 200;  // swipe "long" : 200px (= action skip/save)
+    const VERTICAL_SWIPE_THRESHOLD = 140; // swipe haut : 140px
     const MAX_DRAG = 120;              // cap visuel du drag (le reste suit le geste sans bouger la carte)
 
     const onTouchStart = (e: TouchEvent) => {
@@ -160,14 +165,18 @@ export default function TransitFeed({
       setIsDragging(false);
       setSwipeDx(0);
 
-      // Bloque les taps rapides (< 200ms avec peu de mouvement) pour éviter les accidents
-      if (elapsed < 200 && Math.abs(dx) < 20 && Math.abs(dy) < 20) return;
+      // Bloque les taps rapides (< 150ms avec très peu de mouvement) pour éviter les accidents
+      if (elapsed < 150 && Math.abs(dx) < 10 && Math.abs(dy) < 10) return;
+
+      // Lire les valeurs LIVE via refs
+      const liveActive = activeIndexRef.current;
+      const liveCards = cardsRef.current;
 
       // Swipe horizontal prioritaire (Tinder-like)
       if (Math.abs(dx) > Math.abs(dy)) {
-        if (dx < -SWIPE_THRESHOLD && activeIndex < cards.length - 1) {
+        if (dx < -SWIPE_THRESHOLD && liveActive < liveCards.length - 1) {
           setActiveIndex(i => i + 1); // swipe gauche normal = suivant
-        } else if (dx > SWIPE_THRESHOLD && activeIndex > 0) {
+        } else if (dx > SWIPE_THRESHOLD && liveActive > 0) {
           setActiveIndex(i => i - 1); // swipe droite normal = précédent
         } else if (dx < -LONG_SWIPE_THRESHOLD) {
           // long swipe gauche = skip
@@ -177,9 +186,9 @@ export default function TransitFeed({
           handleSave();
         }
       } else {
-        // Swipe vertical (haut = share) — seulement si vraiment vertical (dy < 0 et |dy| > |dx|*2)
+        // Swipe vertical (haut = share) — seulement si vraiment vertical (dy < 0 et |dy| > |dx|*1.5)
         if (dy < -VERTICAL_SWIPE_THRESHOLD && Math.abs(dy) > Math.abs(dx) * 1.5) {
-          setShareForCard(cards[activeIndex]);
+          setShareForCard(liveCards[liveActive]);
         }
       }
     };
@@ -193,7 +202,7 @@ export default function TransitFeed({
       el.removeEventListener('touchend', onTouchEnd);
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []); // bind UNE seule fois — valeurs accédées via state (activeIndex, cards) et refs
+  }, []); // bind UNE seule fois — valeurs accédées via refs miroirs
 
   // Lock body scroll
   useEffect(() => {
@@ -265,7 +274,7 @@ export default function TransitFeed({
       {/* Cards container (snap-x horizontal, Tinder-like) */}
       <div
         ref={containerRef}
-        className="absolute inset-0 flex items-center justify-center pt-20 pb-20 overflow-hidden"
+        className="absolute inset-0 flex items-center justify-center pt-24 pb-24 overflow-hidden"
       >
         <div
           className="relative w-full h-full"
@@ -388,7 +397,7 @@ function TransitCard({
   const imageUrl = getTransitImage(aspect.transitPlanet, aspect.nature);
 
   return (
-    <div className="relative w-full max-w-sm h-[520px] max-h-[70vh] rounded-3xl overflow-hidden celeste-card animate-fade-in shadow-2xl">
+    <div className="relative w-full max-w-sm h-[480px] max-h-[62vh] rounded-3xl overflow-hidden celeste-card animate-fade-in shadow-2xl">
       {/* Image de fond (si dispo) ou fallback gradient */}
       {imageUrl ? (
         <div
@@ -518,7 +527,7 @@ function HouseCard({
   const imageUrl = getHouseImage(house.transitPlanets, 'neutre');
 
   return (
-    <div className="relative w-full max-w-sm h-[520px] max-h-[70vh] rounded-3xl overflow-hidden celeste-card animate-fade-in shadow-2xl">
+    <div className="relative w-full max-w-sm h-[480px] max-h-[62vh] rounded-3xl overflow-hidden celeste-card animate-fade-in shadow-2xl">
       {imageUrl ? (
         <div
           className="absolute inset-0 bg-cover bg-center"
