@@ -349,7 +349,7 @@ function TransitCard({
   const imageUrl = getTransitImage(aspect.transitPlanet, aspect.nature);
 
   return (
-    <div className="relative w-full h-[440px] max-h-[60vh] rounded-2xl overflow-hidden celeste-card animate-fade-in shadow-2xl">
+    <div className="relative w-full h-[400px] max-h-[56vh] rounded-2xl overflow-hidden celeste-card animate-fade-in shadow-2xl">
       {/* Image de fond (si dispo) ou fallback gradient */}
       {imageUrl ? (
         <div
