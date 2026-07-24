@@ -129,9 +129,11 @@ export default function TransitFeed({
     const el = containerRef.current;
     if (!el) return;
 
-    const SWIPE_THRESHOLD = 100;       // swipe "normal" : 100px (équilibré)
-    const LONG_SWIPE_THRESHOLD = 200;  // swipe "long" : 200px (= action skip/save)
-    const VERTICAL_SWIPE_THRESHOLD = 140; // swipe haut : 140px
+    const SWIPE_THRESHOLD = 140;       // swipe "lent" : il faut 140px de déplacement
+    const VELOCITY_THRESHOLD = 0.4;    // swipe "rapide" : 0.4 px/ms = traverse l'écran en 1s
+    const LONG_SWIPE_THRESHOLD = 260;  // swipe "long" : 260px (= action skip/save)
+    const LONG_VELOCITY = 0.8;        // swipe très rapide = action
+    const VERTICAL_SWIPE_THRESHOLD = 160; // swipe haut : 160px
     const MAX_DRAG = 120;              // cap visuel du drag (le reste suit le geste sans bouger la carte)
 
     const onTouchStart = (e: TouchEvent) => {
@@ -165,30 +167,41 @@ export default function TransitFeed({
       setIsDragging(false);
       setSwipeDx(0);
 
-      // Bloque les taps rapides (< 150ms avec très peu de mouvement) pour éviter les accidents
-      if (elapsed < 150 && Math.abs(dx) < 10 && Math.abs(dy) < 10) return;
+      // Bloque les taps statiques (< 200ms avec très peu de mouvement) pour éviter les accidents
+      if (elapsed < 200 && Math.abs(dx) < 10 && Math.abs(dy) < 10) return;
+
+      // Calcul de vélocité (px/ms)
+      const velocityX = Math.abs(dx) / Math.max(elapsed, 1);
+      const velocityY = Math.abs(dy) / Math.max(elapsed, 1);
 
       // Lire les valeurs LIVE via refs
       const liveActive = activeIndexRef.current;
       const liveCards = cardsRef.current;
 
       // Swipe horizontal prioritaire (Tinder-like)
+      // Combine déplacement OU vélocité : un swipe lent ET court ne déclenche PAS,
+      // un swipe rapide (même sur 50px) déclenche.
       if (Math.abs(dx) > Math.abs(dy)) {
-        if (dx < -SWIPE_THRESHOLD && liveActive < liveCards.length - 1) {
-          setActiveIndex(i => i + 1); // swipe gauche normal = suivant
-        } else if (dx > SWIPE_THRESHOLD && liveActive > 0) {
-          setActiveIndex(i => i - 1); // swipe droite normal = précédent
-        } else if (dx < -LONG_SWIPE_THRESHOLD) {
+        const isLongSwipe = Math.abs(dx) > LONG_SWIPE_THRESHOLD || velocityX > LONG_VELOCITY;
+        const isNormalSwipe = Math.abs(dx) > SWIPE_THRESHOLD || velocityX > VELOCITY_THRESHOLD;
+
+        if (dx < 0 && isLongSwipe) {
           // long swipe gauche = skip
           handleSkip();
-        } else if (dx > LONG_SWIPE_THRESHOLD) {
+        } else if (dx > 0 && isLongSwipe) {
           // long swipe droite = save
           handleSave();
+        } else if (dx < 0 && isNormalSwipe && liveActive < liveCards.length - 1) {
+          setActiveIndex(i => i + 1); // swipe gauche normal = suivant
+        } else if (dx > 0 && isNormalSwipe && liveActive > 0) {
+          setActiveIndex(i => i - 1); // swipe droite normal = précédent
         }
       } else {
-        // Swipe vertical (haut = share) — seulement si vraiment vertical (dy < 0 et |dy| > |dx|*1.5)
-        if (dy < -VERTICAL_SWIPE_THRESHOLD && Math.abs(dy) > Math.abs(dx) * 1.5) {
-          setShareForCard(liveCards[liveActive]);
+        // Swipe vertical (haut = share) — seulement si vraiment vertical ET rapide ou long
+        if (dy < 0 && Math.abs(dy) > Math.abs(dx) * 1.5) {
+          if (Math.abs(dy) > VERTICAL_SWIPE_THRESHOLD || velocityY > VELOCITY_THRESHOLD) {
+            setShareForCard(liveCards[liveActive]);
+          }
         }
       }
     };
