@@ -21,6 +21,10 @@ const Settings = lazy(() => import('./screens/Settings').then(m => ({ default: m
 const Explorer = lazy(() => import('./screens/Explorer').then(m => ({ default: m.Explorer })));
 const Onboarding = lazy(() => import('./screens/Onboarding').then(m => ({ default: m.Onboarding })));
 const CompatRedeem = lazy(() => import('./screens/CompatRedeem').then(m => ({ default: m.CompatRedeem })));
+// v15.0 — Onboarding importé en direct (plus de lazy) pour fix le removeChild au mount
+// Le chunk lazy entrait en conflit avec le unmount de Home, causant
+// "Failed to execute 'removeChild' on 'Node'" capturé par ErrorBoundary
+import { Onboarding as OnboardingDirect } from './screens/Onboarding';
 
 export type Screen = 'landing' | 'auth' | 'onboarding' | 'home' | 'chart' | 'horoscope' | 'compatibility' | 'compat-redeem' | 'journal' | 'explorer' | 'paywall' | 'settings';
 
@@ -387,13 +391,11 @@ export function App() {
   }, []);
 
   // Route to onboarding if no birth data
-  // [DEBUG P0] useEffect qui force onboarding supprimé pour debug
-  // Ancien code :
-  // useEffect(() => {
-  //   if (isAuthed && !user.birthData) {
-  //     setScreen('onboarding');
-  //   }
-  // }, [isAuthed, user.birthData]);
+  useEffect(() => {
+    if (isAuthed && !user.birthData) {
+      setScreen('onboarding');
+    }
+  }, [isAuthed, user.birthData]);
 
   // Safety net: if we have birthData but no natalChart (or the cached chart
   // is stale relative to a change in city/timezone without changing date+time),
@@ -518,10 +520,13 @@ export function App() {
           setUser(updated);
           saveUser(updated);
           setIsAuthed(true);
-          // CRITICAL: route to home after successful login.
+          // CRITICAL: route after successful login.
           // Without this, screen stays at 'auth' and the main content
           // area renders an empty div (only cosmic-bg visible = black screen).
-          setScreen('home');
+          // v15.0 — Route to onboarding if no birthData, home otherwise.
+          // This avoids the removeChild race with the useEffect at line 390
+          // that also routes to onboarding (double setState = fiber conflict).
+          setScreen(updated.birthData ? 'home' : 'onboarding');
         }} />
       );
     }
@@ -540,7 +545,7 @@ export function App() {
     if (!user.birthData) {
       return (
         <Suspense fallback={<Splash />}>
-          <Onboarding onComplete={(u) => {
+          <OnboardingDirect onComplete={(u) => {
             setUser(u);
             saveUser(u);
             if (isGuest) {
