@@ -221,7 +221,7 @@ export default function TransitFeed({
       {/* Cards container — scroll-snap horizontal CSS natif, pas de transform JS */}
       <div
         ref={containerRef}
-        className="absolute inset-0 pt-16 pb-20 overflow-x-auto overflow-y-hidden snap-x snap-mandatory"
+        className="absolute inset-0 pt-28 pb-20 overflow-x-auto overflow-y-hidden snap-x snap-mandatory"
         style={{ scrollbarWidth: 'none', msOverflowStyle: 'none', WebkitOverflowScrolling: 'touch' } as React.CSSProperties}
       >
         <div className="flex items-center px-[calc(50vw-140px)] py-4" style={{ gap: 0 }}>
@@ -349,7 +349,7 @@ function TransitCard({
   const imageUrl = getTransitImage(aspect.transitPlanet, aspect.nature);
 
   return (
-    <div className="relative w-full h-[500px] max-h-[70vh] rounded-2xl overflow-hidden celeste-card animate-fade-in shadow-2xl">
+    <div className="relative w-full h-[440px] max-h-[60vh] rounded-2xl overflow-hidden celeste-card animate-fade-in shadow-2xl">
       {/* Image de fond (si dispo) ou fallback gradient */}
       {imageUrl ? (
         <div
