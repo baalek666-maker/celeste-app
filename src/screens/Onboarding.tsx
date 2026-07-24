@@ -158,7 +158,7 @@ export function Onboarding({ onComplete }: { onComplete: (u: User) => void }) {
     </div>,
 
     // Step 1: Date + Time of birth (merged — was 2 separate steps)
-    <div key="1" className="flex flex-col items-center justify-center min-h-screen px-8 animate-fade-in relative">
+    <div key="1" className="flex flex-col items-center justify-center min-h-screen px-8 pt-28 pb-8 animate-fade-in relative">
       <ProgressBar current={1} />
       <BackButton to={0} />
       <p className="text-gold-400 text-sm uppercase tracking-widest mb-3">Étape 1 sur 2</p>
@@ -167,13 +167,19 @@ export function Onboarding({ onComplete }: { onComplete: (u: User) => void }) {
         La position des planètes change chaque jour, chaque heure. Ta date et l'heure de naissance donnent ton Ascendant.
       </p>
 
-      {/* Date input */}
+      {/* Date input — v15.1 : label au-dessus (les input[type=date] natives Android affichent leur propre format, pas de placeholder custom) */}
+      <label className="w-full max-w-xs mb-2 text-night-400 text-xs uppercase tracking-wider text-left">
+        Ta date de naissance
+      </label>
       <input
         type="date" value={date} onChange={e => setDate(e.target.value)}
         className="w-full max-w-xs py-4 px-4 rounded-2xl glass border border-night-700 text-night-100 text-lg text-center focus:outline-none focus:border-cosmic-500 transition-colors mb-3"
       />
 
       {/* Time input + unknown toggle */}
+      <label className="w-full max-w-xs mb-2 text-night-400 text-xs uppercase tracking-wider text-left">
+        Ton heure de naissance
+      </label>
       <button
         onClick={() => { setTimeUnknown(!timeUnknown); if (!timeUnknown) setTime(''); }}
         className={`w-full max-w-xs mb-3 py-3 rounded-2xl border text-sm font-medium transition-all ${timeUnknown ? 'glass border-cosmic-500 text-cosmic-300' : 'glass border-night-700 text-night-300 hover:border-cosmic-500/50'}`}
