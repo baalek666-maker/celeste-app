@@ -181,7 +181,7 @@ export default function TransitFeed({
       {/* Cards container (snap-x horizontal, Tinder-like) */}
       <div
         ref={containerRef}
-        className="absolute inset-0 flex items-center justify-center pt-24 pb-24 overflow-hidden"
+        className="absolute inset-0 flex items-center justify-center pt-16 pb-20 overflow-hidden"
       >
         <div
           className="relative w-full h-full"
@@ -194,8 +194,10 @@ export default function TransitFeed({
             const isOrphanSection = idx === orphanStartIndex && orphanHouses.length > 0;
             const offset = idx - activeIndex;
             // Calcul de l'opacité et scale pour effet 3D
-            const opacity = Math.max(0.4, 1 - Math.abs(offset) * 0.3);
-            const scale = Math.max(0.85, 1 - Math.abs(offset) * 0.05);
+            // Cartes voisines (±1) : opacity 0.5, scale 0.92
+            // Au-delà : invisible (opacity 0) pour ne pas surcharger
+            const opacity = Math.abs(offset) === 0 ? 1 : Math.abs(offset) === 1 ? 0.5 : 0;
+            const scale = Math.abs(offset) === 0 ? 1 : 0.92;
 
             return (
               <div
@@ -316,7 +318,7 @@ function TransitCard({
   const imageUrl = getTransitImage(aspect.transitPlanet, aspect.nature);
 
   return (
-    <div className="relative w-full max-w-sm h-[480px] max-h-[62vh] rounded-3xl overflow-hidden celeste-card animate-fade-in shadow-2xl">
+    <div className="relative w-full max-w-sm h-[440px] max-h-[58vh] rounded-3xl overflow-hidden celeste-card animate-fade-in shadow-2xl">
       {/* Image de fond (si dispo) ou fallback gradient */}
       {imageUrl ? (
         <div
@@ -446,7 +448,7 @@ function HouseCard({
   const imageUrl = getHouseImage(house.transitPlanets, 'neutre');
 
   return (
-    <div className="relative w-full max-w-sm h-[480px] max-h-[62vh] rounded-3xl overflow-hidden celeste-card animate-fade-in shadow-2xl">
+    <div className="relative w-full max-w-sm h-[440px] max-h-[58vh] rounded-3xl overflow-hidden celeste-card animate-fade-in shadow-2xl">
       {imageUrl ? (
         <div
           className="absolute inset-0 bg-cover bg-center"
