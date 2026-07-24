@@ -212,7 +212,7 @@ export function Onboarding({ onComplete }: { onComplete: (u: User) => void }) {
     // Fric-#3 — Ajout d'un raccourci "Je préciserai plus tard" qui prend Paris
     // comme défaut pour réduire l'abandon. Le user pourra le changer plus tard
     // dans Settings > Profil.
-    <div key="2" className="flex flex-col items-center justify-center min-h-screen px-8 animate-fade-in relative">
+    <div key="2" className="flex flex-col items-center justify-center min-h-screen px-8 pt-28 pb-8 animate-fade-in relative">
       <ProgressBar current={2} />
       <BackButton to={1} />
       <p className="text-gold-400 text-sm uppercase tracking-widest mb-3">Étape 2 sur 2</p>
