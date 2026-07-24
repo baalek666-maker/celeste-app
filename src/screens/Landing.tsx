@@ -299,7 +299,7 @@ export function Landing({ onStart, onLogin, onGuest }: LandingProps) {
               Économique
             </span>
             <p className="text-night-400 text-xs uppercase tracking-wider mb-2">Année</p>
-            <p className="text-gold-400 text-2xl font-bold font-display">39,99 €</p>
+            <p className="text-gold-400 text-2xl font-bold font-display">40 €</p>
           </div>
         </div>
       </section>
