@@ -110,6 +110,16 @@ export default function TransitFeed({
   const [shareForCard, setShareForCard] = useState<CardData | null>(null);
   const [savedAspects, setSavedAspects] = useState<Set<string>>(new Set());
   const containerRef = useRef<HTMLDivElement>(null);
+  const cardsRef = useRef<(HTMLDivElement | null)[]>([]);
+
+  // Scroll vers la carte (utilisé par les flèches et les dots)
+  const scrollToCard = (idx: number) => {
+    const el = cardsRef.current[idx];
+    if (el && containerRef.current) {
+      el.scrollIntoView({ behavior: 'smooth', block: 'center', inline: 'center' });
+      setActiveIndex(idx);
+    }
+  };
 
   // Lock body scroll
   useEffect(() => {
@@ -118,11 +128,41 @@ export default function TransitFeed({
     return () => { document.body.style.overflow = prev; };
   }, []);
 
+  // Sync activeIndex avec le scroll natif (quand l'user swipe à la main)
+  useEffect(() => {
+    const container = containerRef.current;
+    if (!container) return;
+    let scrollEndTimer: ReturnType<typeof setTimeout> | null = null;
+    const onScroll = () => {
+      if (scrollEndTimer) clearTimeout(scrollEndTimer);
+      scrollEndTimer = setTimeout(() => {
+        // Trouve la carte la plus proche du centre du container
+        const containerRect = container.getBoundingClientRect();
+        const centerX = containerRect.left + containerRect.width / 2;
+        let closestIdx = 0;
+        let closestDist = Infinity;
+        cardsRef.current.forEach((el, idx) => {
+          if (!el) return;
+          const r = el.getBoundingClientRect();
+          const cardCenterX = r.left + r.width / 2;
+          const dist = Math.abs(cardCenterX - centerX);
+          if (dist < closestDist) {
+            closestDist = dist;
+            closestIdx = idx;
+          }
+        });
+        setActiveIndex(closestIdx);
+      }, 100);
+    };
+    container.addEventListener('scroll', onScroll, { passive: true });
+    return () => container.removeEventListener('scroll', onScroll);
+  }, []);
+
   // Keyboard navigation
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
-      if (e.key === 'ArrowRight' && activeIndex < cards.length - 1) setActiveIndex(i => i + 1);
-      if (e.key === 'ArrowLeft' && activeIndex > 0) setActiveIndex(i => i - 1);
+      if (e.key === 'ArrowRight') scrollToCard(Math.min(activeIndex + 1, cards.length - 1));
+      if (e.key === 'ArrowLeft') scrollToCard(Math.max(activeIndex - 1, 0));
       if (e.key === 'ArrowUp') setShareForCard(cards[activeIndex]);
       if (e.key === 'Escape') onClose();
     };
@@ -178,19 +218,13 @@ export default function TransitFeed({
         <div className="w-12" />
       </div>
 
-      {/* Cards container — un seul transform parent, enfants côte à côte en flex */}
+      {/* Cards container — scroll-snap horizontal CSS natif, pas de transform JS */}
       <div
         ref={containerRef}
-        className="absolute inset-0 flex items-center justify-center pt-16 pb-20 overflow-hidden"
+        className="absolute inset-0 pt-16 pb-20 overflow-x-auto overflow-y-hidden snap-x snap-mandatory"
+        style={{ scrollbarWidth: 'none', msOverflowStyle: 'none', WebkitOverflowScrolling: 'touch' } as React.CSSProperties}
       >
-        <div
-          className="flex"
-          style={{
-            transform: `translateX(calc(50% - ${activeIndex * 100}% - ${activeIndex * 20}px))`,
-            transition: 'transform 0.4s cubic-bezier(0.25, 0.46, 0.45, 0.94)',
-            gap: '20px',
-          }}
-        >
+        <div className="flex items-center px-[calc(50vw-180px)] py-4" style={{ gap: 0 }}>
           {cards.map((card, idx) => {
             const isOrphanSection = idx === orphanStartIndex && orphanHouses.length > 0;
             const isActive = idx === activeIndex;
@@ -198,9 +232,11 @@ export default function TransitFeed({
             return (
               <div
                 key={idx}
-                className="flex-shrink-0 flex items-center justify-center"
+                ref={el => { cardsRef.current[idx] = el; }}
+                className="snap-center flex-shrink-0 flex items-center justify-center"
                 style={{
-                  width: 'min(360px, calc(100vw - 40px))',
+                  width: '360px',
+                  marginRight: idx < cards.length - 1 ? '20px' : '0',
                   opacity: isActive ? 1 : 0.4,
                   transition: 'opacity 0.3s',
                 }}
@@ -242,7 +278,7 @@ export default function TransitFeed({
           {cards.map((_, idx) => (
             <button
               key={idx}
-              onClick={() => setActiveIndex(idx)}
+              onClick={() => scrollToCard(idx)}
               aria-label={`Carte ${idx + 1}`}
               className={`transition-all rounded-full ${
                 idx === activeIndex
@@ -259,7 +295,7 @@ export default function TransitFeed({
 
       {/* Flèches ← → cliquables (gauche/droite) */}
       <button
-        onClick={() => activeIndex > 0 && setActiveIndex(i => i - 1)}
+        onClick={() => scrollToCard(Math.max(activeIndex - 1, 0))}
         disabled={activeIndex === 0}
         aria-label="Carte précédente"
         className={`absolute left-2 top-1/2 -translate-y-1/2 z-20 w-12 h-12 rounded-full glass border border-cosmic-500/40 backdrop-blur-md flex items-center justify-center transition-all active:scale-90 ${
@@ -269,7 +305,7 @@ export default function TransitFeed({
         <span className="text-2xl text-celeste-text/90">‹</span>
       </button>
       <button
-        onClick={() => activeIndex < cards.length - 1 && setActiveIndex(i => i + 1)}
+        onClick={() => scrollToCard(Math.min(activeIndex + 1, cards.length - 1))}
         disabled={activeIndex === cards.length - 1}
         aria-label="Carte suivante"
         className={`absolute right-2 top-1/2 -translate-y-1/2 z-20 w-12 h-12 rounded-full glass border border-cosmic-500/40 backdrop-blur-md flex items-center justify-center transition-all active:scale-90 ${
