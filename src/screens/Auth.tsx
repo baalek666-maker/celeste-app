@@ -188,6 +188,7 @@ export function Auth({ onSuccess }: { onSuccess: (user: any) => void }) {
             aria-label="Se connecter avec Apple (disponible sur iOS)"
             title="Sign in with Apple — disponible sur l'app iOS"
             className="w-full py-3.5 rounded-2xl bg-black/60 text-white/80 font-semibold flex items-center justify-center gap-2 hover:bg-black/80 transition-all active:scale-[0.99] disabled:opacity-50 cursor-not-allowed"
+            data-build="v60-sw-bust"
           >
             <svg width="18" height="18" viewBox="0 0 24 24" fill="white" aria-hidden="true">
               <path d="M17.05 20.28c-.98.95-2.05.8-3.08.35-1.09-.46-2.09-.48-3.24 0-1.44.62-2.2.44-3.06-.35C2.79 15.25 3.51 7.59 9.05 7.31c1.35.07 2.29.74 3.08.8 1.18-.24 2.31-.93 3.57-.84 1.51.12 2.65.72 3.4 1.8-3.12 1.87-2.38 5.98.48 7.13-.57 1.5-1.31 2.99-2.54 4.09l.01-.01zM12 7.25c-.15-2.6 1.92-4.86 4.4-5.04.12 2.66-2.43 4.96-4.4 5.04z"/>

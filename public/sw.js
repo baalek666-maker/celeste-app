@@ -1,53 +1,32 @@
-// Celeste Service Worker — Push notifications + offline cache (P1 + P9)
-// Architecture:
-//   - push: reçoit les notifications du serveur (cron quotidien + re-engagement)
-//   - notificationclick: ouvre l'app sur la bonne route
-//   - fetch: stale-while-revalidate pour les assets statiques (offline-capable)
+// Celeste Service Worker — Push ONLY (no caching, v60)
+//
+// v60 — KILL SWITCH FINAL.
+// Le SW précédent (v50) avait deux handlers `fetch` et continuait de cacher
+// le bundle JS, ce qui causait le bug removeChild sur Android (user gardait
+// l'ancien bundle en cache). Ce SW NE FAIT QUE push. Plus aucun fetch, plus
+// aucun cache, plus aucun offline.
 
-const CACHE_VERSION = 'celeste-v50';  // bumped v15.7.10: suppression lazy() screens (fix removeChild prod)
-const STATIC_CACHE = `${CACHE_VERSION}-static`;
-const RUNTIME_CACHE = `${CACHE_VERSION}-runtime`;
-
-// Assets statiques à pré-cacher pour le mode offline
-const PRECACHE_URLS = [
-  '/',
-  '/index.html',
-  '/manifest.json',
-  '/icons/icon-192.png',
-  '/icons/icon-512.png',
-  '/icons/apple-touch-icon.png',
-];
-
-// v14.7.4 — KILL SWITCH : ce SW s'auto-désinstalle immédiatement.
-// Raison : après 11 versions bumpées, certains navigateurs Android gardent
-// encore le bundle JS v9 ou v10 en cache. Plutôt que de continuer à bump,
-// on désinstalle complètement le SW et on désactive le pré-cache. L'app continue
-// de marcher normalement (l'API et les assets sont servis par le serveur).
-// Si on veut réactiver un SW plus tard, il faudra une refonte complète du caching.
 self.addEventListener('install', (event) => {
   event.waitUntil(
-    self.skipWaiting().then(() => self.unregister()).catch(() => undefined)
+    self.skipWaiting()
+      .then(() => self.unregister())
+      .catch(() => undefined)
   );
 });
 
 self.addEventListener('activate', (event) => {
   event.waitUntil(
     caches.keys()
-      .then((keys) => Promise.all(keys.map((key) => caches.delete(key))))
+      .then((keys) => Promise.all(keys.map((k) => caches.delete(k))))
       .then(() => self.clients.claim())
       .then(() => self.registration.unregister())
       .catch(() => undefined)
   );
 });
 
-self.addEventListener('fetch', (event) => {
-  // v14.7.4 — SW désactivé : laisser passer toutes les requêtes au réseau.
-  // Le serveur gère déjà Cache-Control: no-store sur index.html, et les assets
-  // hashés (index-XXXX.js) sont invalidés automatiquement par Vite à chaque build.
-  return; // ne pas appeler event.respondWith → laisse le navigateur fetch normalement
-});
+// Note: il n'y a PAS de fetch handler → toutes les requêtes passent
+// par le réseau. Cache-Control: no-store du serveur garantit un bundle frais.
 
-// ─── PUSH: réception des notifications serveur ───────────────────────────
 self.addEventListener('push', (event) => {
   let payload;
   try {
@@ -79,7 +58,6 @@ self.addEventListener('push', (event) => {
   event.waitUntil(self.registration.showNotification(title, options));
 });
 
-// ─── NOTIFICATIONCLICK: ouvre/focus l'app sur la bonne route ──────────────
 self.addEventListener('notificationclick', (event) => {
   event.notification.close();
   const targetUrl = event.notification.data?.url || '/';
@@ -87,7 +65,6 @@ self.addEventListener('notificationclick', (event) => {
   event.waitUntil(
     self.clients.matchAll({ type: 'window', includeUncontrolled: true })
       .then((clientList) => {
-        // Focus existing tab if found
         for (const client of clientList) {
           if (client.url.includes(self.location.origin)) {
             if ('focus' in client) {
@@ -100,92 +77,9 @@ self.addEventListener('notificationclick', (event) => {
             }
           }
         }
-        // Open new tab
         if (self.clients.openWindow) {
           return self.clients.openWindow(targetUrl);
         }
       })
   );
-});
-
-// ─── FETCH: stale-while-revalidate pour offline ──────────────────────────
-//   - Assets statiques (JS/CSS/fonts): cache-first, revalidate en background
-//   - API GET: network-first, fallback cache si offline
-//   - POST/PATCH/DELETE: network-only (pas de cache)
-self.addEventListener('fetch', (event) => {
-  const { request } = event;
-
-  // Skip non-GET (mutations: never cache)
-  if (request.method !== 'GET') return;
-
-  const url = new URL(request.url);
-
-  // Skip cross-origin (Stripe, CDN images, etc.)
-  if (url.origin !== self.location.origin) return;
-
-  // Skip Chrome extension & dev HMR
-  if (url.protocol === 'chrome-extension:' || url.pathname.includes('/@vite/') || url.pathname.includes('/__vite')) {
-    return;
-  }
-
-  // API GET requests → network-first, fallback cache
-  if (url.pathname.startsWith('/api/')) {
-    event.respondWith(
-      fetch(request)
-        .then((response) => {
-          // Clone and cache successful responses
-          if (response.ok) {
-            const clone = response.clone();
-            caches.open(RUNTIME_CACHE).then((cache) => cache.put(request, clone)).catch(() => undefined);
-          }
-          return response;
-        })
-        .catch(() => {
-          // Offline: try cache
-          return caches.match(request).then((cached) => cached || new Response(
-            JSON.stringify({ error: 'Hors ligne' }),
-            { status: 503, headers: { 'Content-Type': 'application/json' } }
-          ));
-        })
-    );
-    return;
-  }
-
-  // HTML/manifest — network-first (always serve fresh content)
-  const isHtml = request.headers.get('accept')?.includes('text/html') || url.pathname === '/' || url.pathname.endsWith('.html');
-  if (isHtml || url.pathname === '/manifest.json') {
-    event.respondWith(
-      fetch(request)
-        .then((response) => {
-          if (response.ok) {
-            const clone = response.clone();
-            caches.open(RUNTIME_CACHE).then((cache) => cache.put(request, clone)).catch(() => undefined);
-          }
-          return response;
-        })
-        .catch(() => caches.match(request).then((cached) => cached || caches.match('/')))
-    );
-    return;
-  }
-
-  // Static assets → network-first pour les JS/CSS avec hash (on veut le dernier build)
-  // Fallback cache seulement si le réseau échoue
-  event.respondWith(
-    fetch(request)
-      .then((response) => {
-        if (response && response.status === 200 && response.type === 'basic') {
-          const clone = response.clone();
-          caches.open(RUNTIME_CACHE).then((cache) => cache.put(request, clone)).catch(() => undefined);
-        }
-        return response;
-      })
-      .catch(() => caches.match(request).then((cached) => cached || new Response('', { status: 504 })))
-  );
-});
-
-// ─── MESSAGE: permet au frontend de déclencher skipWaiting (update) ───────
-self.addEventListener('message', (event) => {
-  if (event.data === 'SKIP_WAITING') {
-    self.skipWaiting();
-  }
 });
