@@ -178,39 +178,34 @@ export default function TransitFeed({
         <div className="w-12" />
       </div>
 
-      {/* Cards container (snap-x horizontal, Tinder-like) */}
+      {/* Cards container — un seul transform parent, enfants côte à côte en flex */}
       <div
         ref={containerRef}
         className="absolute inset-0 flex items-center justify-center pt-16 pb-20 overflow-hidden"
       >
         <div
-          className="relative w-full h-full"
+          className="flex"
           style={{
-            transform: `translateX(${-activeIndex * 100}%)`,
+            transform: `translateX(calc(50% - ${activeIndex * 100}% - ${activeIndex * 20}px))`,
             transition: 'transform 0.4s cubic-bezier(0.25, 0.46, 0.45, 0.94)',
+            gap: '20px',
           }}
         >
           {cards.map((card, idx) => {
             const isOrphanSection = idx === orphanStartIndex && orphanHouses.length > 0;
-            const offset = idx - activeIndex;
-            // Calcul de l'opacité et scale pour effet 3D
-            // Cartes voisines (±1) : opacity 0.5, scale 0.92
-            // Au-delà : invisible (opacity 0) pour ne pas surcharger
-            const opacity = Math.abs(offset) === 0 ? 1 : Math.abs(offset) === 1 ? 0.5 : 0;
-            const scale = Math.abs(offset) === 0 ? 1 : 0.92;
+            const isActive = idx === activeIndex;
 
             return (
               <div
                 key={idx}
-                className="absolute top-0 left-0 w-full h-full flex items-center justify-center px-5"
+                className="flex-shrink-0 flex items-center justify-center"
                 style={{
-                  transform: `translateX(${offset * 100}%) scale(${scale})`,
-                  opacity,
-                  transition: 'transform 0.4s cubic-bezier(0.25, 0.46, 0.45, 0.94), opacity 0.3s',
-                  pointerEvents: offset === 0 ? 'auto' : 'none',
+                  width: 'min(360px, calc(100vw - 40px))',
+                  opacity: isActive ? 1 : 0.4,
+                  transition: 'opacity 0.3s',
                 }}
               >
-                {isOrphanSection && (
+                {isOrphanSection && isActive && (
                   <div className="absolute top-20 left-0 right-0 flex items-center gap-3 px-8 z-10">
                     <div className="flex-1 h-px bg-gradient-to-r from-transparent via-cosmic-500/40 to-transparent" />
                     <span className="text-cosmic-400 text-[10px] uppercase tracking-widest font-semibold">
