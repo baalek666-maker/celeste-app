@@ -497,78 +497,80 @@ function HouseCard({
       )}
 
       <div className="relative z-10 h-full flex flex-col p-4">
-        <div className="flex items-center justify-between mb-2">
-          <div className="flex items-center gap-1.5 text-2xl">
-            <span className="animate-glow drop-shadow-lg">{house.icon}</span>
-          </div>
-        </div>
-
-        <div className="flex justify-center mb-2">
-          <div className="w-12 h-12 rounded-full glass-gold flex items-center justify-center animate-glow backdrop-blur-sm">
-            <span className="text-2xl">🏠</span>
-          </div>
-        </div>
-
-        <div className="flex justify-center mb-1.5">
-          <span className="text-[9px] px-2 py-0.5 rounded-full bg-celeste-bg/50 text-cosmic-300 font-semibold uppercase tracking-wider border border-cosmic-500/30 backdrop-blur-sm">
-            Secteur de vie
-          </span>
-        </div>
-
-        <h3 className="text-xl font-bold text-center mb-1 text-cosmic-gradient leading-tight drop-shadow-lg">
-          Maison {house.num}
-        </h3>
-        <p className="text-sm text-celeste-text/90 text-center mb-2 drop-shadow">
-          {house.theme}
-        </p>
-
-        <div className="flex items-center gap-2 mb-2">
-          <div className="flex-1 h-px bg-gradient-to-r from-transparent via-cosmic-500/40 to-transparent" />
-          <span className="text-cosmic-400 text-[10px]">★</span>
-          <div className="flex-1 h-px bg-gradient-to-r from-transparent via-cosmic-500/40 to-transparent" />
-        </div>
-
-        {house.transitPlanets.length > 0 && (
-          <div className="rounded-lg bg-celeste-bg/40 border border-gold-500/30 p-2 mb-2 backdrop-blur-sm">
-            <p className="text-[9px] text-celeste-text/60 uppercase tracking-wider mb-1">Planètes en transit</p>
-            <div className="flex flex-wrap gap-1">
-              {house.transitPlanets.map(tp => (
-                <span key={tp.key} className="text-[10px] px-1.5 py-0.5 rounded-full bg-gold-500/20 text-gold-100 border border-gold-500/30">
-                  {tp.glyph} {tp.name}{tp.retrograde ? ' ℞' : ''}
-                </span>
-              ))}
+        {/* Bloc scrollable : tout sauf le bouton Partager */}
+        <div className="flex-1 overflow-y-auto" style={{scrollbarWidth: 'none'}}>
+          <div className="flex items-center justify-between mb-2">
+            <div className="flex items-center gap-1.5 text-2xl">
+              <span className="animate-glow drop-shadow-lg">{house.icon}</span>
             </div>
           </div>
-        )}
 
-        {house.insight && (
-          <div className="rounded-lg bg-celeste-bg/40 border border-cosmic-500/30 p-2 mb-2 backdrop-blur-sm">
-            <p className="text-[11px] text-celeste-text/90 flex items-start gap-1.5">
-              <span className="not-italic text-sm flex-shrink-0">💫</span>
-              <span className="italic line-clamp-3">{house.insight}</span>
-            </p>
+          <div className="flex justify-center mb-2">
+            <div className="w-12 h-12 rounded-full glass-gold flex items-center justify-center animate-glow backdrop-blur-sm">
+              <span className="text-2xl">🏠</span>
+            </div>
           </div>
-        )}
 
-        {house.action && (
-          <div className="rounded-lg bg-celeste-bg/40 border border-emerald-500/30 p-2 mb-2 backdrop-blur-sm">
-            <p className="text-[11px] text-celeste-text/90 flex items-start gap-1.5">
-              <span className="not-italic text-sm flex-shrink-0">→</span>
-              <span className="italic line-clamp-2">{house.action}</span>
-            </p>
+          <div className="flex justify-center mb-1.5">
+            <span className="text-[9px] px-2 py-0.5 rounded-full bg-celeste-bg/50 text-cosmic-300 font-semibold uppercase tracking-wider border border-cosmic-500/30 backdrop-blur-sm">
+              Secteur de vie
+            </span>
           </div>
-        )}
 
-        <div className="flex-1" />
+          <h3 className="text-xl font-bold text-center mb-1 text-cosmic-gradient leading-tight drop-shadow-lg">
+            Maison {house.num}
+          </h3>
+          <p className="text-sm text-celeste-text/90 text-center mb-2 drop-shadow">
+            {house.theme}
+          </p>
 
+          <div className="flex items-center gap-2 mb-2">
+            <div className="flex-1 h-px bg-gradient-to-r from-transparent via-cosmic-500/40 to-transparent" />
+            <span className="text-cosmic-400 text-[10px]">★</span>
+            <div className="flex-1 h-px bg-gradient-to-r from-transparent via-cosmic-500/40 to-transparent" />
+          </div>
+
+          {house.transitPlanets.length > 0 && (
+            <div className="rounded-lg bg-celeste-bg/40 border border-gold-500/30 p-2 mb-2 backdrop-blur-sm">
+              <p className="text-[9px] text-celeste-text/60 uppercase tracking-wider mb-1">Planètes en transit</p>
+              <div className="flex flex-wrap gap-1">
+                {house.transitPlanets.map(tp => (
+                  <span key={tp.key} className="text-[10px] px-1.5 py-0.5 rounded-full bg-gold-500/20 text-gold-100 border border-gold-500/30">
+                    {tp.glyph} {tp.name}{tp.retrograde ? ' ℞' : ''}
+                  </span>
+                ))}
+              </div>
+            </div>
+          )}
+
+          {house.insight && (
+            <div className="rounded-lg bg-celeste-bg/40 border border-cosmic-500/30 p-2 mb-2 backdrop-blur-sm">
+              <p className="text-[11px] text-celeste-text/90 flex items-start gap-1.5">
+                <span className="not-italic text-sm flex-shrink-0">💫</span>
+                <span className="italic">{house.insight}</span>
+              </p>
+            </div>
+          )}
+
+          {house.action && (
+            <div className="rounded-lg bg-celeste-bg/40 border border-emerald-500/30 p-2 backdrop-blur-sm">
+              <p className="text-[11px] text-celeste-text/90 flex items-start gap-1.5">
+                <span className="not-italic text-sm flex-shrink-0">→</span>
+                <span className="italic">{house.action}</span>
+              </p>
+            </div>
+          )}
+        </div>
+
+        {/* Bouton Partager fixe en bas */}
         <button
           onClick={onShare}
-          className="w-12 h-12 mx-auto rounded-full bg-gradient-to-br from-cosmic-500 to-cosmic-700 flex items-center justify-center transition-all active:scale-90 shadow-lg shadow-cosmic-900/60"
+          className="w-12 h-12 mx-auto mt-2 rounded-full bg-gradient-to-br from-cosmic-500 to-cosmic-700 flex items-center justify-center flex-shrink-0 transition-all active:scale-90 shadow-lg shadow-cosmic-900/60"
           aria-label="Partager (swipe haut)"
         >
           <span className="text-xl">📤</span>
         </button>
-        <p className="text-[8px] text-celeste-text/40 uppercase tracking-wider text-center mt-1">
+        <p className="text-[8px] text-celeste-text/40 uppercase tracking-wider text-center mt-1 flex-shrink-0">
           Partager
         </p>
       </div>
