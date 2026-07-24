@@ -224,7 +224,7 @@ export default function TransitFeed({
         className="absolute inset-0 pt-16 pb-20 overflow-x-auto overflow-y-hidden snap-x snap-mandatory"
         style={{ scrollbarWidth: 'none', msOverflowStyle: 'none', WebkitOverflowScrolling: 'touch' } as React.CSSProperties}
       >
-        <div className="flex items-center px-[calc(50vw-180px)] py-4" style={{ gap: 0 }}>
+        <div className="flex items-center px-[calc(50vw-140px)] py-4" style={{ gap: 0 }}>
           {cards.map((card, idx) => {
             const isOrphanSection = idx === orphanStartIndex && orphanHouses.length > 0;
             const isActive = idx === activeIndex;
@@ -235,7 +235,7 @@ export default function TransitFeed({
                 ref={el => { cardsRef.current[idx] = el; }}
                 className="snap-center flex-shrink-0 flex items-center justify-center"
                 style={{
-                  width: '360px',
+                  width: '280px',
                   marginRight: idx < cards.length - 1 ? '20px' : '0',
                   opacity: isActive ? 1 : 0.4,
                   transition: 'opacity 0.3s',
@@ -349,7 +349,7 @@ function TransitCard({
   const imageUrl = getTransitImage(aspect.transitPlanet, aspect.nature);
 
   return (
-    <div className="relative w-full max-w-sm h-[440px] max-h-[58vh] rounded-3xl overflow-hidden celeste-card animate-fade-in shadow-2xl">
+    <div className="relative w-full h-[500px] max-h-[70vh] rounded-2xl overflow-hidden celeste-card animate-fade-in shadow-2xl">
       {/* Image de fond (si dispo) ou fallback gradient */}
       {imageUrl ? (
         <div
@@ -367,7 +367,7 @@ function TransitCard({
         </div>
       )}
 
-      <div className="relative z-10 h-full flex flex-col p-6">
+      <div className="relative z-10 h-full flex flex-col p-5">
         {/* Top: glyphs + EXACT + counter */}
         <div className="flex items-center justify-between mb-4">
           <div className="flex items-center gap-2 text-3xl">
@@ -479,7 +479,7 @@ function HouseCard({
   const imageUrl = getHouseImage(house.transitPlanets, 'neutre');
 
   return (
-    <div className="relative w-full max-w-sm h-[440px] max-h-[58vh] rounded-3xl overflow-hidden celeste-card animate-fade-in shadow-2xl">
+    <div className="relative w-full h-[500px] max-h-[70vh] rounded-2xl overflow-hidden celeste-card animate-fade-in shadow-2xl">
       {imageUrl ? (
         <div
           className="absolute inset-0 bg-cover bg-center"
@@ -495,7 +495,7 @@ function HouseCard({
         </div>
       )}
 
-      <div className="relative z-10 h-full flex flex-col p-6">
+      <div className="relative z-10 h-full flex flex-col p-5">
         <div className="flex items-center justify-between mb-4">
           <div className="flex items-center gap-2 text-3xl">
             <span className="animate-glow drop-shadow-lg">{house.icon}</span>
