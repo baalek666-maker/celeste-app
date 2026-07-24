@@ -31,8 +31,9 @@
     <div id="toast-root"></div>
     <!-- Global error overlay : affiche les crash JS même si React plante -->
     <div id="boot-error" style="display:none;position:fixed;inset:0;background:#0a0a15;color:#f5e6d3;padding:24px;font-family:monospace;font-size:13px;overflow:auto;z-index:99999;white-space:pre-wrap"></div>
-    <!-- Si React ne monte pas sous 6 s (cache stale, SW résiduel, ou erreur silencieuse),
-         on affiche ce diagnostic VISIBLE pour ne plus jamais être face à un écran noir. -->
+    <!-- Si React ne monte pas sous 20 s (cache stale, SW résiduel, ou erreur silencieuse),
+         on affiche ce diagnostic VISIBLE pour ne plus jamais être face à un écran noir.
+         v14.7.7 — 6s → 20s : le bundle fait ~770KB, sur 4G lent ça peut prendre 15s. -->
     <div id="stuck-screen" style="display:none;position:fixed;inset:0;z-index:99998;background:#0a0a15;color:#f5e6d3;padding:32px;font-family:system-ui;overflow:auto;">
       <div style="max-width:480px;margin:80px auto;text-align:center;">
         <div style="font-size:64px;margin-bottom:16px;">🌙</div>
@@ -60,13 +61,13 @@
       </div>
     </div>
     <script>
-      // Si #root est encore vide après 6 s, on affiche le diagnostic stuck-screen.
+      // v14.7.7 — Augmenté à 20s pour laisser le temps au bundle 770KB de charger sur 4G lent
       setTimeout(function(){
         var root = document.getElementById('root');
         if (root && (!root.children || root.children.length === 0)) {
           document.getElementById('stuck-screen').style.display = 'block';
         }
-      }, 6000);
+      }, 20000);
       (function(){var h=document.getElementById('current-host');if(h)h.textContent=location.host;})();
       (function(){
         function show(msg){var el=document.getElementById('boot-error');el.style.display='block';el.textContent='⚠️ Boot error:\\n\\n'+msg+'\\n\\n— Hard reload (Cmd/Ctrl+Shift+R) ou ouvrir en navigation privée —';}
