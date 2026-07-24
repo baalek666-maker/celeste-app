@@ -109,113 +109,7 @@ export default function TransitFeed({
   const [activeIndex, setActiveIndex] = useState(0);
   const [shareForCard, setShareForCard] = useState<CardData | null>(null);
   const [savedAspects, setSavedAspects] = useState<Set<string>>(new Set());
-  const [swipeDx, setSwipeDx] = useState(0); // UI live transform (état OK pour render)
-  const [isDragging, setIsDragging] = useState(false);
   const containerRef = useRef<HTMLDivElement>(null);
-  // Refs miroirs pour accès dans le handler (les valeurs live ne déclenchent PAS de re-render)
-  const startX = useRef<number | null>(null);
-  const startY = useRef<number | null>(null);
-  const lastDx = useRef(0);
-  const lastDy = useRef(0);
-  const startTime = useRef(0);
-  // Refs miroirs pour activeIndex/cards — on les update à chaque render
-  const activeIndexRef = useRef(0);
-  const cardsRef = useRef<CardData[]>([]);
-  useEffect(() => { activeIndexRef.current = activeIndex; }, [activeIndex]);
-  useEffect(() => { cardsRef.current = cards; }, [cards]);
-
-  // Swipe horizontal handlers (Tinder-like) — bind UNE SEULE FOIS au mount
-  useEffect(() => {
-    const el = containerRef.current;
-    if (!el) return;
-
-    const SWIPE_THRESHOLD = 140;       // swipe "lent" : il faut 140px de déplacement
-    const VELOCITY_THRESHOLD = 0.4;    // swipe "rapide" : 0.4 px/ms = traverse l'écran en 1s
-    const LONG_SWIPE_THRESHOLD = 260;  // swipe "long" : 260px (= action skip/save)
-    const LONG_VELOCITY = 0.8;        // swipe très rapide = action
-    const VERTICAL_SWIPE_THRESHOLD = 160; // swipe haut : 160px
-    const MAX_DRAG = 120;              // cap visuel du drag (le reste suit le geste sans bouger la carte)
-
-    const onTouchStart = (e: TouchEvent) => {
-      startX.current = e.touches[0].clientX;
-      startY.current = e.touches[0].clientY;
-      lastDx.current = 0;
-      lastDy.current = 0;
-      startTime.current = Date.now();
-      setIsDragging(true);
-    };
-    const onTouchMove = (e: TouchEvent) => {
-      if (startX.current === null || startY.current === null) return;
-      const rawDx = e.touches[0].clientX - startX.current;
-      const rawDy = e.touches[0].clientY - startY.current;
-      // Cap le drag pour éviter que la carte sorte de l'écran
-      const dx = Math.max(-MAX_DRAG, Math.min(MAX_DRAG, rawDx));
-      const dy = Math.max(-MAX_DRAG, Math.min(MAX_DRAG, rawDy));
-      lastDx.current = dx;
-      lastDy.current = dy;
-      setSwipeDx(dx);
-    };
-    const onTouchEnd = () => {
-      if (startX.current === null) return;
-      const dx = lastDx.current;
-      const dy = lastDy.current;
-      const elapsed = Date.now() - startTime.current;
-      startX.current = null;
-      startY.current = null;
-      lastDx.current = 0;
-      lastDy.current = 0;
-      setIsDragging(false);
-      setSwipeDx(0);
-
-      // Bloque les taps statiques (< 200ms avec très peu de mouvement) pour éviter les accidents
-      if (elapsed < 200 && Math.abs(dx) < 10 && Math.abs(dy) < 10) return;
-
-      // Calcul de vélocité (px/ms)
-      const velocityX = Math.abs(dx) / Math.max(elapsed, 1);
-      const velocityY = Math.abs(dy) / Math.max(elapsed, 1);
-
-      // Lire les valeurs LIVE via refs
-      const liveActive = activeIndexRef.current;
-      const liveCards = cardsRef.current;
-
-      // Swipe horizontal prioritaire (Tinder-like)
-      // Combine déplacement OU vélocité : un swipe lent ET court ne déclenche PAS,
-      // un swipe rapide (même sur 50px) déclenche.
-      if (Math.abs(dx) > Math.abs(dy)) {
-        const isLongSwipe = Math.abs(dx) > LONG_SWIPE_THRESHOLD || velocityX > LONG_VELOCITY;
-        const isNormalSwipe = Math.abs(dx) > SWIPE_THRESHOLD || velocityX > VELOCITY_THRESHOLD;
-
-        if (dx < 0 && isLongSwipe) {
-          // long swipe gauche = skip
-          handleSkip();
-        } else if (dx > 0 && isLongSwipe) {
-          // long swipe droite = save
-          handleSave();
-        } else if (dx < 0 && isNormalSwipe && liveActive < liveCards.length - 1) {
-          setActiveIndex(i => i + 1); // swipe gauche normal = suivant
-        } else if (dx > 0 && isNormalSwipe && liveActive > 0) {
-          setActiveIndex(i => i - 1); // swipe droite normal = précédent
-        }
-      } else {
-        // Swipe vertical (haut = share) — seulement si vraiment vertical ET rapide ou long
-        if (dy < 0 && Math.abs(dy) > Math.abs(dx) * 1.5) {
-          if (Math.abs(dy) > VERTICAL_SWIPE_THRESHOLD || velocityY > VELOCITY_THRESHOLD) {
-            setShareForCard(liveCards[liveActive]);
-          }
-        }
-      }
-    };
-
-    el.addEventListener('touchstart', onTouchStart, { passive: true });
-    el.addEventListener('touchmove', onTouchMove, { passive: true });
-    el.addEventListener('touchend', onTouchEnd, { passive: true });
-    return () => {
-      el.removeEventListener('touchstart', onTouchStart);
-      el.removeEventListener('touchmove', onTouchMove);
-      el.removeEventListener('touchend', onTouchEnd);
-    };
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []); // bind UNE seule fois — valeurs accédées via refs miroirs
 
   // Lock body scroll
   useEffect(() => {
@@ -292,8 +186,8 @@ export default function TransitFeed({
         <div
           className="relative w-full h-full"
           style={{
-            transform: `translateX(${-activeIndex * 100}%) translateX(${swipeDx}px)`,
-            transition: isDragging ? 'none' : 'transform 0.4s cubic-bezier(0.25, 0.46, 0.45, 0.94)',
+            transform: `translateX(${-activeIndex * 100}%)`,
+            transition: 'transform 0.4s cubic-bezier(0.25, 0.46, 0.45, 0.94)',
           }}
         >
           {cards.map((card, idx) => {
@@ -302,16 +196,15 @@ export default function TransitFeed({
             // Calcul de l'opacité et scale pour effet 3D
             const opacity = Math.max(0.4, 1 - Math.abs(offset) * 0.3);
             const scale = Math.max(0.85, 1 - Math.abs(offset) * 0.05);
-            const rotate = swipeDx * 0.02; // léger rotate跟随 le drag
 
             return (
               <div
                 key={idx}
                 className="absolute top-0 left-0 w-full h-full flex items-center justify-center px-5"
                 style={{
-                  transform: `translateX(${offset * 100}%) scale(${scale}) rotate(${offset === 0 ? rotate : 0}deg)`,
+                  transform: `translateX(${offset * 100}%) scale(${scale})`,
                   opacity,
-                  transition: isDragging && offset === 0 ? 'none' : 'transform 0.4s cubic-bezier(0.25, 0.46, 0.45, 0.94), opacity 0.3s',
+                  transition: 'transform 0.4s cubic-bezier(0.25, 0.46, 0.45, 0.94), opacity 0.3s',
                   pointerEvents: offset === 0 ? 'auto' : 'none',
                 }}
               >
@@ -367,14 +260,27 @@ export default function TransitFeed({
         </p>
       </div>
 
-      {/* Swipe hint (1ère fois) */}
-      {activeIndex === 0 && (
-        <div className="absolute bottom-24 left-0 right-0 z-10 flex items-center justify-center gap-2 text-celeste-text/40 text-[10px] uppercase tracking-wider pointer-events-none">
-          <span>←</span>
-          <span>swipe</span>
-          <span>→</span>
-        </div>
-      )}
+      {/* Flèches ← → cliquables (gauche/droite) */}
+      <button
+        onClick={() => activeIndex > 0 && setActiveIndex(i => i - 1)}
+        disabled={activeIndex === 0}
+        aria-label="Carte précédente"
+        className={`absolute left-2 top-1/2 -translate-y-1/2 z-20 w-12 h-12 rounded-full glass border border-cosmic-500/40 backdrop-blur-md flex items-center justify-center transition-all active:scale-90 ${
+          activeIndex === 0 ? 'opacity-20' : 'opacity-80 hover:opacity-100 hover:border-cosmic-500/70'
+        }`}
+      >
+        <span className="text-2xl text-celeste-text/90">‹</span>
+      </button>
+      <button
+        onClick={() => activeIndex < cards.length - 1 && setActiveIndex(i => i + 1)}
+        disabled={activeIndex === cards.length - 1}
+        aria-label="Carte suivante"
+        className={`absolute right-2 top-1/2 -translate-y-1/2 z-20 w-12 h-12 rounded-full glass border border-cosmic-500/40 backdrop-blur-md flex items-center justify-center transition-all active:scale-90 ${
+          activeIndex === cards.length - 1 ? 'opacity-20' : 'opacity-80 hover:opacity-100 hover:border-cosmic-500/70'
+        }`}
+      >
+        <span className="text-2xl text-celeste-text/90">›</span>
+      </button>
 
       {/* Share modal */}
       {shareForCard && shareForCard.kind === 'transit' && (
