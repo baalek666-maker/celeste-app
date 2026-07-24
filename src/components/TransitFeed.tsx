@@ -109,56 +109,76 @@ export default function TransitFeed({
   const [activeIndex, setActiveIndex] = useState(0);
   const [shareForCard, setShareForCard] = useState<CardData | null>(null);
   const [savedAspects, setSavedAspects] = useState<Set<string>>(new Set());
+  const [swipeDx, setSwipeDx] = useState(0); // UI live transform (état OK pour render)
+  const [isDragging, setIsDragging] = useState(false);
   const containerRef = useRef<HTMLDivElement>(null);
+  // Refs pour éviter re-bind (les valeurs live ne déclenchent PAS de re-render)
   const startX = useRef<number | null>(null);
   const startY = useRef<number | null>(null);
-  const [swipeDx, setSwipeDx] = useState(0);
-  const [swipeDy, setSwipeDy] = useState(0);
-  const [isDragging, setIsDragging] = useState(false);
+  const lastDx = useRef(0);
+  const lastDy = useRef(0);
+  const startTime = useRef(0);
 
-  // Swipe horizontal handlers (Tinder-like)
+  // Swipe horizontal handlers (Tinder-like) — bound UNE SEULE FOIS au mount
   useEffect(() => {
     const el = containerRef.current;
     if (!el) return;
 
+    const SWIPE_THRESHOLD = 140;       // swipe "normal" : 140px
+    const LONG_SWIPE_THRESHOLD = 260;  // swipe "long" : 260px (= action skip/save)
+    const VERTICAL_SWIPE_THRESHOLD = 160; // swipe haut : 160px
+    const MAX_DRAG = 120;              // cap visuel du drag (le reste suit le geste sans bouger la carte)
+
     const onTouchStart = (e: TouchEvent) => {
       startX.current = e.touches[0].clientX;
       startY.current = e.touches[0].clientY;
+      lastDx.current = 0;
+      lastDy.current = 0;
+      startTime.current = Date.now();
       setIsDragging(true);
     };
     const onTouchMove = (e: TouchEvent) => {
       if (startX.current === null || startY.current === null) return;
-      const dx = e.touches[0].clientX - startX.current;
-      const dy = e.touches[0].clientY - startY.current;
+      const rawDx = e.touches[0].clientX - startX.current;
+      const rawDy = e.touches[0].clientY - startY.current;
+      // Cap le drag pour éviter que la carte sorte de l'écran
+      const dx = Math.max(-MAX_DRAG, Math.min(MAX_DRAG, rawDx));
+      const dy = Math.max(-MAX_DRAG, Math.min(MAX_DRAG, rawDy));
+      lastDx.current = dx;
+      lastDy.current = dy;
       setSwipeDx(dx);
-      setSwipeDy(dy);
     };
     const onTouchEnd = () => {
       if (startX.current === null) return;
-      const dx = swipeDx;
-      const dy = swipeDy;
+      const dx = lastDx.current;
+      const dy = lastDy.current;
+      const elapsed = Date.now() - startTime.current;
       startX.current = null;
       startY.current = null;
+      lastDx.current = 0;
+      lastDy.current = 0;
       setIsDragging(false);
       setSwipeDx(0);
-      setSwipeDy(0);
+
+      // Bloque les taps rapides (< 200ms avec peu de mouvement) pour éviter les accidents
+      if (elapsed < 200 && Math.abs(dx) < 20 && Math.abs(dy) < 20) return;
 
       // Swipe horizontal prioritaire (Tinder-like)
       if (Math.abs(dx) > Math.abs(dy)) {
-        if (dx < -80 && activeIndex < cards.length - 1) {
-          setActiveIndex(i => i + 1); // swipe gauche = suivant
-        } else if (dx > 80 && activeIndex > 0) {
-          setActiveIndex(i => i - 1); // swipe droite = précédent
-        } else if (dx < -180) {
+        if (dx < -SWIPE_THRESHOLD && activeIndex < cards.length - 1) {
+          setActiveIndex(i => i + 1); // swipe gauche normal = suivant
+        } else if (dx > SWIPE_THRESHOLD && activeIndex > 0) {
+          setActiveIndex(i => i - 1); // swipe droite normal = précédent
+        } else if (dx < -LONG_SWIPE_THRESHOLD) {
           // long swipe gauche = skip
           handleSkip();
-        } else if (dx > 180) {
+        } else if (dx > LONG_SWIPE_THRESHOLD) {
           // long swipe droite = save
           handleSave();
         }
       } else {
-        // Swipe vertical (haut = share)
-        if (dy < -120) {
+        // Swipe vertical (haut = share) — seulement si vraiment vertical (dy < 0 et |dy| > |dx|*2)
+        if (dy < -VERTICAL_SWIPE_THRESHOLD && Math.abs(dy) > Math.abs(dx) * 1.5) {
           setShareForCard(cards[activeIndex]);
         }
       }
@@ -172,7 +192,8 @@ export default function TransitFeed({
       el.removeEventListener('touchmove', onTouchMove);
       el.removeEventListener('touchend', onTouchEnd);
     };
-  }, [activeIndex, cards, swipeDx, swipeDy]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []); // bind UNE seule fois — valeurs accédées via state (activeIndex, cards) et refs
 
   // Lock body scroll
   useEffect(() => {
@@ -244,7 +265,7 @@ export default function TransitFeed({
       {/* Cards container (snap-x horizontal, Tinder-like) */}
       <div
         ref={containerRef}
-        className="absolute inset-0 flex items-center justify-center pt-24 pb-32 overflow-hidden"
+        className="absolute inset-0 flex items-center justify-center pt-20 pb-20 overflow-hidden"
       >
         <div
           className="relative w-full h-full"
@@ -367,7 +388,7 @@ function TransitCard({
   const imageUrl = getTransitImage(aspect.transitPlanet, aspect.nature);
 
   return (
-    <div className="relative w-full max-w-sm h-[600px] max-h-[80vh] rounded-3xl overflow-hidden celeste-card animate-fade-in shadow-2xl">
+    <div className="relative w-full max-w-sm h-[520px] max-h-[70vh] rounded-3xl overflow-hidden celeste-card animate-fade-in shadow-2xl">
       {/* Image de fond (si dispo) ou fallback gradient */}
       {imageUrl ? (
         <div
@@ -497,7 +518,7 @@ function HouseCard({
   const imageUrl = getHouseImage(house.transitPlanets, 'neutre');
 
   return (
-    <div className="relative w-full max-w-sm h-[600px] max-h-[80vh] rounded-3xl overflow-hidden celeste-card animate-fade-in shadow-2xl">
+    <div className="relative w-full max-w-sm h-[520px] max-h-[70vh] rounded-3xl overflow-hidden celeste-card animate-fade-in shadow-2xl">
       {imageUrl ? (
         <div
           className="absolute inset-0 bg-cover bg-center"
