@@ -23,6 +23,27 @@ const QUICK_FALLBACK = {
   city: 'Paris', country: 'France', lat: 48.8566, lng: 2.3522, tz: 2,
 };
 
+// Couleur de l'anneau de score selon la valeur (gold = excellent, purple = bien, pink = challenge)
+function ringColor(score: number): string {
+  if (score >= 70) return '#fbbf24';   // gold-400
+  if (score >= 40) return '#a78bfa';   // cosmic-400
+  return '#f472b6';                     // pink-400
+}
+
+// Verdict 1 mot VMF : 1 insight humain selon score + context (toujours positif-cadrant)
+function verdictForContext(score: number, context: 'romantic' | 'family' | 'friend' | 'colleague'): string {
+  const table: Record<typeof context, [string, string, string]> = {
+    romantic:   ['Bousculade saine', 'Complémentarité douce', 'Connexion électrique'],
+    family:     ['À apprivoiser',    'Entente naturelle',     'Lien rare et précieux'],
+    friend:     ['À découvrir',      'Amitié qui tient',      'Binôme inséparable'],
+    colleague:  ['À cadrer',         'Collaboration fluide',  'Synergie puissante'],
+  };
+  const [low, mid, high] = table[context];
+  if (score >= 70) return high;
+  if (score >= 40) return mid;
+  return low;
+}
+
 // FR → EN sign mapping. Backend returns French names ('Bélier', 'Lion'...),
 // but the frontend type system uses English ZodiacSign ('aries', 'leo'...).
 // Without this map, ZODIAC_SIGNS[result.yourSun] returns undefined → no glyph,
@@ -295,6 +316,7 @@ export function Compatibility({ user }: { user: User }) {
 
       {result && !loading && (
         <div className="animate-fade-in">
+          {/* Hero score : anneau SVG animé + verdict 1 mot */}
           <div className="glass rounded-3xl p-6 mb-4 text-center">
             <div className="flex items-center justify-center gap-6 mb-4">
               <div className="text-center">
@@ -303,8 +325,22 @@ export function Compatibility({ user }: { user: User }) {
                 </span>
                 <p className="text-night-400 text-xs mt-1">Toi</p>
               </div>
-              <div className="w-20 h-20 rounded-full glass border-2 border-gold-500/30 flex items-center justify-center shadow-[0_0_24px_rgba(251,191,36,0.25)]">
-                <span className="text-3xl font-bold text-gold-gradient tabular-nums">{animatedScore}%</span>
+              {/* Anneau de score : cercle SVG stroke-dasharray animé (0 → score%) */}
+              <div className="relative w-24 h-24">
+                <svg width="96" height="96" viewBox="0 0 96 96" className="absolute inset-0 -rotate-90">
+                  <circle cx="48" cy="48" r="42" fill="none" stroke="rgba(255,255,255,0.08)" strokeWidth="4" />
+                  <circle
+                    cx="48" cy="48" r="42" fill="none"
+                    stroke={ringColor(animatedScore)}
+                    strokeWidth="4"
+                    strokeLinecap="round"
+                    strokeDasharray={`${(animatedScore / 100) * 263.9} 263.9`}
+                    style={{ transition: 'stroke-dasharray 0.05s linear, stroke 0.5s ease' }}
+                  />
+                </svg>
+                <div className="absolute inset-0 flex items-center justify-center">
+                  <span className="text-2xl font-bold text-gold-gradient tabular-nums">{animatedScore}<span className="text-sm text-night-400">%</span></span>
+                </div>
               </div>
               <div className="text-center">
                 <span className="text-3xl block" style={{ color: ZODIAC_SIGNS[result.theirSun as ZodiacSign]?.color }}>
@@ -314,8 +350,12 @@ export function Compatibility({ user }: { user: User }) {
               </div>
             </div>
             <h2 className="text-xl font-bold text-cosmic-gradient">{result.title}</h2>
+            {/* Verdict 1 mot VMF — toujours positif-cadrant */}
+            <p className="text-gold-300 text-sm font-medium mt-1.5 tracking-wide">
+              {verdictForContext(animatedScore, (result.context as 'romantic' | 'family' | 'friend' | 'colleague') || 'romantic')}
+            </p>
             {mode === 'quick' && (
-              <p className="text-night-500 text-[0.7rem] italic mt-2 leading-snug">
+              <p className="text-night-500 text-[0.7rem] italic mt-3 leading-snug">
                 ⚠️ Analyse basée sur les signes solaires uniquement. Pour une lecture complète (Lune, Maisons…), utilise le mode Détaillé.
               </p>
             )}

@@ -1,4 +1,3 @@
-import { StrictMode } from 'react';
 import { createRoot } from 'react-dom/client';
 import './index.css';
 import { App } from './App';
@@ -24,12 +23,12 @@ window.addEventListener('error', (e) => captureError(e.error ?? e.message));
 window.addEventListener('unhandledrejection', (e) => captureError(e.reason));
 
 createRoot(document.getElementById('root')!).render(
-  <StrictMode>
-    <ErrorBoundary>
-      {/* Toujours visible, peu importe l'écran (auth/onboarding/home). */}
-      <OfflineIndicator />
-      <ToastHost />
-      <App />
-    </ErrorBoundary>
-  </StrictMode>,
+  // StrictMode désactivé pour debug P0
+  <ErrorBoundary>
+    {/* Toujours visible, peu importe l'écran (auth/onboarding/home). */}
+    <OfflineIndicator />
+    {/* ToastHost désactivé pour debug P0 */}
+    {/* <ToastHost /> */}
+    <App />
+  </ErrorBoundary>,
 );

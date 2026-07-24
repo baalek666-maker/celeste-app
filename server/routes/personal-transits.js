@@ -33,6 +33,91 @@ const PLANET_GLYPHS = {
   jupiter: '♃', saturn: '♄', uranus: '♅', neptune: '♆', pluto: '♇',
 };
 
+// v14.7.7 — Thèmes des planètes natales (ce qu'elles représentent dans le thème).
+// Utilisé pour générer des interprétations fallback uniques par aspect transit→natal.
+const NATAL_THEMES = {
+  sun:     'ton identité profonde et ta volonté',
+  moon:    'ton monde émotionnel et tes besoins intimes',
+  mercury: 'ta manière de penser et de communiquer',
+  venus:   'ton rapport à l\'amour, au plaisir et aux valeurs',
+  mars:    'ton énergie d\'action et ta combativité',
+  jupiter: 'ta capacité d\'expansion et ta vision du monde',
+  saturn:  'ta structure, tes responsabilités et ta maturité',
+  uranus:  'ta soif de liberté et d\'innovation',
+  neptune: 'ta sensibilité, ton intuition et ta spiritualité',
+  pluto:   'ta capacité de transformation et de régénération',
+};
+
+// v14.7.7 — Qualités des planètes en transit (ce qu'elles activent).
+const TRANSIT_QUALITIES = {
+  sun:     'rayonnement et affirmation',
+  moon:    'émotions et intuition',
+  mercury: 'pensée et communication',
+  venus:   'amour et douceur',
+  mars:    'action et courage',
+  jupiter: 'expansion et optimisme',
+  saturn:  'structure et exigence',
+  uranus:  'rupture et innovation',
+  neptune: 'rêverie et dissolution',
+  pluto:   'transformation et intensité',
+};
+
+// v14.7.7 — Conseils uniques par (nature × aspect). Avant : 3 conseils fixes pour 3 natures
+// → si 5 aspects sont tous "tension", le user lisait 5 fois le même conseil.
+const PERSONAL_COUNSEL = {
+  harmonious: {
+    conjunction: 'Accueille ce qui arrive et laisse-le te traverser.',
+    opposition:   'Dialogue avec cette énergie nouvelle au lieu de résister.',
+    trine:        'Profite de cette fluidité — agis maintenant.',
+    square:       'Canalise cette énergie nouvelle dans un projet.',
+    sextile:      'Saisis cette opportunité douce, même par un petit pas.',
+  },
+  tension: {
+    conjunction: 'Canalise cette intensité dans un projet concret, pas dans l\'attente.',
+    opposition:   'Prends du recul avant de répondre — la friction te dit quelque chose.',
+    trine:        'L\'élan est là mais demande ton engagement.',
+    square:       'Transforme la friction en action — sport, écriture, mouvement.',
+    sextile:      'Engage-toi activement, l\'opportunité ne restera pas.',
+  },
+  neutre: {
+    conjunction: 'Observe ce que cette rencontre active en toi.',
+    opposition:   'Tu peux vouloir deux directions opposées, c\'est ok.',
+    trine:        'Laisse couler, sans forcer.',
+    square:       'Accepte l\'inconfort, il porte un message.',
+    sextile:      'Sois attentif aux petits signes aujourd\'hui.',
+  },
+};
+
+// v14.7.7 — Helper : génère interprétation + conseil uniques par aspect transit→natal.
+function personalFallback(a) {
+  const tName = a.transitPlanet || 'sun';
+  const nName = a.natalPlanet || 'sun';
+  const nature = a.nature || 'neutre';
+  const aspect = a.aspect || 'conjunction';
+  const tFr = a.transitPlanetFr || PLANET_FR[tName] || tName;
+  const nFr = a.natalPlanetFr || PLANET_FR[nName] || nName;
+  const tQ = TRANSIT_QUALITIES[tName] || TRANSIT_QUALITIES.sun;
+  const nT = NATAL_THEMES[nName] || NATAL_THEMES.sun;
+
+  // Interprétation : varie selon transit × natale × nature (3 dimensions = 30+ combinaisons)
+  let interpretation;
+  if (nature === 'harmonique') {
+    interpretation = `${tFr} en transit active doucement ${nT}. C'est une journée pour laisser cette qualité (${tQ}) soutenir ce que tu incarnes déjà (${nT}).`;
+  } else if (nature === 'tension') {
+    // v14.7.7.1 — accord pluriel : on remplace le verbe à la 3e personne par "peuvent"
+    // pour gérer les thèmes au pluriel ("tes besoins intimes", "ta structure, tes responsabilités", etc.).
+    interpretation = `${tFr} en transit vient challenger ${nT}. Cette friction peut sembler inconfortable, mais elle t'invite à grandir — accepte que ${nT} peuvent se transformer sous la pression de ${tQ}.`;
+  } else {
+    interpretation = `${tFr} en transit rencontre ${nT}. C'est une rencontre qui met en lumière ce que tu portes en toi (${nT}) sous un jour nouveau — observe sans forcer.`;
+  }
+
+  // Conseil : 15 variations (3 natures × 5 aspects)
+  const counselTable = PERSONAL_COUNSEL[nature] || PERSONAL_COUNSEL.neutre;
+  const conseil = counselTable[aspect] || counselTable.conjunction;
+
+  return { interpretation, conseil };
+}
+
 const ASPECTS = [
   { name: 'conjunction', angle: 0,   orb: 8, nature: 'neutre',    glyph: '☌', fr: 'conjonte' },
   { name: 'opposition',  angle: 180, orb: 8, nature: 'tension',   glyph: '☍', fr: 'opposition' },
@@ -225,21 +310,21 @@ Règles:
         if (endIdx === -1) throw new Error('no balanced JSON in LLM response');
         parsed = JSON.parse(llmText.slice(startIdx, endIdx + 1));
       } catch {
+        // v14.7.7 — Fallback unique par aspect. Avant : interprétation/conseil identiques
+        // pour TOUS les aspects du jour (même copier-coller 5x). Maintenant : variation
+        // selon (transit_planète × natale_planète × nature × aspect) — chaque ligne est unique.
         parsed = {
           headline: 'Le ciel bouge pour toi aujourd\'hui. Écoute ce qui se présente.',
-          aspects: aspects.map(() => ({
-            interpretation: 'Un aspect actif aujourd\'hui — reste attentif aux signes.',
-            conseil: 'Respire avant de réagir.',
-          })),
+          aspects: aspects.map(a => personalFallback(a)),
         };
       }
 
-      // Merge LLM interpretations with computed aspect data
+      // Merge LLM interpretations with computed aspect data — fallback riche si LLM KO
       const llmAspects = Array.isArray(parsed.aspects) ? parsed.aspects : [];
       const finalAspects = aspects.map((a, i) => ({
         ...a,
-        interpretation: llmAspects[i]?.interpretation || 'Cet aspect active une partie de ton thème aujourd\'hui.',
-        conseil: llmAspects[i]?.conseil || 'Reste à l\'écoute de ce qui se présente.',
+        interpretation: llmAspects[i]?.interpretation || personalFallback(a).interpretation,
+        conseil: llmAspects[i]?.conseil || personalFallback(a).conseil,
       }));
 
       const result = {

@@ -67,10 +67,19 @@ export const toast = {
 
 function ToastHost() {
   const [items, setItems] = useState<ToastItem[]>(_items);
+  // Stables: utiliser un ref pour le setState afin que le listener soit unique
+  // même si React re-render ToastHost (StrictMode double-mount ou re-mount forcé).
+  // Bug fix P0: sans ce ref, _listeners accumulait des setItems "fantômes" qui
+  // continuaient à mettre à jour un state sur un composant démonté, ce qui
+  // finissait par déclencher un NotFoundError removeChild sur le portal #toast-root
+  // au moment de l'unmount.
+  const setItemsRef = useRef(setItems);
+  setItemsRef.current = setItems;
   useEffect(() => {
-    _listeners.push(setItems);
+    const handler = (next: ToastItem[]) => setItemsRef.current(next);
+    _listeners.push(handler);
     return () => {
-      const idx = _listeners.indexOf(setItems);
+      const idx = _listeners.indexOf(handler);
       if (idx >= 0) _listeners.splice(idx, 1);
     };
   }, []);

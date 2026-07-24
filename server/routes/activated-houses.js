@@ -64,7 +64,7 @@ function findHouseForLongitude(longitude, houses) {
 
 // ─── Main router factory ─────────────────────────────────────
 
-export function createActivatedHousesRouter({ db, auth, getNatalPositions, getTransits, callLLMWithRetry }) {
+export function createActivatedHousesRouter({ db, auth, getNatalPositions, getTransits, callLLMWithRetry, _generateHouseFallback, _generateHouseAction }) {
   const router = Router();
 
   db.exec(`
@@ -238,21 +238,24 @@ Règles:
         if (endIdx === -1) throw new Error('no balanced JSON in LLM response');
         parsed = JSON.parse(llmText.slice(startIdx, endIdx + 1));
       } catch {
+        // v14.7.2 — Fallback déterministe riche (v14.4 était un copier-coller "Cette zone de vie
+        // est activée"). Utilise les helpers _generateHouseFallback/_generateHouseAction du
+        // server.js qui prennent en compte la maison (1-12) ET les planètes en transit/natales.
         parsed = {
-          headline: 'Certaines zones de ta vie sont mises en lumière aujourd\'hui.',
-          houses: topHouses.map(() => ({
-            insight: 'Cette zone de vie est activée aujourd\'hui.',
-            action: 'Prête attention à ce qui se présente dans ce domaine.',
+          headline: 'Le ciel éclaire certaines zones de ta vie aujourd\'hui.',
+          houses: topHouses.map(h => ({
+            insight: _generateHouseFallback(h, h.transitPlanets, h.natalPlanets),
+            action: _generateHouseAction(h),
           })),
         };
       }
 
-      // Merge LLM with computed data
+      // Merge LLM with computed data — fallback riche si LLM KO
       const llmHouses = Array.isArray(parsed.houses) ? parsed.houses : [];
       const finalHouses = topHouses.map((h, i) => ({
         ...h,
-        insight: llmHouses[i]?.insight || `La Maison ${h.num} (${h.theme}) est activée aujourd'hui.`,
-        action: llmHouses[i]?.action || 'Reste attentif aux opportunités dans ce domaine.',
+        insight: llmHouses[i]?.insight || _generateHouseFallback(h, h.transitPlanets, h.natalPlanets),
+        action: llmHouses[i]?.action || _generateHouseAction(h),
       }));
 
       const result = {

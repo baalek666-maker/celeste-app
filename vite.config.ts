@@ -8,7 +8,7 @@ export default defineConfig({
   // oxc fait déjà du dead-code elimination et tree-shaking.
   // Les console.log résiduels sont minimisés par la minification oxc.
   build: {
-    minify: 'oxc',
+    minify: false,
     // P0-1 — Manual chunks (function form for Vite 8 / rolldown compatibility).
     // React/react-dom/scheduler changent rarement (1 fois par version mineure),
     // les isoler permet un cache hit à chaque deploy du code app.
@@ -28,12 +28,12 @@ export default defineConfig({
     host: '0.0.0.0',
     port: 5174,
     allowedHosts: true,
-    proxy: { '/api': { target: 'http://localhost:3001', changeOrigin: true } }
+    proxy: { '/api': { target: 'http://localhost:3002', changeOrigin: true } }
   },
   preview: {
     host: '0.0.0.0',
     port: 5173,
     allowedHosts: true,
-    proxy: { '/api': { target: 'http://localhost:3001', changeOrigin: true } }
+    proxy: { '/api': { target: 'http://localhost:3002', changeOrigin: true } }
   }
 })

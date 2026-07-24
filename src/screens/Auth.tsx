@@ -28,6 +28,13 @@ export function Auth({ onSuccess }: { onSuccess: (user: any) => void }) {
   const [oauthLoading, setOauthLoading] = useState<'google' | 'apple' | null>(null);
   const [googleReady, setGoogleReady] = useState(false);
   const googleButtonRef = useRef<HTMLDivElement>(null);
+  // Stocker onSuccess dans un ref pour qu'il soit toujours à jour sans
+  // déclencher un re-mount du useEffect Google (qui injecte un iframe hors-React).
+  // Bug fix P0: avec [mode, onSuccess] comme deps, onSuccess changeait à chaque
+  // render d'App → useEffect re-run → vide le bouton Google → React tente un
+  // removeChild sur un node orphelin → NotFoundError au commit.
+  const onSuccessRef = useRef(onSuccess);
+  onSuccessRef.current = onSuccess;
 
   // ── Charge le SDK Google Identity Services ────────────────────────────────
   useEffect(() => {
@@ -36,6 +43,7 @@ export function Auth({ onSuccess }: { onSuccess: (user: any) => void }) {
       return;
     }
     let cancelled = false;
+    let renderedButton: HTMLElement | null = null;
     const init = () => {
       if (cancelled || !window.google?.accounts?.id) return;
       try {
@@ -50,7 +58,7 @@ export function Auth({ onSuccess }: { onSuccess: (user: any) => void }) {
                 idToken: resp.credential,
               });
               if (mode === 'register') clearStoredReferralCode();
-              onSuccess(result.user);
+              onSuccessRef.current(result.user);
             } catch (err: unknown) {
               setError(errMsg(err, 'Connexion Google indisponible.'));
             } finally {
@@ -60,6 +68,8 @@ export function Auth({ onSuccess }: { onSuccess: (user: any) => void }) {
           cancel_on_tap_outside: true,
         });
         if (googleButtonRef.current) {
+          // Vider le conteneur avant de re-render (StrictMode + hot-reload safe)
+          googleButtonRef.current.innerHTML = '';
           window.google.accounts.id.renderButton(googleButtonRef.current, {
             theme: 'outline',
             size: 'large',
@@ -69,6 +79,7 @@ export function Auth({ onSuccess }: { onSuccess: (user: any) => void }) {
             locale: 'fr',
             logo_alignment: 'left',
           });
+          renderedButton = googleButtonRef.current;
         }
         setGoogleReady(true);
       } catch (e) {
@@ -87,8 +98,16 @@ export function Auth({ onSuccess }: { onSuccess: (user: any) => void }) {
     } else {
       init();
     }
-    return () => { cancelled = true; };
-  }, [mode, onSuccess]);
+    // Cleanup: annule init asynchrone ET vide le conteneur Google pour éviter
+    // removeChild NotFoundError sur le iframe GIS lors du unmount (P0).
+    return () => {
+      cancelled = true;
+      if (renderedButton) {
+        try { renderedButton.innerHTML = ''; } catch { /* noop */ }
+      }
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [mode]); // Intentionnellement onSuccess exclu (lu via onSuccessRef pour stabilité)
 
   // ── Apple : non disponible sur web sans app native ────────────────────────
   const handleAppleClick = async () => {

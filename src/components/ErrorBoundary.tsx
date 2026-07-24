@@ -39,11 +39,12 @@ export class ErrorBoundary extends Component<Props, State> {
           <p className="text-night-300 text-sm mb-6">
             L'application a rencontré un imprévu. Tu peux réessayer sans perdre tes données.
           </p>
-          {import.meta.env.DEV && (
-            <pre className="text-left text-xs text-red-300 bg-night-900/60 rounded-xl p-3 mb-4 overflow-auto max-h-40">
-              {this.state.error.message}
-            </pre>
-          )}
+          {/* Debug: TOUJOURS afficher en prod (pas que DEV) pour pouvoir diagnostiquer */}
+          <details className="text-left text-xs text-red-300 bg-night-900/60 rounded-xl p-3 mb-4">
+            <summary className="cursor-pointer text-night-400 mb-1">Détails techniques</summary>
+            <div className="font-bold mb-2 text-red-200">{this.state.error.name}: {this.state.error.message}</div>
+            <pre className="overflow-auto max-h-60 text-[10px] text-night-300 whitespace-pre-wrap">{this.state.error.stack}</pre>
+          </details>
           <button onClick={this.reset}
             className="w-full py-3 rounded-2xl bg-gradient-to-r from-cosmic-600 to-cosmic-700 text-white font-semibold">
             Réessayer

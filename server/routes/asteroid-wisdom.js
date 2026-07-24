@@ -70,6 +70,69 @@ function degToSignInfo(lon) {
   return { sign, degree: deg, absDeg: lon };
 }
 
+/**
+ * v14.7.1.3 — Fallback déterministe PAR archétype (et non plus copier-coller générique).
+ * Chaque astéroïde a sa propre grille d'interprétation indexée par signe. Quand le LLM
+ * échoue (timeout, rate-limit, JSON cassé), on sert ce texte déterministe — au moins
+ * chaque ligne est unique et cohérente avec la position natale calculée.
+ *
+ * Pour rester honnête intellectuellement, on utilise des descriptions génériques mais
+ * qui varient par archétype ET par signe (pas juste un template "tu as une capacité").
+ */
+const ARCH_FALLBACK = {
+  chiron: {
+    baseMeaning: (sign) => `Ta blessure guérisseuse se loge en ${sign}. Là où tu as souffert, tu deviens le médecin des autres. C'est un don paradoxal : ta fragilité devient ton expertise la plus fine.`,
+    baseGift: (sign) => `Tu peux accompagner ceux qui vivent ce que tu as traversé — sans en faire un métier, mais avec une présence qui désarme.`,
+    baseShadow: (sign) => `Le piège : rester dans le rôle du blessé pour ne pas avoir à vivre ta propre guérison. Tant que tu soignes les autres, tu n'as pas à te soigner toi-même.`,
+    basePractice: (sign) => `Accepte cette semaine de recevoir au lieu de donner — accepte un soin, un compliment, un service.`,
+  },
+  ceres: {
+    baseMeaning: (sign) => `Cérès en ${sign} raconte comment tu nourris et ce dont tu as besoin pour te sentir nourri·e. Ta manière de prendre soin est ta signature.`,
+    baseGift: (sign) => `Tu sais créer un espace où les gens se sentent en sécurité — par ta présence, ta cuisine, ton écoute.`,
+    baseShadow: (sign) => `Attention à confondre "prendre soin des autres" et s\u2019oublier soi-même. Le don peut devenir épuisement si tu ne reçois rien en retour.`,
+    basePractice: (sign) => `Liste trois choses qui te nourrissent vraiment cette semaine — et fais-en au moins une chaque jour, sans négocier.`,
+  },
+  pallas: {
+    baseMeaning: (sign) => `Pallas en ${sign} révèle ton intelligence stratégique — là où tu vois des patterns que personne d'autre ne voit. C'est ta façon de penser unique.`,
+    baseGift: (sign) => `Tu peux résoudre des problèmes que d'autres fuient — par ta capacité à relier des informations que personne ne rapproche.`,
+    baseShadow: (sign) => `Le piège : intellectualiser au lieu de ressentir. Quand tu analyses trop, tu perds l'intuition qui fait ta vraie force.`,
+    basePractice: (sign) => `Coupe ton esprit 10 minutes par jour (marche, musique, danse) — et vois ce qui remonte quand tu n'analyses plus.`,
+  },
+  juno: {
+    baseMeaning: (sign) => `Junon en ${sign} décrit ce que tu attends des liens profonds — ta vision du partenariat égal et juste.`,
+    baseGift: (sign) => `Tu sais créer des relations où chacun a sa place, sans jeu de pouvoir. C'est rare.`,
+    baseShadow: (sign) => `Le piège : confondre engagement et perte de soi. T'investir à fond peut t'amener à oublier tes propres besoins.`,
+    basePractice: (sign) => `Note ce qui est non-négociable pour toi dans un lien — et ce qui est négociable. Mets les deux listes par écrit.`,
+  },
+  vesta: {
+    baseMeaning: (sign) => `Vesta en ${sign} indique où brûle ton feu sacré — ce à quoi tu es prêt·e à te consacrer entièrement.`,
+    baseGift: (sign) => `Quand tu t'engages sur quelque chose qui compte, tu deviens inarrêtable. Ta concentration devient magnétique.`,
+    baseShadow: (sign) => `Le piège : te consumer entièrement pour une cause au point de t'oublier. Le feu sacré a besoin d'être protégé pour durer.`,
+    basePractice: (sign) => `Identifie une chose que tu as négligée à force de te consacrer à ce qui brûle — et donne-lui 30 minutes aujourd'hui.`,
+  },
+};
+
+function archFallback(p) {
+  const fb = ARCH_FALLBACK[p.key];
+  if (!fb) {
+    // Astéroïde inconnu (futur ajout) — fallback minimal mais non-copier-coller.
+    return {
+      title: p.archetype,
+      meaning: `${p.name} en ${p.sign} marque une facette de ton chemin intérieur — explore-la.`,
+      gift: `Ce que cette position t'enseigne se révèle dans tes relations profondes.`,
+      shadow: `Le piège serait de l'ignorer ou d'en faire trop — vise le milieu.`,
+      practice: `Prends un moment de silence aujourd'hui et écoute ce que cette part de toi veut te dire.`,
+    };
+  }
+  return {
+    title: p.archetype,
+    meaning: fb.baseMeaning(p.sign),
+    gift: fb.baseGift(p.sign),
+    shadow: fb.baseShadow(p.sign),
+    practice: fb.basePractice(p.sign),
+  };
+}
+
 // ─── Main router factory ─────────────────────────────────────
 
 export function createAsteroidWisdomRouter({ db, auth, getNatalPositions, callLLMWithRetry }) {
@@ -188,15 +251,12 @@ Règles:
         if (endIdx === -1) throw new Error('no balanced JSON in LLM response');
         parsed = JSON.parse(llmText.slice(startIdx, endIdx + 1));
       } catch {
+        // v14.7.1.3 — Fallback déterministe par archétype (jamais de copier-coller générique).
+        // Chaque astéroïde a son propre texte selon le signe qu'il occupe. Ça reste pauvre vs LLM
+        // mais au moins chaque ligne est unique et actionnable, pas une phrase identique.
         parsed = {
-          headline: 'Tes archétypes intérieurs racontent une histoire de guérison et de pouvoir.',
-          archetypes: positions.map(p => ({
-            title: p.archetype,
-            meaning: `${p.name} en ${p.sign} révèle une dimension unique de ton être.`,
-            gift: 'Tu as une capacité unique dans ce domaine.',
-            shadow: 'Attention à ne pas laisser ça te dominer.',
-            practice: 'Explore ce facet de toi en conscience.',
-          })),
+          headline: 'Tes archétypes intérieurs dessinent un chemin unique.',
+          archetypes: positions.map(p => archFallback(p)),
         };
       }
 
@@ -207,8 +267,9 @@ Règles:
         ...((llmArchetypes[i] || {})),
       }));
 
+      // v14.7.1.3 — Apostrophe typographique française (\u2019) au lieu de concat bizarre.
       const result = {
-        headline: parsed.headline || 'Tes archétypes intérieurs t'+'attendent.',
+        headline: parsed.headline || 'Tes archétypes intérieurs t\u2019attendent.',
         archetypes: finalArchetypes,
         generatedAt: new Date().toISOString(),
       };

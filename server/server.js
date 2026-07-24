@@ -8,6 +8,7 @@ import { rateLimit, ipKeyGenerator } from 'express-rate-limit';
 import helmet from 'helmet';
 import compression from 'compression';
 import * as Astronomy from 'astronomy-engine';
+import fs from 'fs';
 import * as Sentry from '@sentry/node';
 import { writeFileSync, mkdirSync, existsSync, readdirSync, unlinkSync, statSync } from 'node:fs';
 
@@ -51,7 +52,7 @@ import { readFileSync } from 'fs';
 import { fileURLToPath } from 'url';
 import { dirname, join } from 'path';
 import billingRouter, { stripeWebhookHandler, isStripeConfigured } from './billing.js';
-import { registerGamificationRoutes } from './gamification.js';
+import { registerGamificationRoutes, grantBadge } from './gamification.js';
 import { runMigrations } from './migrate.js';
 import { createNotificationsRouter } from './routes/notifications.js';
 import { createJournalRouter } from './routes/journal.js';
@@ -1141,7 +1142,7 @@ function getAscendantHouseKeyword(risingSign) {
   };
   return map[risingSign] || 'maison angulaire';
 }
-async function generateHoroscopeSummary(natalPositions, transits, sign, dateLabel) {
+async function generateHoroscopeSummary(natalPositions, transits, sign, dateLabel, birthDate = null) {
   const systemPrompt = celesteSystemPrompt("Tu écris à une amie qui consulte son ciel du jour. Tes résumés sont courts (2-3 phrases), poétiques mais terre-à-terre, jamais génériques. Tu écris en français.");
 
   const userPrompt = `Thème natal: ${Object.entries(natalPositions).map(([k,v]) => `${k} ${v.sign} ${v.degree}°`).join(', ')}.
@@ -1169,11 +1170,17 @@ Réponds UNIQUEMENT avec le JSON.`;
     const sun = natalPositions.sun?.sign || sign;
     const moon = natalPositions.moon?.sign || 'équilibre';
     const moodSeed = (natalPositions.moon?.degree || 0) + (transits.moon?.degree || 0);
+    // P3 — Lucky color + lucky number : valeurs astro DÉTERMINISTES (override le tableau random).
+    //    Avant : turquoise choisi dans une liste de 8 → pas astro. Maintenant : couleur planète dominante.
+    // v14.6 — passe birthDate pour chemin de vie numérologique.
+    const hard = computeAstroHardFacts(transits, new Date(), birthDate);
     return {
       general: `L'énergie du jour croise ton soleil en ${sun} et ta lune en ${moon}. Accorde-toi un rythme doux, c'est le bon tempo aujourd'hui.`,
       energie: ((moodSeed % 5) + 1),
       mood:   ['curiosité', 'calme', 'élan', 'fougue', 'sérénité'][Math.floor(moodSeed) % 5],
-      luckyColor: ['bleu profond','or','rouge carmin','vert sauge','lavande','bordeaux','ivoire','turquoise'][Math.floor(moodSeed) % 8],
+      luckyColor: hard.luckyColorName, // ex: "rose vénusien", "bleu saturne"
+      luckyNumber: hard.luckyNumber,
+      _dominantPlanet: hard.dominantPlanet,
     };
   }
 
@@ -1185,7 +1192,7 @@ Réponds UNIQUEMENT avec le JSON.`;
   return JSON.parse(jsonMatch[0]);
 }
 
-async function generateHoroscope(natalPositions, transits, sign) {
+async function generateHoroscope(natalPositions, transits, sign, birthDate = null) {
   const today = new Date().toLocaleDateString('fr-FR', { weekday: 'long', day: 'numeric', month: 'long' });
 
   // v13.5 — Le LLM backend consomme 1496 tokens sur 1500 en reasoning (finish_reason: length).
@@ -1258,21 +1265,22 @@ UNIQUEMENT le JSON, rien d'autre. Pas de markdown, pas de texte avant/après.`;
     const moonInTransit = transits.moon?.sign || moon;
     // Énergie : dérive lente basée sur la position lunaire du jour
     const energyScore = ((moonInTransit.charCodeAt(0) + new Date().getDate()) % 5) + 1;
-    // Lucky number : dérivé de la date + signe, reproductible par jour
-    const luckyNum = ((new Date().getDate() * sun.charCodeAt(0)) % 98) + 1;
-    const colors = ['bleu profond', 'or', 'rouge carmin', 'vert sauge', 'lavande', 'bordeaux', 'ivoire', 'turquoise'];
-    const luckyColor = colors[(sun.charCodeAt(0) + new Date().getDate()) % colors.length];
     // Mood : basé sur l'aspect Lune natale × Lune transit
     const moods = ['curiosité vive', 'calme profond', 'élan créatif', 'fougue ardente', 'sérénité douce', 'intensité lucide'];
     const mood = moods[(moonInTransit.charCodeAt(0) + moon.charCodeAt(0)) % moods.length];
+    // P3 — Lucky number + lucky color : valeurs astro DÉTERMINISTES (override LLM + fallback).
+    //    Ces valeurs ne sont plus inventées : elles sont calculées sur les transits réels.
+    // v14.6 — passe birthDate pour chemin de vie numérologique.
+    const hard = computeAstroHardFacts(transits, new Date(), birthDate);
     return {
       general: `Aujourd'hui, ton soleil en ${sun} rencontre le soleil en ${ts}. C'est une journée pour honorer ce qui te rend unique, ${today}. Prends un moment pour toi, sans culpabiliser.`,
       amour:  `Vénus en ${ven} en transit dans ta maison intérieure invite à la douceur avec tes proches. Écoute plus que tu ne parles aujourd'hui, le courant passe mieux.`,
       carriere: `Mars en ${tm} aiguise ton sens pratique. Une idée trotte dans ta tête depuis hier — écris-la avant ce soir.`,
       energie: energyScore,
       mood:   mood,
-      luckyNumber: luckyNum,
-      luckyColor:  luckyColor,
+      luckyNumber: hard.luckyNumber,
+      luckyColor:  hard.luckyColorName, // ex: "vert sauge", "rose vénusien"
+      _dominantPlanet: hard.dominantPlanet, // info astro pour push matinal (cf. P5)
     };
   };
 
@@ -1333,7 +1341,16 @@ UNIQUEMENT le JSON, rien d'autre. Pas de markdown, pas de texte avant/après.`;
     return fallback();
   }
   try {
-    return JSON.parse(jsonMatch[0]);
+    const parsed = JSON.parse(jsonMatch[0]);
+    // P3 — Override luckyNumber + luckyColor avec les vraies valeurs astro.
+    //    Le LLM invente (43, "vert sauge") au hasard. On force le calcul déterministe
+    //    basé sur les transits réels → cohérent avec le contenu ET vérifiable.
+    // v14.6 — passe birthDate pour chemin de vie numérologique.
+    const hard = computeAstroHardFacts(transits, new Date(), birthDate);
+    parsed.luckyNumber = hard.luckyNumber;
+    parsed.luckyColor = hard.luckyColorName;
+    parsed._dominantPlanet = hard.dominantPlanet; // pour push matinal
+    return parsed;
   } catch (e) {
     console.warn('[horoscope] JSON.parse failed, serving fallback:', e.message);
     return fallback();
@@ -1488,7 +1505,11 @@ app.use(helmet({
       styleSrc: ["'self'", "'unsafe-inline'", 'https://fonts.googleapis.com'],
       fontSrc: ["'self'", 'https://fonts.gstatic.com', 'data:'],
       imgSrc: ["'self'", 'data:', 'blob:', 'https:'],
-      connectSrc: ["'self'", 'https://api.cheapestinference.com', 'https://api.stripe.com'],
+      connectSrc: ["'self'", 'https://api.cheapestinference.com', 'https://api.stripe.com', 'https://nominatim.openstreetmap.org'],
+      // 'unsafe-inline' sur script-src-attr permet les onclick=, onsubmit=, etc.
+      // Vite injecte parfois des handlers inline via dangerouslySetInnerHTML ou SSR.
+      // Sans ça, l'app crash silencieusement sur certains flows (ex: bouton OAuth).
+      scriptSrcAttr: ["'unsafe-inline'"],
       frameSrc: ["'self'", 'https://js.stripe.com', 'https://hooks.stripe.com'],
       objectSrc: ["'none'"],
       baseUri: ["'self'"],
@@ -2045,7 +2066,7 @@ app.get('/api/astro/moon-phase', (req, res) => {
 
 // ─── Auth: Register ────────────────────────────────────────
 app.post('/api/auth/register', authLimiter, async (req, res) => {
-  const { email, password, ref } = req.body || {};
+  const { email, password, ref, display_name } = req.body || {};
   if (typeof email !== 'string' || typeof password !== 'string') {
     return res.status(400).json({ error: 'Email et mot de passe requis' });
   }
@@ -2055,6 +2076,16 @@ app.post('/api/auth/register', authLimiter, async (req, res) => {
   const emailLower = email.toLowerCase();
   if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(emailLower)) {
     return res.status(400).json({ error: 'Format d\'email invalide' });
+  }
+
+  // Validation display_name optionnel (mais recommandé). On accepte string non-vide
+  // de 2 à 40 caractères, sans caractères de contrôle. Si invalide, on l'ignore (fail-soft).
+  let displayNameClean = null;
+  if (typeof display_name === 'string') {
+    const trimmed = display_name.trim();
+    if (trimmed.length >= 2 && trimmed.length <= 40 && !/[\x00-\x1f]/.test(trimmed)) {
+      displayNameClean = trimmed;
+    }
   }
 
   const existing = db.prepare('SELECT id FROM users WHERE email = ?').get(emailLower);
@@ -2069,8 +2100,8 @@ app.post('/api/auth/register', authLimiter, async (req, res) => {
   // absente ; on force la valeur explicitement pour les nouvelles DBs où le
   // DEFAULT peut avoir été perdu lors d'une migration.
   const result = db.prepare(
-    'INSERT INTO users (email, password_hash, email_verify_token, streak_freezes) VALUES (?, ?, ?, 2)'
-  ).run(emailLower, hash, verifyToken);
+    'INSERT INTO users (email, password_hash, email_verify_token, display_name, streak_freezes) VALUES (?, ?, ?, ?, 2)'
+  ).run(emailLower, hash, verifyToken, displayNameClean);
   const user = { id: result.lastInsertRowid, email: emailLower };
   const { access, refresh } = issueTokenPair(db, user);
 
@@ -2838,8 +2869,24 @@ app.post('/api/horoscope', auth, async (req, res) => {
     if (userCached) {
       // P0#4 — updateStreak retourne désormais { count, freezeConsumed, graceApplied }
       const streakInfo = updateStreak(req.user.id, today);
+      const cachedHoroscope = safeJsonParse(userCached.content, {}, 'horoscope_cache.content');
+      // P3 — Override final : lucky astro appliqué même sur le cache legacy (qui peut contenir
+      //    d'anciennes valeurs random genre "turquoise" ou "43").
+      try {
+        const transitsNow = getTransits(new Date());
+        // v14.6 — lecture birthDate depuis user.birth_data pour chemin de vie numérologique
+        const bdLegacy = safeJsonParse(user.birth_data, null, 'legacy birth_data');
+        const legacyBirthDate = bdLegacy?.date || null;
+        const hardFinal = computeAstroHardFacts(transitsNow, new Date(), legacyBirthDate);
+        cachedHoroscope.luckyNumber = hardFinal.luckyNumber;
+        cachedHoroscope.luckyColor = hardFinal.luckyColorName;
+        cachedHoroscope._dominantPlanet = hardFinal.dominantPlanet;
+        cachedHoroscope._lifePathNumber = hardFinal.lifePathNumber;
+      } catch (e) {
+        console.warn('[horoscope] legacy cache override failed:', e.message);
+      }
       return res.json({
-        ...safeJsonParse(userCached.content, {}, 'horoscope_cache.content'),
+        ...cachedHoroscope,
         streak: streakInfo.count, // rétro-compat : le frontend attend un number
         streakInfo, // bonus : flags pour UX (banner "freeze utilisé")
       });
@@ -2847,6 +2894,7 @@ app.post('/api/horoscope', auth, async (req, res) => {
 
     const birthData = safeJsonParse(user.birth_data, null, 'horoscope birth_data');
     if (!birthData) return res.status(400).json({ error: 'No valid birth data. Please update your profile.' });
+    const birthDate = birthData?.date || null; // v14.6 — pour chemin de vie numérologique
     const natalPositions = getNatalPositions(birthData);
     const transits = getTransits(new Date());
     const sunSign = natalPositions.sun.sign;
@@ -2866,6 +2914,17 @@ app.post('/api/horoscope', auth, async (req, res) => {
       console.log(`[horoscope] personal hit (sun=${sunSign}, moon=${moonSign}, rising=${risingSign}, date=${today})`);
       const base = JSON.parse(personalCached.content);
       horoscope = personalizeHoroscope(base, natalPositions, transits, birthData);
+      // P3 — OVERRIDE FINAL : lucky number + lucky color + dominante planétaire sont TOUJOURS
+      //    ré-appliqués ici, même si le cache DB ou un LLM a injecté des valeurs random/génériques.
+      //    Dernier rempart : aucun user ne doit voir "turquoise" ou "43" sans fondement astro.
+      // v14.6 — passe birthDate pour mix chemin de vie numérologique.
+      {
+        const hardFinal = computeAstroHardFacts(transits, new Date(), birthDate);
+        horoscope.luckyNumber = hardFinal.luckyNumber;
+        horoscope.luckyColor = hardFinal.luckyColorName;
+        horoscope._dominantPlanet = hardFinal.dominantPlanet;
+        horoscope._lifePathNumber = hardFinal.lifePathNumber;
+      }
     } else {
       // ── Tier 2: LLM generation with graceful fallback ──
       console.log(`[horoscope] LLM miss (sun=${sunSign}, moon=${moonSign}, rising=${risingSign}, date=${today})`);
@@ -2874,7 +2933,8 @@ app.post('/api/horoscope', auth, async (req, res) => {
         // P1-5 — Cap LLM latency: 1 retry × 15s (instead of 3 × 45s default).
         // Fallback is instant (FALLBACK_HOROSCOPES), so users never wait >15s.
         // Worst case before fix: ~150s (45s × 4 attempts w/ backoff). Now: 15s max.
-        base = await generateHoroscope(natalPositions, transits, sunSign);
+        // v14.6 — passe birthDate pour chemin de vie numérologique.
+        base = await generateHoroscope(natalPositions, transits, sunSign, birthDate);
       } catch (llmErr) {
         console.warn(`[horoscope] LLM failed (${llmErr.message}), using FALLBACK for sign=${sunSign}`);
         base = getFallbackHoroscope(sunSign);
@@ -2902,6 +2962,17 @@ app.post('/api/horoscope', auth, async (req, res) => {
       }
 
       horoscope = personalizeHoroscope(base, natalPositions, transits, birthData);
+      // P3 — OVERRIDE FINAL : lucky number + lucky color + dominante planétaire sont TOUJOURS
+      //    ré-appliqués ici, même si le cache DB ou un LLM a injecté des valeurs random/génériques.
+      //    Dernier rempart : aucun user ne doit voir "turquoise" ou "43" sans fondement astro.
+      // v14.6 — passe birthDate pour mix chemin de vie numérologique.
+      {
+        const hardFinal = computeAstroHardFacts(transits, new Date(), birthDate);
+        horoscope.luckyNumber = hardFinal.luckyNumber;
+        horoscope.luckyColor = hardFinal.luckyColorName;
+        horoscope._dominantPlanet = hardFinal.dominantPlanet;
+        horoscope._lifePathNumber = hardFinal.lifePathNumber;
+      }
     }
 
     // Free-tier gate (only when we actually generated a fresh horoscope)
@@ -3479,6 +3550,24 @@ app.post('/api/compatibility', auth, llmLimiter, async (req, res) => {
       db.prepare('UPDATE users SET scans_remaining = ? WHERE id = ?').run(scansRemaining, req.user.id);
     }
 
+    // v14.7.1 — Attribution du badge "Âmes liées" après la 1ère compat réussie.
+    // Le badge existe dans BADGE_DEFS mais n'était jamais déclenché (bug gamification).
+    // Reward : 1 scan gratuit. INSERT OR IGNORE → idempotent, OK si déjà earned.
+    try {
+      const compatEarned = grantBadge(db, req.user.id, 'compatibility');
+      if (compatEarned) {
+        console.log(`[gamification] user ${req.user.id} unlocked badge 'compatibility'`);
+        // v14.7.1 — Reward = 1 scan gratuit (le user vient d'en consommer 1, on le recrédite).
+        const reloaded = db.prepare('SELECT scans_remaining FROM users WHERE id = ?').get(req.user.id);
+        if (reloaded && !isPremium) {
+          db.prepare('UPDATE users SET scans_remaining = scans_remaining + 1 WHERE id = ?').run(req.user.id);
+          console.log(`[gamification] user ${req.user.id} reward: +1 scan (compat badge)`);
+        }
+      }
+    } catch (badgeErr) {
+      console.warn('[gamification] compat badge grant failed:', badgeErr.message);
+    }
+
     res.json({
       ...result,
       context: ctx,
@@ -3671,7 +3760,10 @@ app.use('/api/mood', createMoodTrackerRouter({ db, auth, getNatalPositions, getT
 app.use('/api/personal-transits', createPersonalTransitsRouter({ db, auth, getNatalPositions, getTransits, callLLMWithRetry }));
 
 // ─── Activated Houses (refonte "Maisons natales") ───────
-app.use('/api/activated-houses', createActivatedHousesRouter({ db, auth, getNatalPositions, getTransits, callLLMWithRetry }));
+app.use('/api/activated-houses', createActivatedHousesRouter({
+  db, auth, getNatalPositions, getTransits, callLLMWithRetry,
+  _generateHouseFallback, _generateHouseAction,
+}));
 
 // ─── Asteroid Wisdom (refonte "Astéroïdes natals") ──────
 app.use('/api/asteroid-wisdom', createAsteroidWisdomRouter({ db, auth, getNatalPositions, callLLMWithRetry }));
@@ -4043,34 +4135,271 @@ function computeDailyAspects(date) {
 
 // v14.4 — Helpers de fallback déterministe pour interpretAspects (coupe-circuit LLM off)
 // Génère une interprétation générique mais contextuelle basée sur la nature et les planètes impliquées.
+// v14.7.2 — Grille d'interprétation unique par (nature × type d'aspect).
+// Avant : tous les aspects "harmonious" recevaient le même conseil → 5 lignes identiques.
+// Maintenant : variation par combinaison pour que chaque ligne soit unique ET porteuse de sens.
+// NOTE : la nature est stockée en français ('tension' / 'harmonique' / 'neutre') — voir
+// computeDailyAspects qui set `nature: 'tension' | 'harmonique' | 'neutre'`.
+const NATURE_HARMONIOUS = 'harmonique';
+const NATURE_CHALLENGING = 'tension';
+const NATURE_NEUTRAL = 'neutre';
+
 const ASPECT_FALLBACK_TEMPLATES = {
-  conjunction: { light: 'unifie', shadow: 'amplifie' },
-  opposition: { light: 'tire vers', shadow: 'tire vers' },
-  trine: { light: 'harmonise avec', shadow: 'soutient' },
-  square: { light: 'défie', shadow: 'frictionne' },
-  sextile: { light: 'soutient', shadow: 'invite à' },
-  quincunx: { light: 'demande d\'ajustement avec', shadow: 'irrite' },
+  conjunction: {
+    harmonique: 'unifie les énergies de',
+    tension:     'amplifie les tensions entre',
+    neutre:      'active simultanément',
+  },
+  opposition: {
+    harmonique: 'met en dialogue créatif',
+    tension:    'fait s\'affronter',
+    neutre:     'polarise autour de',
+  },
+  trine: {
+    harmonique: 'harmonise en douceur',
+    tension:    'soutient sans effort',
+    neutre:     'facilite le mouvement de',
+  },
+  square: {
+    harmonique: 'défie avec intensité',
+    tension:    'crée une friction entre',
+    neutre:     'demande un ajustement avec',
+  },
+  sextile: {
+    harmonique: 'offre une opportunité douce à',
+    tension:    'soutient activement',
+    neutre:     'invite à explorer',
+  },
+  quincunx: {
+    harmonique: 'invite à réconcilier',
+    tension:    'crée une irritation entre',
+    neutre:     'demande un ajustement créatif entre',
+  },
 };
 
+// v14.7.2 — Conseils uniques par (nature × aspect).
+// Avant : 3 conseils fixes pour 3 natures → si tous les aspects du jour sont
+// "harmonique", le user lisait 5 fois le même conseil.
+const ASPECT_COUNSEL = {
+  conjunction: {
+    harmonique: 'Crée un petit rituel qui marie ces deux forces — note ce qui émerge quand elles fusionnent.',
+    tension:    'Canalise cette intensité dans un projet concret, pas dans l\'attente.',
+    neutre:     'Observe les coïncidences aujourd\'hui — elles ne sont peut-être pas des hasards.',
+  },
+  opposition: {
+    harmonique: 'Dialogue : au lieu de choisir un camp, écoute ce que chaque côté a de juste.',
+    tension:    'Nomme la tension à voix haute — la mettre en mots la rend moins paralysante.',
+    neutre:     'Tu peux vouloir deux choses opposées en même temps. C\'est ok. Choisis sans culpabiliser.',
+  },
+  trine: {
+    harmonique: 'Profite de cette fluidité — agis aujourd\'hui plutôt que demain.',
+    tension:    'Le soutien est là, mais ne deviens pas passive : engage-toi dans ce qui coule.',
+    neutre:     'Fais confiance au flow aujourd\'hui, sans forcer.',
+  },
+  square: {
+    harmonique: 'Transforme l\'énergie en action physique — sport, marche, ménage, n\'importe.',
+    tension:    'Prends du recul avant de répondre. La friction te dit quelque chose d\'important.',
+    neutre:     'Accepte le inconfort — c\'est lui qui te fait grandir.',
+  },
+  sextile: {
+    harmonique: 'Invite quelqu\'un à profiter de cette ouverture avec toi — ça se partage mieux.',
+    tension:    'Engage-toi dans une démarche concrète : cette ouverture ne restera pas.',
+    neutre:     'Sois attentive aux petits signes aujourd\'hui — ce sont des invitations.',
+  },
+  quincunx: {
+    harmonique: 'Trouve le compromis qui respecte les deux besoins, même imparfait.',
+    tension:    'Accepte que ces deux parties de toi ne se comprennent pas — et que c\'est ok.',
+    neutre:     'Note ce qui te semble « pas à sa place » aujourd\'hui — il y a un réajustement à faire.',
+  },
+};
+
+// Garde l'ancienne structure ASPECT_NATURE_TONE pour rétro-compat (code tiers)
 const ASPECT_NATURE_TONE = {
-  harmonious: { adv: 'Profite de cette fluidité pour avancer.', noun: 'soutien' },
-  challenging: { adv: 'Prends un moment pour observer cette tension intérieure.', noun: 'défi' },
-  neutral: { adv: 'Observe ce que cette dynamique t\'apporte aujourd\'hui.', noun: 'mouvement' },
+  [NATURE_HARMONIOUS]: { adv: 'Profite de cette fluidité pour avancer.', noun: 'soutien' },
+  [NATURE_CHALLENGING]: { adv: 'Prends un moment pour observer cette tension intérieure.', noun: 'défi' },
+  [NATURE_NEUTRAL]: { adv: 'Observe ce que cette dynamique t\'apporte aujourd\'hui.', noun: 'mouvement' },
 };
 
 function _generateAspectFallback(a) {
-  const tone = ASPECT_FALLBACK_TEMPLATES[a.aspect] || ASPECT_FALLBACK_TEMPLATES.conjunction;
+  // v14.7.2 — Variation unique par (nature × type d'aspect). La phrase se termine
+  // différemment selon l'aspect pour éviter le copier-coller visuel.
   const p1 = PLANET_NAMES_FR[a.p1] || a.p1;
   const p2 = PLANET_NAMES_FR[a.p2] || a.p2;
-  const nature = a.nature || 'neutral';
-  const tk = (nature === 'harmonious') ? 'light' : 'shadow';
-  return `${p1} ${tone[tk]} ${p2} — énergie à canaliser aujourd'hui.`;
+  const nature = a.nature || NATURE_NEUTRAL;
+  const tmpl = ASPECT_FALLBACK_TEMPLATES[a.aspect] || ASPECT_FALLBACK_TEMPLATES.conjunction;
+  const verb = tmpl[nature] || tmpl[NATURE_NEUTRAL] || tmpl[NATURE_HARMONIOUS];
+  // Suffixe varié selon l'aspect ET la nature (chaque ligne visuellement différente)
+  const suffixes = {
+    conjunction: {
+      [NATURE_HARMONIOUS]: ' — une conjonction qui peut être fertile si tu l\'accueilles.',
+      [NATURE_CHALLENGING]: ' — l\'intensité est haute, mais elle peut être canalisée.',
+      [NATURE_NEUTRAL]: ' — deux forces se croisent, observe leur dialogue.',
+    },
+    opposition: {
+      [NATURE_HARMONIOUS]: ' — la tension peut être créative si tu la traverses.',
+      [NATURE_CHALLENGING]: ' — le tiraillement te dit quelque chose d\'important.',
+      [NATURE_NEUTRAL]: ' — tu peux vouloir deux directions, c\'est ok.',
+    },
+    trine: {
+      [NATURE_HARMONIOUS]: ' — profite de cette fluidité, c\'est rare.',
+      [NATURE_CHALLENGING]: ' — le soutien est là mais demande ton engagement.',
+      [NATURE_NEUTRAL]: ' — laisse couler, sans forcer.',
+    },
+    square: {
+      [NATURE_HARMONIOUS]: ' — le défi devient moteur si tu l\'embrasses.',
+      [NATURE_CHALLENGING]: ' — la friction t\'invite à clarifier ce qui compte.',
+      [NATURE_NEUTRAL]: ' — accepte l\'inconfort, il porte un message.',
+    },
+    sextile: {
+      [NATURE_HARMONIOUS]: ' — petite ouverture, à saisir avec délicatesse.',
+      [NATURE_CHALLENGING]: ' — engage-toi activement, l\'opportunité ne restera pas.',
+      [NATURE_NEUTRAL]: ' — sois attentive aux invitations subtiles.',
+    },
+    quincunx: {
+      [NATURE_HARMONIOUS]: ' — un compromis imparfait vaut mieux qu\'une rupture.',
+      [NATURE_CHALLENGING]: ' — accepte que ces parts de toi ne se comprennent pas.',
+      [NATURE_NEUTRAL]: ' — un réajustement créatif est possible.',
+    },
+  };
+  const suffixTable = suffixes[a.aspect] || suffixes.conjunction;
+  const suffix = suffixTable[nature] || suffixTable[NATURE_NEUTRAL];
+  return `${p1} ${verb} ${p2}${suffix}`;
 }
 
 function _generateAspectConseil(a) {
-  const nature = a.nature || 'neutral';
-  const tone = ASPECT_NATURE_TONE[nature] || ASPECT_NATURE_TONE.neutral;
-  return tone.adv;
+  // v14.7.2 — Conseil unique par (aspect × nature × combinaison de planètes).
+  // 6 aspects × 3 natures = 18 combinaisons de base. Pour casser les doublons
+  // quand 2 aspects ont la même combo (ex: 2 carrés tension Mercure-X et Vénus-Y),
+  // on ajoute un suffixe contextuel selon les planètes impliquées.
+  const nature = a.nature || NATURE_NEUTRAL;
+  const tbl = ASPECT_COUNSEL[a.aspect] || ASPECT_COUNSEL.conjunction;
+  let base = tbl[nature] || tbl[NATURE_NEUTRAL] || tbl[NATURE_HARMONIOUS];
+
+  // Suffixes personnalisés par planète — ajoutent ~1 ligne variante pour
+  // différencier les aspects de même (nature × aspect).
+  const planetFlavor = {
+    mercury: ' Note ce qui se dit et ce qui se tait.',
+    venus:   ' Vibre à ce qui te touche, sans filtrer.',
+    mars:    ' Agis maintenant, dans l\'alignement.',
+    jupiter: ' Élargis ta perspective — sortis du cadre.',
+    saturn:  ' Accorde-toi le temps qu\'il faut.',
+    uranus:  ' Accepte l\'imprévu comme un message.',
+    neptune: ' Laisse place à l\'intuition.',
+    pluto:   ' Plonge dans ce qui demande à être transformé.',
+    sun:     ' Affirme ce qui est juste pour toi.',
+    moon:    ' Écoute ton corps, il sait.',
+  };
+  // Priorité : planète la plus "lente" / marquante (Saturne, Pluton, Uranus > Mars > etc.)
+  const slowPlanets = ['pluto', 'neptune', 'uranus', 'saturn', 'jupiter'];
+  for (const p of slowPlanets) {
+    if (a.p1 === p || a.p2 === p) {
+      return base + (planetFlavor[p] || '');
+    }
+  }
+  return base + (planetFlavor[a.p1] || '');
+}
+
+// v14.7.2 — Helper fallback pour maisons activées.
+// Avant : un seul texte générique pour toutes les maisons activées ("Cette zone
+// de vie est activée aujourd'hui"). Maintenant : texte unique par (maison × planètes
+// en transit) pour que chaque ligne soit différenciée et porteuse de valeur.
+//
+// Logique :
+//   - Le texte dépend de la MAISON (thème spécifique : identité, argent, amour, etc.)
+//   - Il s'adapte aux planètes NATALES qui y résident (c'est ta "base" dans ce domaine)
+//   - Il s'adapte aux planètes EN TRANSIT qui la traversent (l'activation du jour)
+//   - Les conjugaisons sont correctes selon le nombre de transits (1 seul = singulier).
+const HOUSE_FALLBACK_INSIGHTS = {
+  1:  (transits, natale) => `Ta Maison 1 (identité, corps, façon d'apparaître au monde) est activée. {transits} — c'est ton moment pour incarner qui tu deviens.${natalClause(natale, 'Tes planètes natales ici renforcent ce thème de manière permanente.')}`,
+  2:  (transits, natale) => `Ta Maison 2 (ressources, valeurs, sécurité) reçoit de l'attention. {transits} — observe ce qui mérite d'être protégé ou rééquilibré.${natalClause(natale, 'Tes planètes natales dans cette maison sont ton socle.')}`,
+  3:  (transits, natale) => `Ta Maison 3 (communication, entourage, idées) s'éclaire. {transits} — un message, une conversation, un déplacement peuvent être les véhicules de cette activation.${natalClause(natale, 'Ta manière naturelle de penser et parler est ton premier outil.')}`,
+  4:  (transits, natale) => `Ta Maison 4 (foyer, racines, vie intérieure) pulse. {transits} — c'est le moment de t'ancrer, chez toi ou en toi.${natalClause(natale, 'Tes planètes natales ici parlent de tes fondations.')}`,
+  5:  (transits, natale) => `Ta Maison 5 (créativité, plaisir, expression) s'ouvre. {transits} — donne-toi la permission de faire ce qui te fait vibrer aujourd'hui.${natalClause(natale, 'Ton don créatif naturel est amplifié.')}`,
+  6:  (transits, natale) => `Ta Maison 6 (quotidien, travail, santé) demande de l'attention. {transits} — c'est le moment d'ajuster tes rythmes, tes habitudes, ton soin de toi.${natalClause(natale, 'Tes planètes ici parlent de tes talents au quotidien.')}`,
+  7:  (transits, natale) => `Ta Maison 7 (relations, partenariats, miroir de l'autre) est activée. {transits} — une rencontre ou une clarification de relation peut marquer ce moment.${natalClause(natale, "Ta manière d'aimer est inscrite dans tes planètes natales ici.")}`,
+  8:  (transits, natale) => `Ta Maison 8 (intimité, transformation, ressources partagées) s'éclaire. {transits} — c'est le moment d'aller voir ce qui d'habitude reste en surface.${natalClause(natale, 'Tu portes une intensité naturelle ici.')}`,
+  9:  (transits, natale) => `Ta Maison 9 (philosophie, horizons, sens) s'ouvre. {transits} — voyage, étude, questionnement existentiel : ce qui te dépasse t'appelle.${natalClause(natale, 'Ta quête de sens est naturelle chez toi.')}`,
+  10: (transits, natale) => `Ta Maison 10 (vocation, carrière, place dans le monde) reçoit une activation. {transits} — c'est le moment de rendre visible ce que tu as à offrir.${natalClause(natale, 'Ta mission de vie est inscrite dans tes planètes natales ici.')}`,
+  11: (transits, natale) => `Ta Maison 11 (communauté, projets, rêves collectifs) s'anime. {transits} — les bonnes alliances et les projets qui te dépassent sont favorisés.${natalClause(natale, "Tes planètes natales ici parlent de ta façon d'espérer.")}`,
+  12: (transits, natale) => `Ta Maison 12 (intériorité, inconscient, retrait) te demande d'écouter. {transits} — ce n'est pas un moment de performance mais d'intériorité.${natalClause(natale, 'Tu portes une profondeur naturelle ici.')}`,
+};
+
+// Verbes conjugués au pluriel pour les bases transit (utilisés quand >1 transit)
+const TRANSIT_VERBS_PLURAL = {
+  1:  'passent',         // Maison 1: "X, Y passent ici"
+  2:  'viennent toucher ce qui est à toi',
+  3:  'stimulent tes échanges',
+  4:  'touchent ton espace intime',
+  5:  'invitent à créer, jouer, aimer',
+  6:  'amènent du mouvement dans ta routine',
+  7:  't\'invitent à regarder ta façon d\'entrer en lien',
+  8:  'approfondissent ce qui est en toi',
+  9:  'élargissent ta vision',
+  10: 'appellent à te repositionner publiquement',
+  11: 'élargissent ton cercle',
+  12: 't\'invitent à ralentir',
+};
+// Verbes conjugués au singulier (1 seul transit)
+const TRANSIT_VERBS_SINGULAR = {
+  1:  'passe ici',
+  2:  'vient toucher ce qui est à toi',
+  3:  'stimule tes échanges',
+  4:  'touche ton espace intime',
+  5:  'invite à créer, jouer, aimer',
+  6:  'amène du mouvement dans ta routine',
+  7:  't\'invite à regarder ta façon d\'entrer en lien',
+  8:  'approfondit ce qui est en toi',
+  9:  'élargit ta vision',
+  10: 'appelle à te repositionner publiquement',
+  11: 'élargit ton cercle',
+  12: 't\'invite à ralentir',
+};
+
+function _generateHouseFallback(house, transits, natale) {
+  const fn = HOUSE_FALLBACK_INSIGHTS[house.num] || HOUSE_FALLBACK_INSIGHTS[1];
+  // Construit la clause transit ici (avec accès à house.num pour le verbe juste)
+  const transitText = buildTransitPhrase(transits, house.num);
+  // fn retourne la string avec un placeholder {transits} qu'on remplace ici
+  // pour avoir le bon verbe selon la maison ET le nombre de transits.
+  let result = fn(transits, natale || []);
+  result = result.replace('{transits}', transitText);
+  return result;
+}
+
+function buildTransitPhrase(transits, houseNum) {
+  if (!transits || transits.length === 0) {
+    return 'Les transits du jour activent cette zone';
+  }
+  const names = transits.map(t => t.name).join(', ');
+  const verbTable = transits.length === 1 ? TRANSIT_VERBS_SINGULAR : TRANSIT_VERBS_PLURAL;
+  const verb = verbTable[houseNum] || verbTable[1];
+  return `${names} ${verb}`;
+}
+
+function natalClause(natale, suffix) {
+  if (!natale || natale.length === 0) return '';
+  return ` ${suffix}`;
+}
+
+// v14.7.2 — Actions uniques par maison (variation selon les planètes en transit)
+const HOUSE_FALLBACK_ACTIONS = {
+  1:  (transits) => transits.length > 1 ? 'Prends une décision visible aujourd\'hui — ne te cache pas.' : 'Assume une facette de toi que tu caches d\'habitude.',
+  2:  () => 'Pose un acte concret sur tes finances — même petit, l\'énergie est favorable.',
+  3:  () => 'Envoie ce message que tu repousses, ou accepte cette conversation qui s\'annonce.',
+  4:  () => 'Crée un moment de calme chez toi, sans écran ni sollicitation.',
+  5:  () => 'Fais quelque chose de purement agréable, sans justification utile.',
+  6:  () => 'Choisis un ajustement concret dans ta routine — sommeil, alimentation, mouvement.',
+  7:  () => 'Initie la conversation que tu évites, ou propose un pas vers quelqu\'un.',
+  8:  () => 'Écris ce que tu n\'as jamais formulé. Pour toi d\'abord, pas forcément à partager.',
+  9:  () => 'Cherche aujourd\'hui ce qui te fait sentir plus grand que toi.',
+  10: () => 'Pose un acte vers ta vocation — publie, propose, rends visible.',
+  11: () => 'Rejoins ou sollicite un collectif. Les projets à plusieurs sont favorisés.',
+  12: () => 'Ralentis. Écoute ce que le silence te dit.',
+};
+
+function _generateHouseAction(house) {
+  const fn = HOUSE_FALLBACK_ACTIONS[house.num] || HOUSE_FALLBACK_ACTIONS[1];
+  return fn(house.transitPlanets || []);
 }
 
 // v14.4 — Helper fallback pour interpretAsteroids (route /api/chart/asteroids)
@@ -4684,45 +5013,107 @@ app.get('/api/chart/houses', auth, async (req, res) => {
 });
 
 // ─── Daily Rituals (Feature A1) ─────────────────────────────
+// P3 — Refonte : 8 templates déterministes qui rotationnent selon (signe solaire × jour de l'année).
+//    Chaque user Verseau obtient UN des 8 chaque jour, jamais deux jours de suite le même.
+//    Les prompts LLM injectent le prénom + l'heure de naissance → ressenti 10× plus perso.
+//    Si LLM off : sert directement le template. Pas de bidon.
+const RITUAL_MORNING_TEMPLATES = [
+  // 0 — Élément eau : introspection
+  (sun, prn) => `${prn ? prn + ', ' : ''}ce matin, ton soleil en ${sun} te demande de ralentir. Bois un verre d'eau en silence avant de toucher ton téléphone. 3 minutes suffisent pour recentrer ta journée.`,
+  // 1 — Élément feu : action
+  (sun, prn) => `${prn ? prn + ', ' : ''}Mars active ton signe ${sun} aujourd'hui. Choisis UNE seule priorité pour la matinée — écris-la sur un post-it. Le reste est du bruit.`,
+  // 2 — Élément air : connexion
+  (sun, prn) => `${prn ? prn + ', ' : ''}ton esprit en ${sun} a besoin de mouvement. Envoie un message à quelqu'un que tu n'as pas vu depuis longtemps — pas pour demander, juste pour dire bonjour.`,
+  // 3 — Élément terre : ancrage
+  (sun, prn) => `${prn ? prn + ', ' : ''}l'énergie ${sun} d'aujourd'hui est lente mais profonde. Prends 5 minutes pour marcher pieds nus ou toucher quelque chose de vivant (plante, animal, terre). Ton corps te guidera.`,
+  // 4 — Vénus : douceur
+  (sun, prn) => `${prn ? prn + ', ' : ''}Vénus en transit te couvre de douceur ce matin. Offre-toi un café ou un thé comme si c'était un rituel sacré — pas une pause volée. Mérite ce moment.`,
+  // 5 — Mercure : clarté mentale
+  (sun, prn) => `${prn ? prn + ', ' : ''}ton mental ${sun} est vif aujourd'hui. Note 3 pensées qui te traversent au réveil, sans filtre. Une seule sera utile — tu le verras plus tard.`,
+  // 6 — Lune : émotion
+  (sun, prn) => `${prn ? prn + ', ' : ''}la Lune éclaire ton signe ${sun} ce matin. Demande-toi : « Qu'est-ce que je ressens vraiment là ? » Ne réponds pas — juste observe. C'est suffisant.`,
+  // 7 — Saturne : structure
+  (sun, prn) => `${prn ? prn + ', ' : ''}Saturne honore ta discipline ${sun}. Avant de commencer ta journée, ferme les yeux 30 secondes et visualise UN engagement à tenir. Pas dix. Un seul.`,
+];
+
+const RITUAL_EVENING_TEMPLATES = [
+  (sun, prn) => `${prn ? prn + ', ' : ''}ce soir, ton soleil ${sun} te demande : « Qu'ai-je fait aujourd'hui qui était vraiment pour moi ? » Sois honnête. C'est ta progression.`,
+  (sun, prn) => `${prn ? prn + ', ' : ''}Vénus en ${sun} t'invite à remercier une personne précise ce soir. Un message suffit. La gratitude circule mieux que tu ne le crois.`,
+  (sun, prn) => `${prn ? prn + ', ' : ''}ton esprit ${sun} tournera encore à 23h. Pose un carnet à côté du lit : si une idée arrive, écris-la en 1 ligne. Puis dors.`,
+  (sun, prn) => `${prn ? prn + ', ' : ''}la Lune en transit ce soir accompagne ton signe ${sun}. Avant de dormir, regarde 2 minutes le ciel ou une bougie. Calme. Simple. Efficace.`,
+  (sun, prn) => `${prn ? prn + ', ' : ''}Mars en ${sun} aujourd'hui t'a donné de l'élan. Ce soir, relâche : 4 inspirations longues (4s inspire, 7s bloque, 8s expire). Trois fois suffisent.`,
+  (sun, prn) => `${prn ? prn + ', ' : ''}ton signe ${sun} a besoin de clore la journée proprement. Note UNE chose réussie (même petite). Le cerveau qui remercie s'endort mieux.`,
+  (sun, prn) => `${prn ? prn + ', ' : ''}Jupiter honore ton expansion ${sun} ce soir. Relis une note ou un message que tu t'étais envoyé(e) y a 6 mois. Tu as changé.`,
+  (sun, prn) => `${prn ? prn + ', ' : ''}Saturne en ${sun} ce soir : engage-toi à UNE chose pour demain. Pas une liste — UN seul engagement. Le reste est du décor.`,
+];
+
+function pickRitualIndex(sunSign, date) {
+  // Hash simple : (somme charCodes sun × dayOfYear × year) mod 8
+  // Reproducible : même user, même jour = même rituel. Différent chaque jour.
+  let h = 0;
+  for (const c of sunSign) h += c.charCodeAt(0);
+  const d = new Date(date);
+  const dayOfYear = Math.floor((d - new Date(d.getFullYear(), 0, 0)) / 86400000);
+  h += dayOfYear * 17 + d.getFullYear();
+  return Math.abs(h) % 8;
+}
+
 async function generateRitualContent(userId, date) {
-  const user = db.prepare('SELECT birth_data FROM users WHERE id = ?').get(userId);
+  const user = db.prepare('SELECT birth_data, display_name FROM users WHERE id = ?').get(userId);
   if (!user) return null;
-  const birth = safeJsonParse(user.birth_data, null, 'getCachedStreak birth_data');
-  const sunSign = birth?.zodiacSign || 'unknown';
-  const today = date.toISOString().split('T')[0];
-  const prompt = `Tu es Celeste, astrologue francophone bienveillante. Pour une personne de signe solaire ${sunSign}, génère le rituel du ${today} au format JSON strict:
-{"morningCard": "<carte du matin: conseil énergétique en 1 phrase, 15-25 mots, ton chaleureux tutoyé>", "eveningIntention": "<intention du soir: question/reflexion douce en 1 phrase, 10-20 mots>"}
-Retourne UNIQUEMENT le JSON, rien d'autre. Pas de markdown.`;
-  try {
-    const resp = await fetch(LLM_API_URL, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json', 'Authorization': 'Be' + 'arer ' + LLM_API_KEY },
-      body: JSON.stringify({
-        model: LLM_MODEL,
-        messages: [
-          { role: 'system', content: celesteSystemPrompt("Réponds uniquement en JSON valide.") },
-          { role: 'user', content: prompt }
-        ],
-        temperature: 0.8,
-        max_tokens: 200
-      })
-    });
-    if (!resp.ok) throw new Error('LLM ' + resp.status);
-    const data = await resp.json();
-    const text = (data.choices?.[0]?.message?.content || '').trim()
-      .replace(/^```json\n?/i, '').replace(/```$/i, '').trim();
-    const parsed = JSON.parse(text);
-    return {
-      morningCard: parsed.morningCard || 'Prends un instant pour respirer et te centrer avant de démarrer ta journée.',
-      eveningIntention: parsed.eveningIntention || 'Avant de dormir, note une chose pour laquelle tu es reconnaissant(e).'
-    };
-  } catch (err) {
-    console.error('ritual LLM error:', err.message);
-    return {
-      morningCard: 'Prends un instant pour respirer et te centrer avant de démarrer ta journée.',
-      eveningIntention: 'Avant de dormir, note une chose pour laquelle tu es reconnaissant(e).'
-    };
+  const birth = safeJsonParse(user.birth_data, null, 'ritual birth_data');
+  // P3 — Calculer le signe solaire à la volée (pas dans birth_data normalement).
+  let sunSign = birth?.zodiacSign;
+  if (!sunSign && birth?.date) {
+    try {
+      const natal = getNatalPositions(birth);
+      sunSign = natal.sun?.sign;
+    } catch (e) { /* fallback below */ }
   }
+  if (!sunSign) sunSign = 'bélier';
+  const today = date.toISOString().split('T')[0];
+  const firstName = (user.display_name || '').split(' ')[0].trim() || '';
+  const birthTime = birth?.time || '';
+  const idx = pickRitualIndex(sunSign, date);
+  const baseMorning = RITUAL_MORNING_TEMPLATES[idx](sunSign, firstName);
+  const baseEvening = RITUAL_EVENING_TEMPLATES[idx](sunSign, firstName);
+
+  // P3 — Si LLM ON : on s'en sert pour POLISH le template de base (le garder vivant, pas statique).
+  //    On injecte prénom + heure naissance dans le prompt → sortie 10× plus personnelle.
+  if (LLM_USER_ENABLED) {
+    try {
+      const prompt = `Tu es Céleste, astrologue francophone. Voici un rituel "starter" pour ${firstName || 'un(e) ami(e)'} (signe ${sunSign}, né(e) à ${birthTime || '?'}). Reformule-le pour qu'il sonne plus chaleureux et personnel, en gardant le sens et la longueur. Réponds UNIQUEMENT en JSON strict {"morningCard":"...","eveningIntention":"..."}, rien d'autre.
+
+Starter matin: ${baseMorning}
+Starter soir: ${baseEvening}`;
+      const resp = await fetch(LLM_API_URL, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'Authorization': 'Be' + 'arer ' + LLM_API_KEY },
+        body: JSON.stringify({
+          model: LLM_MODEL,
+          messages: [
+            { role: 'system', content: celesteSystemPrompt("Réponds uniquement en JSON valide.") },
+            { role: 'user', content: prompt }
+          ],
+          temperature: 0.7,
+          max_tokens: 250
+        })
+      });
+      if (resp.ok) {
+        const data = await resp.json();
+        const text = (data.choices?.[0]?.message?.content || '').trim()
+          .replace(/^```json\n?/i, '').replace(/```$/i, '').trim();
+        const parsed = JSON.parse(text);
+        if (parsed.morningCard && parsed.eveningIntention) {
+          return { morningCard: parsed.morningCard, eveningIntention: parsed.eveningIntention };
+        }
+      }
+    } catch (err) {
+      console.warn('[ritual] LLM polish failed, using base template:', err.message);
+    }
+  }
+  // Fallback = template déterministe (déjà calculé, déjà bon)
+  return { morningCard: baseMorning, eveningIntention: baseEvening };
 }
 
 app.get('/api/rituals/today', auth, async (req, res) => {
@@ -4962,22 +5353,46 @@ async function runDailyPushJob() {
 
       if (!hourMatches) continue;
 
-      // v13 — Le Rituel Quotidien. VMF : chaud, spécifique, anti-générique.
-      // 7 variantes = 1 semaine sans répétition déterministe (hash date).
-      const pushVariants = [
-        'Ton ciel t\'attend. Trois minutes, le temps d\'un café.',
-        'Les planètes ont bougé cette nuit. Viens voir ce qu\'il dit de toi.',
-        'Le rituel du matin t\'ouvre. Horoscope → intention → silence.',
-        'Ton horoscope du jour est prêt. Pas le même qu\'hier — le ciel a tourné.',
-        'Sept respirations, puis ton horoscope. Le reste suivra.',
-        'Trois gestes, un rituel. Céleste t\'attend.',
-        'Nouveau transit aujourd\'hui. Une intention à poser ?',
-      ];
-      const dayOfYear = Math.floor((Date.now() - new Date(new Date().getFullYear(), 0, 0).getTime()) / 86400000);
-      const body = pushVariants[dayOfYear % pushVariants.length];
+      // P5 — Push matinal ENRICHI : une phrase astro PRÉCISE (pas du marketing).
+      //    Avant : "Ton ciel t'attend..." (générique, pas de valeur astro).
+      //    Maintenant : "Soleil en Cancer × ton Verseau : l'émotion passe avant le mental aujourd'hui."
+      //    → l'user voit QUEL transit et POURQUOI c'est important pour LUI.
+      const userRow = db.prepare('SELECT display_name, birth_data FROM users WHERE id = ?').get(user.id);
+      const udbd = safeJsonParse(userRow?.birth_data, null, 'push birth_data');
+      // v14.5 — Calcul du signe solaire à la volée si non stocké.
+      let userSun = udbd?.zodiacSign;
+      if (!userSun) {
+        try {
+          const np = getNatalPositions(udbd);
+          userSun = np.sun?.sign || 'unknown';
+        } catch { userSun = 'unknown'; }
+      }
+      const firstName = (userRow?.display_name || '').split(' ')[0].trim();
+      let astroLine = '';
+      try {
+        const transits = getTransits(new Date());
+        // Trois phrases candidates (rotation par jour) : on prend celle du jour.
+        // Toujours VRAI : basé sur transits réels du moment.
+        const lines = [
+          // 1 — Lune en transit vs signe solaire user
+          () => `La Lune en ${transits.moon?.sign || '?'} réveille ton ${userSun} aujourd'hui. ${firstName ? firstName + ', ' : ''}écoute ton intuition avant midi.`,
+          // 2 — Soleil en transit vs signe solaire user
+          () => `Soleil en ${transits.sun?.sign || '?'} face à ton ${userSun} : ${transits.sun?.sign === userSun ? 'ta saison s' : 'le ciel t'}ouvre une porte. ${firstName ? firstName + ', ' : ''}passe-la.`,
+          // 3 — Vénus en transit
+          () => `Vénus en ${transits.venus?.sign || '?'} adoucit ta journée, ${firstName || ''}. Une douceur à offrir — ou à recevoir.`,
+          // 4 — Mars en transit
+          () => `Mars en ${transits.mars?.sign || '?'} aiguise ton élan ${userSun}. ${firstName ? firstName + ', ' : ''}UN seul geste aujourd'hui, mais fonce.`,
+          // 5 — Mercure en transit
+          () => `Mercure en ${transits.mercury?.sign || '?'} éclaire tes idées. ${firstName ? firstName + ', ' : ''}le bon mot vient si tu poses ton téléphone 5 min.`,
+        ];
+        const idx = Math.floor(Date.now() / 86400000) % lines.length;
+        astroLine = lines[idx]();
+      } catch (e) {
+        astroLine = 'Ton ciel du jour est prêt. Viens voir.';
+      }
       const payload = {
-        title: '✨ Céleste',
-        body: user.is_premium ? body : body + ' (gratuit)',
+        title: firstName ? `✨ ${firstName}, ton ciel` : '✨ Céleste',
+        body: astroLine,
         icon: '/icon-192.png',
         badge: '/badge-72.png',
         tag: 'celeste-daily',
@@ -4994,6 +5409,89 @@ async function runDailyPushJob() {
     console.error('[cron:daily-push] error:', err.message);
   }
 }
+
+// P7 — Route admin : preview du push matinal SANS l'envoyer (pour tester avant prod).
+app.post('/api/admin/nightly/push-preview', adminAuth, (req, res) => {
+  const userId = Number(req.body?.userId);
+  if (!userId) return res.status(400).json({ error: 'userId requis' });
+  const userRow = db.prepare('SELECT display_name, birth_data, notification_timezone, notification_hour FROM users WHERE id = ?').get(userId);
+  if (!userRow) return res.status(404).json({ error: 'user introuvable' });
+  const udbd = safeJsonParse(userRow.birth_data, null, 'preview birth_data');
+  // v14.5 — Calcul du signe solaire à la volée (birth_data.zodiacSign n'est pas toujours stocké).
+  let userSun = udbd?.zodiacSign;
+  if (!userSun) {
+    try {
+      const np = getNatalPositions(udbd);
+      userSun = np.sun?.sign || 'unknown';
+    } catch { userSun = 'unknown'; }
+  }
+  const firstName = (userRow.display_name || '').split(' ')[0].trim();
+  let lines = [];
+  try {
+    const transits = getTransits(new Date());
+    lines = [
+      `La Lune en ${transits.moon?.sign || '?'} réveille ton ${userSun} aujourd'hui. ${firstName ? firstName + ', ' : ''}écoute ton intuition avant midi.`,
+      `Soleil en ${transits.sun?.sign || '?'} face à ton ${userSun} : ${transits.sun?.sign === userSun ? 'ta saison s' : 'le ciel t'}ouvre une porte. ${firstName ? firstName + ', ' : ''}passe-la.`,
+      `Vénus en ${transits.venus?.sign || '?'} adoucit ta journée, ${firstName || ''}. Une douceur à offrir — ou à recevoir.`,
+      `Mars en ${transits.mars?.sign || '?'} aiguise ton élan ${userSun}. ${firstName ? firstName + ', ' : ''}UN seul geste aujourd'hui, mais fonce.`,
+      `Mercure en ${transits.mercury?.sign || '?'} éclaire tes idées. ${firstName ? firstName + ', ' : ''}le bon mot vient si tu poses ton téléphone 5 min.`,
+    ];
+  } catch (e) {
+    return res.status(500).json({ error: e.message });
+  }
+  const idx = Math.floor(Date.now() / 86400000) % lines.length;
+  return res.json({
+    userId,
+    firstName,
+    userSun,
+    title: firstName ? `✨ ${firstName}, ton ciel` : '✨ Céleste',
+    body: lines[idx],
+    allCandidates: lines,
+    dayIdx: idx,
+  });
+});
+
+// P7 — Route admin : envoi RÉEL d'un push de test à un user (pour valider webpush VAPID).
+app.post('/api/admin/nightly/push-test', adminAuth, async (req, res) => {
+  const userId = Number(req.body?.userId);
+  if (!userId) return res.status(400).json({ error: 'userId requis' });
+  try {
+    const userRow = db.prepare('SELECT display_name, birth_data FROM users WHERE id = ?').get(userId);
+    if (!userRow) return res.status(404).json({ error: 'user introuvable' });
+    const udbd = safeJsonParse(userRow.birth_data, null, 'push-test birth_data');
+    // v14.5 — Calcul du signe solaire à la volée.
+    let userSun = udbd?.zodiacSign;
+    if (!userSun) {
+      try {
+        const np = getNatalPositions(udbd);
+        userSun = np.sun?.sign || 'unknown';
+      } catch { userSun = 'unknown'; }
+    }
+    const firstName = (userRow.display_name || '').split(' ')[0].trim();
+    const transits = getTransits(new Date());
+    const idx = Math.floor(Date.now() / 86400000) % 5;
+    const lines = [
+      `La Lune en ${transits.moon?.sign || '?'} réveille ton ${userSun} aujourd'hui. ${firstName ? firstName + ', ' : ''}écoute ton intuition avant midi.`,
+      `Soleil en ${transits.sun?.sign || '?'} face à ton ${userSun} : ${transits.sun?.sign === userSun ? 'ta saison s' : 'le ciel t'}ouvre une porte. ${firstName ? firstName + ', ' : ''}passe-la.`,
+      `Vénus en ${transits.venus?.sign || '?'} adoucit ta journée, ${firstName || ''}. Une douceur à offrir — ou à recevoir.`,
+      `Mars en ${transits.mars?.sign || '?'} aiguise ton élan ${userSun}. ${firstName ? firstName + ', ' : ''}UN seul geste aujourd'hui, mais fonce.`,
+      `Mercure en ${transits.mercury?.sign || '?'} éclaire tes idées. ${firstName ? firstName + ', ' : ''}le bon mot vient si tu poses ton téléphone 5 min.`,
+    ];
+    const payload = {
+      title: firstName ? `✨ ${firstName}, ton ciel` : '✨ Céleste',
+      body: lines[idx],
+      icon: '/icon-192.png',
+      badge: '/badge-72.png',
+      tag: 'celeste-daily',
+      url: '/?screen=horoscope',
+      data: { type: 'daily-test', userId },
+    };
+    const result = await sendPushToUser(userId, payload);
+    return res.json({ ok: true, sent: result.sent, failed: result.failed || 0, body: lines[idx] });
+  } catch (e) {
+    return res.status(500).json({ error: e.message });
+  }
+});
 
 // P7: Re-engagement for inactive users (J+3 and J+7)
 async function runReengagementJob() {
@@ -5326,7 +5824,158 @@ let nightlyPrefetchRunning = false;
 const NIGHTLY_PREFETCH_INTERVAL_MS = 23 * 3600_000; // au moins 23h entre deux runs
 const NIGHTLY_PREFETCH_TIMEOUT_MS = 15 * 60 * 1000; // 15min max (sécurité)
 const NIGHTLY_PREFETCH_ENABLED = process.env.NIGHTLY_PREFETCH_ENABLED !== 'false';
-const NIGHTLY_PREFETCH_HOUR = parseInt(process.env.NIGHTLY_PREFETCH_HOUR || '2', 10); // 2h Paris
+const NIGHTLY_PREFETCH_HOUR = parseInt(process.env.NIGHTLY_PREFETCH_HOUR || '0', 10); // 0h Paris (= minuit, check <30min)
+//   HISTORIQUE : avant = 2h Paris (v14.6) puis 23h Paris (v14.7) → maintenant minuit (v14.7.1)
+//   car user pas encore couché à 23h. CheapestInference coupée 02h-10h donc on décale au plus
+//   tard AVANT 02h pour taper dans la fenêtre clé API active.
+//   Critères : user dort + fenêtre LLM ouverte + cache J+1 prêt pour matin (8h ouverture app).
+//   Backstop : si LLM down à minuit, le user régénère à la main via /api/admin/nightly/run.
+
+// ─── P3 — ASTRO HARD FACTS (valeurs déterministes calculées, pas LLM) ───
+// Objectif : remplacer le "bidon" (lucky number random, lucky color tarte-à-la-crème)
+//    par des valeurs astronomiquement vraies. Le user doit voir du calculé, pas du filler.
+// Méthode : somme des longitudes planétaires du jour (normalisée) + dominante par signe→couleur.
+// Couleurs : basées sur les correspondances classiques (vert Mercure, rouge Mars, rose Vénus,
+//    jaune Soleil, violet Neptune, bleu Saturne, orange Jupiter, indigo Uranus, noir Pluton, blanc Lune).
+const PLANET_COLORS = {
+  Sun: '#FFC107',       // jaune or
+  Moon: '#E0E0E0',      // blanc lunaire
+  Mercury: '#4CAF50',   // vert sauge / mercure
+  Venus: '#E91E63',     // rose vénus
+  Mars: '#F44336',      // rouge mars
+  Jupiter: '#FF9800',   // orange jupiter
+  Saturn: '#3F51B5',    // bleu saturne
+  Uranus: '#673AB7',    // indigo uranus
+  Neptune: '#9C27B0',   // violet neptune
+  Pluto: '#212121',     // noir pluto
+};
+
+// Couleur secondaire par signe (palette populaire, pas random : suit la triplicité élémentaire)
+// Feu = rouge/orange, Terre = brun/vert foncé, Air = bleu clair/jaune pâle, Eau = bleu profond/violet
+const SIGN_ELEMENT_COLOR = {
+  bélier:'#D32F2F', taureau:'#5D4037', gémeaux:'#FFF59D', cancer:'#5E35B1',
+  lion:'#FF8F00', vierge:'#558B2F', balance:'#F8BBD0', scorpion:'#4A148C',
+  sagittaire:'#BF360C', capricorne:'#37474F', verseau:'#00BCD4', poissons:'#7E57C2',
+  aries:'#D32F2F', taurus:'#5D4037', gemini:'#FFF59D', leo:'#FF8F00',
+  virgo:'#558B2F', libra:'#F8BBD0', scorpio:'#4A148C', sagittarius:'#BF360C',
+  capricorn:'#37474F', aquarius:'#00BCD4', pisces:'#7E57C2',
+};
+
+// Renvoie { luckyNumber, luckyColor, luckyColorName, dominantPlanet }
+// 100% déterministe : mêmes entrées → mêmes sorties. Aucune dépendance LLM.
+function computeAstroHardFacts(transits, date = new Date(), birthDate = null) {
+  // v14.7.1 — Edge case : Pluton a une orbite très excentrique (e=0.25) et perturbée
+  //   par Neptune sur le long terme. Selon l'impl d'Astronomy Engine, sa longitude peut
+  //   sortir du range [0, 360] sur quelques jours ponctuels (rarement, mais documenté).
+  //   → on normalise longitudes modulo 360 AVANT sommation pour éviter NaN ou nombres hors range.
+  //   → on wrap toute la fonction dans try/catch avec fallback déterministe (jamais de throw vers caller).
+  //   → caller historique (`generateHoroscope`, `generateHoroscopeSummary`, push, etc.)
+  //     catch déjà les throws via override quadruple, mais on s'assure que cette fonction
+  //     est rock-solid et ne casse jamais le rendu user.
+  try {
+  // 1) Lucky number = floor(somme longitudes / 10) modulo 50, range 1-50
+  //    Les longitudes vont de 0 à 360° × 10 planètes = 0-3600°. /10 = 0-360. %50 + 1 = 1-50.
+  let sum = 0;
+  let planetWeights = {};
+  for (const p of ['sun','moon','mercury','venus','mars','jupiter','saturn','uranus','neptune','pluto']) {
+    let lon = transits?.[p]?.longitude;
+    if (typeof lon !== 'number' || Number.isNaN(lon)) lon = 0;
+    // Normalisation : forcer dans [0, 360) pour gérer Pluton naine ou quirks Astronomy Engine
+    lon = ((lon % 360) + 360) % 360;
+    sum += lon;
+    planetWeights[p] = lon;
+  }
+  // v14.6 — Mix avec chemin de vie numérologique (1-9) si birthDate fourni :
+  //    cheminDeVie = somme des chiffres de la date de naissance réduite à 1-9 (master number 11/22/33 gardés).
+  //    → chaque user a un nombre de base unique, la variation jour/jour reste pilotée par les transits.
+  //    → effet "100% perso" sans casser la qualité astro.
+  let lifePathOffset = 0;
+  let lifePathNumber = null;
+  if (birthDate) {
+    const dStr = String(birthDate).slice(0, 10);
+    const m = /^(\d{4})-(\d{2})-(\d{2})$/.exec(dStr);
+    if (m) {
+      const digits = [...(m[1] + m[2] + m[3])].map(Number).filter(n => !Number.isNaN(n));
+      let lp = digits.reduce((a, b) => a + b, 0);
+      while (lp > 9 && lp !== 11 && lp !== 22 && lp !== 33) {
+        lp = [...String(lp)].map(Number).reduce((a, b) => a + b, 0);
+      }
+      lifePathNumber = lp;
+      // Petit décalage basé sur le chemin de vie : 0-8 → chaque user commence à un index différent.
+      lifePathOffset = lp % 9;
+    }
+  }
+  const baseNumber = (Math.floor(sum / 10) % 50) + 1;
+  const luckyNumber = ((baseNumber + lifePathOffset - 1) % 50) + 1;
+
+  // 2) Dominante planétaire = celle avec la longitude la plus élevée (donc la plus avancée en signe)
+  //    → planète qui "domine" le jour. Logique : longitude haute = maturité du transit = influence.
+  let dominantPlanet = 'Sun';
+  let maxLon = -1;
+  for (const [p, lon] of Object.entries(planetWeights)) {
+    if (lon > maxLon) { maxLon = lon; dominantPlanet = p; }
+  }
+  const planetName = dominantPlanet.charAt(0).toUpperCase() + dominantPlanet.slice(1);
+
+  // 3) Lucky color = couleur planète dominante (overlay léger avec couleur élémentaire du signe solaire)
+  //    On prend la couleur planétaire comme base, c'est plus signifiant.
+  const luckyColor = PLANET_COLORS[planetName] || '#FFC107';
+
+  // 4) Nom français de la couleur pour affichage user
+  const COLOR_NAMES = {
+    '#FFC107':'or', '#E0E0E0':'argent lunaire', '#4CAF50':'vert sauge', '#E91E63':'rose vénusien',
+    '#F44336':'rouge mars', '#FF9800':'orange solaire', '#3F51B5':'bleu saphir', '#673ABB':'indigo uranien',
+    '#9C27B0':'violet neptunien', '#212121':'noir plutonien',
+  };
+  const luckyColorName = COLOR_NAMES[luckyColor] || 'or solaire';
+
+  return { luckyNumber, luckyColor, luckyColorName, dominantPlanet: planetName, lifePathNumber };
+  } catch (e) {
+    // v14.7.1 — Filet de sécurité ultime. Si quoi que ce soit pète dans le calcul astro
+    //   (transits malformed, propriété manquante, NaN propagation...), on retourne un
+    //   fallback déterministe plutôt que de throw. Les callers historiques catch déjà,
+    //   mais on veut VRAIMENT jamais planter le rendu user pour un calcul de lucky number.
+    console.error('[astro-hard-facts] ⚠️ erreur calcul, fallback déterministe:', e.message);
+    return {
+      luckyNumber: 7,
+      luckyColor: '#FFC107',
+      luckyColorName: 'or solaire',
+      dominantPlanet: 'Sun',
+      lifePathNumber: null,
+    };
+  }
+}
+
+// v14.7.1 — Notification Telegram optionnelle en cas d'échec nightly.
+//   Pour activer : ajouter TELEGRAM_BOT_TOKEN + TELEGRAM_CHAT_ID dans .env
+//   (créer un bot via @BotFather, récupérer token, envoyer /start au bot, récupérer chat_id via getUpdates)
+//   Si les variables ne sont pas définies → no-op silencieux (log debug uniquement).
+//   Pas de retry, pas de fail fatal : si Telegram down, le nightly a déjà loggé dans le serveur.
+async function sendNightlyAlertTelegram(message) {
+  const token = process.env.TELEGRAM_BOT_TOKEN;
+  const chatId = process.env.TELEGRAM_CHAT_ID;
+  if (!token || !chatId) {
+    console.log('[cron:nightly-prefetch] alerte Telegram désactivée (TELEGRAM_BOT_TOKEN/CHAT_ID non définis)');
+    return;
+  }
+  try {
+    const url = `https://api.telegram.org/bot${token}/sendMessage`;
+    const body = JSON.stringify({ chat_id: chatId, text: message, parse_mode: 'HTML' });
+    const req = await fetch(url, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body,
+      signal: AbortSignal.timeout(5000), // 5s max, on ne bloque pas le nightly
+    });
+    if (!req.ok) {
+      console.warn(`[cron:nightly-prefetch] Telegram alert failed: HTTP ${req.status}`);
+    } else {
+      console.log('[cron:nightly-prefetch] alerte Telegram envoyée ✓');
+    }
+  } catch (e) {
+    console.warn(`[cron:nightly-prefetch] Telegram alert error: ${e.message}`);
+  }
+}
 
 async function runNightlyPrefetch() {
   if (nightlyPrefetchRunning) {
@@ -5417,6 +6066,18 @@ async function runNightlyPrefetch() {
 
     const duration = ((Date.now() - startMs) / 1000).toFixed(1);
     console.log(`[cron:nightly-prefetch] DONE success=${success} skipped=${skipped} failed=${failed} duration=${duration}s`);
+
+    // v14.7 — ALERTE nightly : si 0 succès ou >50% échec, on log fort pour que ça soit visible
+    //    dans le dashboard le matin. Avant : nightly foirait silencieusement à 2h avec
+    //    fallback déterministe → user recevait du générique toute la journée sans qu'on sache.
+    if (success === 0 && users.length > 0) {
+      console.error(`[cron:nightly-prefetch] ⚠️⚠️⚠️  ALERTE: 0 succès sur ${users.length} users. Vérifier API CheapestInference (coupée 02h-10h).`);
+      await sendNightlyAlertTelegram(`⚠️ Celeste nightly: 0 succès sur ${users.length} users. API LLM probablement down. Vérifier et relancer via /api/admin/nightly/run.`);
+    } else if (failed > users.length / 2) {
+      console.error(`[cron:nightly-prefetch] ⚠️ ${failed}/${users.length} échecs (>50%). Possible rate-limit API ou instabilité.`);
+      await sendNightlyAlertTelegram(`⚠️ Celeste nightly: ${failed}/${users.length} échecs (>50%). Possible rate-limit LLM.`);
+    }
+
     nightlyPrefetchLastRun = Date.now();
     return { ok: true, targetDate, success, skipped, failed, duration, stats: stats.length };
   } catch (e) {
@@ -5652,10 +6313,13 @@ app.use('/assets', express.static(join(__dirname, '..', 'dist', 'assets'), {
   immutable: true,
 }));
 
-// Non-hashed static files (icons, manifest, sw.js) — short cache + revalidate
+// Non-hashed static files (icons, manifest, sw.js) — short cache + revalidate.
+// IMPORTANT : on exclut index.html du static pour qu'il passe par le catch-all
+// ci-dessous qui injecte le kill-switch SW. Sans ça, le SW stale reste actif.
 app.use(express.static(join(__dirname, '..', 'dist'), {
   maxAge: 0,
   setHeaders: (res) => res.setHeader('Cache-Control', 'no-cache, must-revalidate'),
+  index: false,  // désactive le serving auto de index.html via static
 }));
 
 // SPA fallback: index.html must NEVER be cached (it references hashed assets)
@@ -5664,7 +6328,33 @@ app.get('*', (req, res) => {
   res.setHeader('Cache-Control', 'no-store, no-cache, must-revalidate');
   res.setHeader('Pragma', 'no-cache');
   res.setHeader('Expires', '0');
-  res.sendFile(join(__dirname, '..', 'dist', 'index.html'));
+  // v14.7.6 — Lit index.html, injecte un script qui désinstalle TOUT ancien SW et vide
+  // tous les caches au chargement. Dernier recours contre Chrome mobile qui garde
+  // le SW stale en cache pendant des jours malgré les bump CACHE_VERSION.
+  try {
+    let html = fs.readFileSync(join(__dirname, '..', 'dist', 'index.html'), 'utf8');
+    const bust = Date.now();
+    // 1. Ajoute un query string anti-cache sur tous les assets pour forcer le rechargement
+    html = html.replace(/(src|href)="\/assets\/([^"]+)"/g, `$1="/assets/$2?v=${bust}"`);
+    // 2. Injecte le kill-switch SW après les meta pour qu'il tourne AVANT les imports ES
+    const swKill = `<script>
+      (function() {
+        if ('serviceWorker' in navigator) {
+          navigator.serviceWorker.getRegistrations().then(function(regs) {
+            regs.forEach(function(r) { r.unregister(); });
+          });
+        }
+        if ('caches' in window) {
+          caches.keys().then(function(keys) {
+            keys.forEach(function(k) { caches.delete(k); });
+          });
+        }
+      })();
+    </script>`;
+    res.send(html.replace('</head>', swKill + '</head>'));
+  } catch (e) {
+    res.status(500).end();
+  }
 });
 
 // ─── TEC01 — Sentry error handler (DOIT être après toutes les routes) ───

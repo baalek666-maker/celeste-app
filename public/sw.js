@@ -4,7 +4,7 @@
 //   - notificationclick: ouvre l'app sur la bonne route
 //   - fetch: stale-while-revalidate pour les assets statiques (offline-capable)
 
-const CACHE_VERSION = 'celeste-v5';  // bumped: force purge of all v4 caches
+const CACHE_VERSION = 'celeste-v50';  // bumped v15.7.10: suppression lazy() screens (fix removeChild prod)
 const STATIC_CACHE = `${CACHE_VERSION}-static`;
 const RUNTIME_CACHE = `${CACHE_VERSION}-runtime`;
 
@@ -18,26 +18,33 @@ const PRECACHE_URLS = [
   '/icons/apple-touch-icon.png',
 ];
 
-// ─── INSTALL: pré-cache des assets critiques ─────────────────────────────
+// v14.7.4 — KILL SWITCH : ce SW s'auto-désinstalle immédiatement.
+// Raison : après 11 versions bumpées, certains navigateurs Android gardent
+// encore le bundle JS v9 ou v10 en cache. Plutôt que de continuer à bump,
+// on désinstalle complètement le SW et on désactive le pré-cache. L'app continue
+// de marcher normalement (l'API et les assets sont servis par le serveur).
+// Si on veut réactiver un SW plus tard, il faudra une refonte complète du caching.
 self.addEventListener('install', (event) => {
   event.waitUntil(
-    caches.open(STATIC_CACHE)
-      .then((cache) => cache.addAll(PRECACHE_URLS).catch(() => undefined))
-      .then(() => self.skipWaiting())
+    self.skipWaiting().then(() => self.unregister()).catch(() => undefined)
   );
 });
 
-// ─── ACTIVATE: nettoie les anciens caches ─────────────────────────────────
 self.addEventListener('activate', (event) => {
   event.waitUntil(
     caches.keys()
-      .then((keys) => Promise.all(
-        keys
-          .filter((key) => key !== STATIC_CACHE && key !== RUNTIME_CACHE)
-          .map((key) => caches.delete(key))
-      ))
+      .then((keys) => Promise.all(keys.map((key) => caches.delete(key))))
       .then(() => self.clients.claim())
+      .then(() => self.registration.unregister())
+      .catch(() => undefined)
   );
+});
+
+self.addEventListener('fetch', (event) => {
+  // v14.7.4 — SW désactivé : laisser passer toutes les requêtes au réseau.
+  // Le serveur gère déjà Cache-Control: no-store sur index.html, et les assets
+  // hashés (index-XXXX.js) sont invalidés automatiquement par Vite à chaque build.
+  return; // ne pas appeler event.respondWith → laisse le navigateur fetch normalement
 });
 
 // ─── PUSH: réception des notifications serveur ───────────────────────────

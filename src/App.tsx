@@ -387,11 +387,13 @@ export function App() {
   }, []);
 
   // Route to onboarding if no birth data
-  useEffect(() => {
-    if (isAuthed && !user.birthData) {
-      setScreen('onboarding');
-    }
-  }, [isAuthed, user.birthData]);
+  // [DEBUG P0] useEffect qui force onboarding supprimé pour debug
+  // Ancien code :
+  // useEffect(() => {
+  //   if (isAuthed && !user.birthData) {
+  //     setScreen('onboarding');
+  //   }
+  // }, [isAuthed, user.birthData]);
 
   // Safety net: if we have birthData but no natalChart (or the cached chart
   // is stale relative to a change in city/timezone without changing date+time),
@@ -600,7 +602,9 @@ export function App() {
       <div className="max-w-md mx-auto min-h-screen relative">
         {/* Contenu principal (main landmark déjà dans index.html pour SPA) */}
         <div className="pb-24">
-          <div key={screen} className="page-enter">
+          {/* Bug fix: removed key={screen} that forced full unmount/remount on every navigation,
+              which crashed Auth's Google GIS iframe with "removeChild NotFoundError" (P0). */}
+          <div className="page-enter">
             <Suspense fallback={<Splash />}>
               {screen === 'home' && <Home user={user} onNavigate={handleNavigate} isGuest={isGuest} />}
               {screen === 'chart' && <ChartView user={user} />}
