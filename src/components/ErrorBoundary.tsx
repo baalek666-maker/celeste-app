@@ -24,6 +24,19 @@ export class ErrorBoundary extends Component<Props, State> {
 
   componentDidCatch(error: Error, info: React.ErrorInfo) {
     captureError(error, { componentStack: info.componentStack });
+    // P0-FIX 'UNE ÉTINCELLE' : si l'erreur est un NotFoundError removeChild
+    // (causé par un iframe hors-React comme Google GIS ou un SW stale), on la
+    // swallow au lieu de monter le fallback. Le crash est cosmétique — la
+    // page continue de fonctionner en dessous.
+    if (
+      error?.name === 'NotFoundError' &&
+      (error?.message?.includes('removeChild') || error?.message?.includes('insertBefore'))
+    ) {
+      console.warn('[ErrorBoundary] Swallowed removeChild NotFoundError:', error.message);
+      // Reset le state pour éviter l'affichage du fallback même si getDerivedStateFromError
+      // a déjà été appelé.
+      this.setState({ error: null });
+    }
     // DEBUG-TEMP — POST l'erreur au serveur + localStorage, retiré après diagnostic
     try {
       const payload = {
