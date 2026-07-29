@@ -149,19 +149,42 @@ export function Paywall({ onClose, onSubscribe }: {
           </div>
         )}
 
-        {/* Features */}
+        {/* P1#8 — Features refacto émotionnel (Option B).
+            Garde les features concrètes (ce que Camille achète) + ajoute 1 phrase
+            émotionnelle ciblée sur sa douleur en tête. VMF-aligned : elle se sent
+            vue, sans piège dark-pattern. */}
         <div className="space-y-3 mb-8">
           {[
-            { icon: '🌅', title: 'Horoscope vraiment quotidien', desc: "Tes planètes, pas seulement ton signe. Une lecture qui te ressemble." },
-            { icon: '💞', title: 'Compatibilité illimitée', desc: 'La chimie astrale avec les personnes qui comptent pour toi' },
-            { icon: '📖', title: 'Journal de bord', desc: 'Note tes ressentis et repère les cycles qui reviennent' },
-            { icon: '🔮', title: 'Transits du moment', desc: "Ce qui se joue en toi maintenant, décrypté simplement" },
+            {
+              icon: '☽',
+              emotion: 'Pourquoi tu réagis si fort à tout ?',
+              feature: 'Tes 4 planètes perso (Lune, Mercure, Vénus, Mars) — pas juste ton signe. Une lecture qui te ressemble vraiment.',
+            },
+            {
+              icon: '⊹',
+              emotion: 'Pourquoi il/elle te fait cet effet-là ?',
+              feature: 'Compat basée sur ta vraie chimie astrale. Jusqu\'à 6 personnes, illimité.',
+            },
+            {
+              icon: '✎',
+              emotion: 'Mettre des mots sur ce qui se passe en toi.',
+              feature: 'Journal guidé selon tes cycles lunaires. Repère tes patterns en 14 jours.',
+            },
+            {
+              icon: '⌖',
+              emotion: 'Ce qui se joue en toi cette semaine ?',
+              feature: 'Transits expliqués simplement, sans jargon. Lune, Mercure, Vénus.',
+            },
           ].map((f, i) => (
-            <div key={f.title} className="glass rounded-2xl p-4 flex items-start gap-3 animate-fade-in card-glow" style={{ animationDelay: `${0.1 + i * 0.08}s` }}>
+            <div
+              key={f.emotion}
+              className="glass rounded-2xl p-4 flex items-start gap-3 animate-fade-in card-glow"
+              style={{ animationDelay: `${0.1 + i * 0.08}s` }}
+            >
               <div className="text-2xl mt-0.5">{f.icon}</div>
-              <div>
-                <p className="text-night-100 font-semibold text-sm">{f.title}</p>
-                <p className="text-night-400 text-xs mt-0.5">{f.desc}</p>
+              <div className="min-w-0 flex-1">
+                <p className="text-night-100 font-semibold text-sm italic leading-snug">{f.emotion}</p>
+                <p className="text-night-400 text-xs mt-1 leading-relaxed">{f.feature}</p>
               </div>
             </div>
           ))}
