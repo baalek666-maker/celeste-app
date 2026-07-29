@@ -104,7 +104,10 @@ export function Explorer({ user, onNavigate }: { user: User; onNavigate: (s: Scr
           {modKey === 'chinese'      && <ChineseAstrology user={user} />}
           {modKey === 'sky'          && <DailySky />}
           {modKey === 'draws'        && <DailyDraws />}
-          {modKey === 'cycle'        && <DailyCycle />}
+          {modKey === 'cycle'        && <DailyCycle
+            natalMoon={user.natalChart?.moon}
+            natalRising={user.natalChart?.rising}
+          />}
         </div>
       </div>
     );

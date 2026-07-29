@@ -1,30 +1,21 @@
 import { useEffect, useMemo, useState } from 'react';
 import { MoonPhase, Libration, MakeTime } from 'astronomy-engine';
 import { localISODate } from '../lib/storage';
+import type { ZodiacSign } from '../types';
 
 /**
- * DailyCycle v2 — croisement cycle hormonal × phase lunaire, AUTOMATIQUE.
+ * DailyCycle v3 — croisement cycle hormonal × phase lunaire × thème natal.
  *
- * Logique :
- *   - L'utilisatrice saisit UNE seule chose : la date de début de ses dernières règles
- *     (par défaut : "aujourd'hui", 1 tap)
- *   - Tout le reste est calculé :
- *       phase hormonale (menstruelle / folliculaire / ovulatoire / lutéale)
- *       jour dans le cycle (1-35)
- *       prochaines règles estimées
- *       jour d'ovulation estimé
- *   - On croise avec la phase lunaire live (astronomy-engine)
- *   - On propose UN texte contextuel par jour, jamais générique
+ * v3 changes (vs v2) :
+ *   - Anneau SVG du cycle : 4 segments (menstruelle / folliculaire / ovulatoire / lutéale)
+ *     avec curseur "tu es ici" qui pointe sur le jour actuel. Donne une image mentale
+ *     immédiate de là où on en est dans le cycle.
+ *   - Croisement Lune natale × phase hormonale : insight "creepy accurate" quand
+ *     la Lune du jour touche la Lune natale pendant l'ovulation, etc.
+ *   - Détection cycle "expiré" : si on est au-delà de J+cycle_length, banner
+ *     passif pour actualiser la date. Pas de notif, juste visuel.
  *
- * Stockage : localStorage, deux clés :
- *   celeste_cycle_period_start  → 'YYYY-MM-DD' (date début règles)
- *   celeste_cycle_length        → number (durée cycle, défaut 28)
- *
- * Pas de backend, pas d'appel réseau. Hors ligne OK.
- *
- * v1 → v2 refonte :
- *   - AVANT : 4 chips à cliquer (l'utilisatrice devait deviner sa phase) → mauvaise UX
- *   - MAINTENANT : 1 date + auto-calcul de tout le cycle → valeur immédiate
+ * Logique inchangée : 1 date de dernières règles → tout est calculé.
  */
 
 const STORAGE_START = 'celeste_cycle_period_start';
@@ -44,12 +35,12 @@ function computeMoonInfo(): MoonInfo {
   try {
     const date = MakeTime(new Date());
     const angle = MoonPhase(date);
-    let signKey = '';
+    let signKey: string = '';
     try {
       const lib = Libration(date);
       const mlon = ((lib.mlon % 360) + 360) % 360;
       const signIdx = Math.floor(mlon / 30);
-      const SIGNS = ['Bélier','Taureau','Gémeaux','Cancer','Lion','Vierge','Balance','Scorpion','Sagittaire','Capricorne','Verseau','Poissons'];
+      const SIGNS = ['aries','taurus','gemini','cancer','leo','virgo','libra','scorpio','sagittarius','capricorn','aquarius','pisces'];
       signKey = SIGNS[signIdx];
     } catch { /* signe optionnel */ }
     let phaseName: string;
@@ -92,45 +83,47 @@ function writeLength(n: number) {
   try { localStorage.setItem(STORAGE_LENGTH, String(n)); } catch { /* ignore */ }
 }
 
-/** Calcule le jour dans le cycle à partir de la date de début et de la longueur. */
 function dayInCycle(start: string, length: number, refDate: Date = new Date()): number | null {
   try {
     const startDate = new Date(start + 'T00:00:00');
     if (isNaN(startDate.getTime())) return null;
     const ref = new Date(refDate.getFullYear(), refDate.getMonth(), refDate.getDate());
     const diffDays = Math.floor((ref.getTime() - startDate.getTime()) / (1000 * 60 * 60 * 24));
-    if (diffDays < 0) return 0; // futur
+    if (diffDays < 0) return 0;
     const cyclePos = ((diffDays % length) + length) % length;
-    return cyclePos + 1; // 1-indexé
+    return cyclePos + 1;
   } catch {
     return null;
   }
 }
 
-function phaseForDay(day: number | null, length: number): { key: string; label: string; emoji: string; desc: string } | null {
-  if (day === null) return null;
-  // Menstruelle : jours 1 à ~5 (durée moyenne des règles)
-  // Folliculaire : jusqu'à l'ovulation
-  // Ovulatoire : autour du jour length/2 (14 pour 28j)
-  // Lutéale : le reste
-  const ovulationDay = Math.round(length / 2);
-  if (day <= 5)                       return { key: 'menstruelle',  label: 'Menstruelle',  emoji: '🌑', desc: 'Repos, lenteur, écoute' };
-  if (day < ovulationDay - 1)         return { key: 'folliculaire', label: 'Folliculaire', emoji: '🌒', desc: 'Énergie qui monte, projets' };
-  if (day <= ovulationDay + 1)        return { key: 'ovulatoire',   label: 'Ovulatoire',   emoji: '🌕', desc: 'Pic d\'énergie, magnétisme' };
-  return                                     { key: 'luteale',      label: 'Lutéale',      emoji: '🌘', desc: 'Recentrage, lucidité' };
+interface PhaseInfo {
+  key: string;
+  label: string;
+  emoji: string;
+  desc: string;
+  color: string; // CSS hex pour l'anneau
 }
 
-/** Texte contextuel selon la phase hormonale × la phase lunaire. */
+function phaseForDay(day: number | null, length: number): PhaseInfo | null {
+  if (day === null) return null;
+  const ovulationDay = Math.round(length / 2);
+  if (day <= 5)                 return { key: 'menstruelle',  label: 'Menstruelle',  emoji: '🌑', desc: 'Repos, lenteur, écoute',                  color: '#7c3aed' };
+  if (day < ovulationDay)        return { key: 'folliculaire', label: 'Folliculaire', emoji: '🌒', desc: 'Énergie qui monte, projets',               color: '#a855f7' };
+  if (day === ovulationDay)      return { key: 'ovulatoire',   label: 'Ovulatoire',   emoji: '🌕', desc: 'Pic d\'énergie, magnétisme',              color: '#f59e0b' };
+  if (day === ovulationDay + 1)  return { key: 'ovulatoire',   label: 'Ovulatoire',   emoji: '🌕', desc: 'Pic d\'énergie, magnétisme',              color: '#f59e0b' };
+  return                                { key: 'luteale',     label: 'Lutéale',      emoji: '🌘', desc: 'Recentrage, lucidité',                   color: '#6366f1' };
+}
+
 function crossoverText(phaseKey: string, moon: MoonInfo, day: number | null): string {
   const moonFull = moon.phaseName === 'Pleine lune';
   const moonNew = moon.phaseName === 'Nouvelle lune';
   const moonWaxing = moon.angle > 0 && moon.angle < 180;
   const moonWaning = moon.angle >= 180;
-
   if (phaseKey === 'menstruelle') {
     if (moonNew) return 'Nouvelle lune + règles : double page blanche. Ton corps te dit arrête. Écoute-le.';
     if (moonFull) return 'Pleine lune + règles : ce que tu ressens est amplifié — donne-toi de la place.';
-    return 'Phase de repos. Ce que la Lune fait au ciel, ton corps le fait en toi. Pas de forcing.';
+    return 'Phase de repos. La Lune fait au ciel ce que ton corps fait en toi. Pas de forcing.';
   }
   if (phaseKey === 'folliculaire') {
     if (moonWaxing) return `Énergie montante, Lune croissante. Jour ${day} — tu redémarres. Lance ce que tu repousses.`;
@@ -138,11 +131,22 @@ function crossoverText(phaseKey: string, moon: MoonInfo, day: number | null): st
   }
   if (phaseKey === 'ovulatoire') {
     if (moonFull) return 'Pic hormonal + Pleine lune : ta lumière est à son maximum. Brille, mais garde pour après.';
-    return `Jour ${day}, ovulation. Ton magnétisme est haut. C\'est le moment de dire oui — ou de te reposer vraiment.`;
+    return `Jour ${day}, ovulation. Ton magnétisme est haut. C'est le moment de dire oui — ou de te reposer vraiment.`;
   }
-  // lutéale
-  if (moonWaning) return `Lutéale + Lune décroissante. Jour ${day} — tu as besoin de moins, et c\'est très bien.`;
+  if (moonWaning) return `Lutéale + Lune décroissante. Jour ${day} — tu as besoin de moins, et c'est très bien.`;
   return `Lutéale, Lune montante. Jour ${day} — ce qui te travaille demande à sortir. Écris-le plutôt que le garder.`;
+}
+
+/** Insight natal : on regarde si la Lune du jour touche la Lune natale ou l'Ascendant. */
+function natalInsight(moon: MoonInfo, natalMoon?: ZodiacSign, natalRising?: ZodiacSign): string | null {
+  if (!moon.signKey) return null;
+  if (moon.signKey === natalMoon) {
+    return `La Lune revient sur ta Lune natale en ${moon.signKey}. Ce que tu ressens aujourd'hui a une racine profonde — fais-toi confiance.`;
+  }
+  if (moon.signKey === natalRising) {
+    return `La Lune touche ton Ascendant ${moon.signKey}. Tu rayonnes différemment aujourd'hui. Les autres le voient.`;
+  }
+  return null;
 }
 
 function addDays(yyyyMmDd: string, n: number): string {
@@ -160,7 +164,7 @@ function formatFr(yyyyMmDd: string): string {
   } catch { return yyyyMmDd; }
 }
 
-export default function DailyCycle() {
+export default function DailyCycle({ natalMoon, natalRising }: { natalMoon?: ZodiacSign; natalRising?: ZodiacSign }) {
   const moon = useMemo(() => computeMoonInfo(), []);
   const [start, setStart] = useState<string | null>(() => readStart());
   const [length, setLength] = useState<number>(() => readLength());
@@ -170,12 +174,18 @@ export default function DailyCycle() {
   const day = dayInCycle(start ?? '', length);
   const phase = phaseForDay(day, length);
 
-  // Auto-masquer le date input si on annule
-  useEffect(() => {
-    if (showDatePicker && start) {
-      // Si on a déjà une date et qu'on rouvre, l'input s'affiche avec cette valeur
-    }
-  }, [showDatePicker, start]);
+  // Détection cycle "expiré" : si on est au-delà de J+length sans avoir actualisé
+  const cycleExpired = useMemo(() => {
+    if (!start) return false;
+    try {
+      const startDate = new Date(start + 'T00:00:00');
+      const ref = new Date();
+      ref.setHours(0, 0, 0, 0);
+      const diffDays = Math.floor((ref.getTime() - startDate.getTime()) / (1000 * 60 * 60 * 24));
+      // Si on a dépassé length + 2 jours de marge, c'est expiré
+      return diffDays > length + 2;
+    } catch { return false; }
+  }, [start, length]);
 
   const handleToday = () => {
     const t = localISODate();
@@ -203,6 +213,8 @@ export default function DailyCycle() {
     setLength(clamped);
   };
 
+  const insight = natalInsight(moon, natalMoon, natalRising);
+
   // ─── CAS 1 : pas encore de date ─────────────────────────────────
   if (!start) {
     return (
@@ -215,7 +227,6 @@ export default function DailyCycle() {
           </p>
         </div>
 
-        {/* CTA principal : aujourd'hui */}
         <button
           onClick={handleToday}
           className="w-full glass-gold rounded-2xl p-5 border-2 border-gold-500/40 hover:border-gold-400 transition-all group active:scale-[0.99]"
@@ -230,7 +241,6 @@ export default function DailyCycle() {
           </div>
         </button>
 
-        {/* Lien discret : autre date */}
         {!showDatePicker ? (
           <button
             onClick={() => setShowDatePicker(true)}
@@ -266,14 +276,43 @@ export default function DailyCycle() {
     );
   }
 
-  // ─── CAS 2 : on a une date → calcul auto de tout ─────────────────
+  // ─── CAS 2 : on a une date ─────────────────────────────────────
   const nextPeriod = addDays(start, length);
   const ovulationDay = addDays(start, Math.round(length / 2) - 1);
   const progressPct = day === null ? 0 : Math.round((day / length) * 100);
 
   return (
     <div className="space-y-4">
-      {/* ── Header + reset */}
+      {/* Banner "cycle expiré" — discret */}
+      {cycleExpired && (
+        <div className="glass rounded-2xl p-4 border border-amber-500/30 bg-amber-500/5 animate-fade-in">
+          <div className="flex items-start gap-3">
+            <span className="text-amber-400 text-lg">⏰</span>
+            <div className="flex-1">
+              <p className="text-night-100 text-sm font-semibold">Tes prochaines règles arrivent</p>
+              <p className="text-night-400 text-xs mt-1 leading-relaxed">
+                Ton dernier cycle data de plus de {length} jours. Tu peux confirmer que tes règles ont commencé ?
+              </p>
+              <div className="flex gap-2 mt-3">
+                <button
+                  onClick={handleToday}
+                  className="text-xs px-3 py-1.5 rounded-lg bg-gold-500/20 border border-gold-500/40 text-gold-300 hover:bg-gold-500/30 transition-all"
+                >
+                  Oui, aujourd'hui
+                </button>
+                <button
+                  onClick={() => setShowDatePicker(true)}
+                  className="text-xs px-3 py-1.5 rounded-lg glass border border-night-700 text-night-300 hover:border-gold-500/30 transition-all"
+                >
+                  Autre date
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Header */}
       <div className="glass rounded-2xl p-5 border border-gold-500/15">
         <div className="flex items-start justify-between mb-1">
           <div>
@@ -293,31 +332,29 @@ export default function DailyCycle() {
         </p>
       </div>
 
-      {/* ── Carte phase du jour — LE hero */}
+      {/* ── ANNEAU DU CYCLE — la nouvelle pièce maîtresse */}
+      <div className="glass rounded-2xl p-5 border border-gold-500/20 bg-gradient-to-br from-gold-500/5 to-cosmic-500/5">
+        <div className="flex items-center justify-between mb-3">
+          <p className="text-night-400 text-xs uppercase tracking-wider">Tu en es ici</p>
+          <p className="text-night-500 text-[10px]">Jour {day} / {length}</p>
+        </div>
+        <CycleRing day={day ?? 0} length={length} phase={phase} />
+      </div>
+
+      {/* Phase actuelle + desc */}
       {phase && (
-        <div className="glass rounded-2xl p-5 border border-gold-500/30 bg-gradient-to-br from-gold-500/5 to-cosmic-500/5">
-          <div className="flex items-center justify-between mb-3">
-            <p className="text-night-400 text-xs uppercase tracking-wider">Tu en es ici</p>
-            <p className="text-night-500 text-[10px]">Jour {day} / {length}</p>
-          </div>
-          <div className="flex items-center gap-4 mb-3">
-            <div className="text-5xl" aria-hidden="true">{phase.emoji}</div>
+        <div className="glass rounded-2xl p-5 border border-night-700/40">
+          <div className="flex items-center gap-4">
+            <div className="text-4xl" aria-hidden="true">{phase.emoji}</div>
             <div className="flex-1">
-              <p className="text-night-100 font-bold text-lg">{phase.label}</p>
+              <p className="text-night-100 font-bold text-base">{phase.label}</p>
               <p className="text-night-400 text-xs mt-0.5">{phase.desc}</p>
             </div>
-          </div>
-          {/* Barre de progression du cycle */}
-          <div className="w-full h-1.5 rounded-full bg-night-800/80 overflow-hidden">
-            <div
-              className="h-full bg-gradient-to-r from-cosmic-500 via-cosmic-400 to-gold-400 transition-all duration-700 ease-out shadow-[0_0_8px_rgba(251,191,36,0.4)]"
-              style={{ width: `${progressPct}%` }}
-            />
           </div>
         </div>
       )}
 
-      {/* ── Carte Lune du jour */}
+      {/* Carte Lune */}
       <div className="glass rounded-2xl p-5">
         <div className="flex items-center justify-between mb-2">
           <p className="text-night-400 text-xs uppercase tracking-wider">Ciel du jour</p>
@@ -332,7 +369,7 @@ export default function DailyCycle() {
         </div>
       </div>
 
-      {/* ── Croisement — LE texte à valeur ajoutée */}
+      {/* Croisement phase × Lune */}
       {phase && (
         <div className="glass rounded-2xl p-5 border border-gold-500/20 animate-fade-in">
           <p className="text-night-400 text-xs uppercase tracking-wider mb-2">Ce que ça dit aujourd'hui</p>
@@ -342,32 +379,33 @@ export default function DailyCycle() {
         </div>
       )}
 
-      {/* ── Timeline : règles passées / ovulation / prochaines règles */}
+      {/* Insight natal — différenciateur */}
+      {insight && (
+        <div className="glass rounded-2xl p-5 border border-cosmic-500/30 bg-cosmic-500/5 animate-fade-in">
+          <div className="flex items-center gap-2 mb-2">
+            <span className="text-cosmic-300 text-base">✦</span>
+            <p className="text-cosmic-300 text-xs uppercase tracking-wider">Ton ciel te reconnaît</p>
+          </div>
+          <p className="text-night-100 text-sm leading-relaxed">{insight}</p>
+        </div>
+      )}
+
+      {/* Timeline */}
       <div className="glass rounded-2xl p-5">
         <p className="text-night-400 text-xs uppercase tracking-wider mb-3">Calendrier de ton cycle</p>
         <div className="space-y-2.5">
-          <TimelineRow
-            label="Dernières règles"
-            date={start}
-            emoji="🌑"
-            state="done"
-          />
+          <TimelineRow label="Dernières règles"   date={start}       emoji="🌑" state="done" />
           <TimelineRow
             label="Ovulation estimée"
             date={ovulationDay}
             emoji="🌕"
             state={day !== null && day >= Math.round(length / 2) - 1 ? 'done' : 'upcoming'}
           />
-          <TimelineRow
-            label="Prochaines règles"
-            date={nextPeriod}
-            emoji="🌑"
-            state="upcoming"
-          />
+          <TimelineRow label="Prochaines règles"   date={nextPeriod}  emoji="🌑" state="upcoming" />
         </div>
       </div>
 
-      {/* ── Ajustement durée du cycle */}
+      {/* Durée cycle */}
       <div className="glass rounded-2xl p-4">
         <div className="flex items-center justify-between mb-2">
           <p className="text-night-400 text-xs">Durée habituelle de ton cycle</p>
@@ -398,6 +436,138 @@ export default function DailyCycle() {
       </p>
     </div>
   );
+}
+
+/**
+ * CycleRing — anneau SVG 4 segments (les 4 phases du cycle) + curseur "tu es ici".
+ * Pas de dépendance externe (Tailwind only + 1 SVG inline).
+ */
+function CycleRing({ day, length, phase }: { day: number; length: number; phase: PhaseInfo | null }) {
+  // Cercle trigonométrique : on commence en haut (12h) et on tourne horaire.
+  // 4 segments : menstruelle (jours 1-5), folliculaire, ovulatoire, lutéale.
+  const ovulationDay = Math.round(length / 2);
+  const segments: { label: string; start: number; end: number; color: string }[] = [
+    { label: 'M', start: 1,           end: 5,                    color: '#7c3aed' }, // menstruelle
+    { label: 'F', start: 6,           end: ovulationDay - 1,     color: '#a855f7' }, // folliculaire (jusqu'à J13 sur 28j)
+    { label: 'O', start: ovulationDay,     end: ovulationDay + 1, color: '#f59e0b' }, // ovulatoire (J14-15)
+    { label: 'L', start: ovulationDay + 2, end: length,          color: '#6366f1' }, // lutéale
+  ];
+  const size = 200;
+  const cx = size / 2;
+  const cy = size / 2;
+  const rOuter = 80;
+  const rInner = 60;
+  const rDot = 90;
+
+  // Conversion jour → angle (0° = haut, sens horaire)
+  const angleForDay = (d: number) => {
+    const pct = ((d - 1) / length);
+    // -90° = haut, sens horaire = + dans le sens trigonométrique inverse
+    return -90 + (pct * 360);
+  };
+
+  // Curseur "tu es ici"
+  const cursorAngle = angleForDay(day);
+  const cursorRad = (cursorAngle * Math.PI) / 180;
+  const cursorX = cx + rDot * Math.cos(cursorRad);
+  const cursorY = cy + rDot * Math.sin(cursorRad);
+
+  return (
+    <div className="flex flex-col items-center">
+      <svg width={size} height={size} viewBox={`0 0 ${size} ${size}`} className="animate-fade-in">
+        {/* Track de fond */}
+        <circle cx={cx} cy={cy} r={(rOuter + rInner) / 2} fill="none"
+                stroke="rgba(197,160,89,0.15)" strokeWidth={rOuter - rInner} />
+
+        {/* Segments */}
+        {segments.map((seg) => {
+          if (seg.start > seg.end) return null;
+          const a1 = angleForDay(seg.start) - 0.5;
+          const a2 = angleForDay(seg.end) + 0.5;
+          const p1 = polar(cx, cy, rOuter, a1);
+          const p2 = polar(cx, cy, rOuter, a2);
+          const p3 = polar(cx, cy, rInner, a2);
+          const p4 = polar(cx, cy, rInner, a1);
+          const largeArc = (a2 - a1) > 180 ? 1 : 0;
+          const path = `M ${p1.x} ${p1.y} A ${rOuter} ${rOuter} 0 ${largeArc} 1 ${p2.x} ${p2.y} L ${p3.x} ${p3.y} A ${rInner} ${rInner} 0 ${largeArc} 0 ${p4.x} ${p4.y} Z`;
+          return (
+            <path
+              key={seg.label}
+              d={path}
+              fill={seg.color}
+              opacity={phase && seg.label === (phase.key === 'menstruelle' ? 'M' : phase.key === 'folliculaire' ? 'F' : phase.key === 'ovulatoire' ? 'O' : 'L') ? 0.95 : 0.35}
+            />
+          );
+        })}
+
+        {/* Labels des 4 segments (extérieurs) */}
+        {segments.map((seg) => {
+          const midDay = (seg.start + seg.end) / 2;
+          const a = angleForDay(midDay);
+          const rad = (a * Math.PI) / 180;
+          const x = cx + (rOuter + 12) * Math.cos(rad);
+          const y = cy + (rOuter + 12) * Math.sin(rad);
+          return (
+            <text
+              key={`lbl-${seg.label}`}
+              x={x}
+              y={y}
+              textAnchor="middle"
+              dominantBaseline="central"
+              fontSize="11"
+              fill={seg.color}
+              opacity={0.85}
+              style={{ fontWeight: 600 }}
+            >
+              {seg.label}
+            </text>
+          );
+        })}
+
+        {/* Centre — phase label */}
+        <text
+          x={cx} y={cy - 8}
+          textAnchor="middle"
+          fontSize="22"
+          fill="#F4D27A"
+          style={{ fontWeight: 700 }}
+        >
+          {phase ? phase.emoji : '·'}
+        </text>
+        <text
+          x={cx} y={cy + 14}
+          textAnchor="middle"
+          fontSize="10"
+          fill="#cbd5e1"
+          style={{ letterSpacing: '0.15em', textTransform: 'uppercase' }}
+        >
+          Jour {day}
+        </text>
+
+        {/* Curseur "tu es ici" */}
+        <circle
+          cx={cursorX}
+          cy={cursorY}
+          r="5"
+          fill="#F4D27A"
+          stroke="#0a0508"
+          strokeWidth="2"
+        >
+          <animate
+            attributeName="r"
+            values="5;7;5"
+            dur="2.4s"
+            repeatCount="indefinite"
+          />
+        </circle>
+      </svg>
+    </div>
+  );
+}
+
+function polar(cx: number, cy: number, r: number, angleDeg: number) {
+  const rad = (angleDeg * Math.PI) / 180;
+  return { x: cx + r * Math.cos(rad), y: cy + r * Math.sin(rad) };
 }
 
 function TimelineRow({ label, date, emoji, state }: { label: string; date: string; emoji: string; state: 'done' | 'upcoming' }) {
