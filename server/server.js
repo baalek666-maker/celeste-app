@@ -6033,18 +6033,16 @@ async function runNightlyPortraitPrefetch() {
   try {
     console.log('[cron:nightly-portrait] START hour=Paris');
 
-    // 1) Lister users premium actifs avec birth_data
-    //    Si TON CAS : on peut élargir à tous les users + birth_data, mais le user
-    //    gratuit voit un teaser fixe (pas l'interprétation), donc pas besoin de
-    //    pré-générer pour lui = économie.
+    // v14.9.b — Tous les users avec birth_data (free + premium).
+    // Raison : un user gratuit qui a rempli son profil mérite aussi son portrait
+    // pré-généré la nuit (positions brutes + interprétation complète), sinon on
+    // accumule du retard. Le coût LLM est faible (8 users max en DB actuelle).
     const users = db.prepare(
       `SELECT id, email FROM users
-       WHERE birth_data IS NOT NULL AND birth_data != ''
-       AND is_premium = 1
-       AND (premium_until IS NULL OR premium_until > strftime('%s','now'))`
+       WHERE birth_data IS NOT NULL AND birth_data != ''`
     ).all();
 
-    console.log(`[cron:nightly-portrait] ${users.length} users premium actifs à traiter`);
+    console.log(`[cron:nightly-portrait] ${users.length} users avec birth_data à traiter`);
 
     let success = 0, skipped = 0, failed = 0, totalLooked = 0;
 
