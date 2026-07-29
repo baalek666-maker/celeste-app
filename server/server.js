@@ -126,7 +126,8 @@ db.exec(`
     birth_data TEXT,
     natal_chart TEXT,
     is_premium INTEGER DEFAULT 0,
-    scans_remaining INTEGER DEFAULT 7,
+    scans_remaining INTEGER DEFAULT 3,
+    scans_reset_month INTEGER DEFAULT (CAST(strftime('%Y%m','now') AS INTEGER)),
     trial_started_at INTEGER,
     premium_until INTEGER,
     stripe_customer_id TEXT,
@@ -593,6 +594,26 @@ function daysBetween(isoA, isoB) {
   const a = new Date(isoA + 'T00:00:00Z');
   const b = new Date(isoB + 'T00:00:00Z');
   return Math.round((b.getTime() - a.getTime()) / 86400000);
+}
+
+/**
+ * v14.8 — Quota mensuel : 3 scans personnels gratuits par mois calendaire.
+ * Si l'user est dans un nouveau mois (vs scans_reset_month), on remet le compteur à 3.
+ * Retourne le nombre de scans restants APRÈS reset éventuel.
+ * Si l'user est premium → retourne 999 (illimité), aucun update DB.
+ */
+const FREE_SCANS_PER_MONTH = 3;
+function ensureMonthlyScans(userId) {
+  const u = db.prepare('SELECT scans_remaining, scans_reset_month FROM users WHERE id = ?').get(userId);
+  if (!u) return FREE_SCANS_PER_MONTH;
+  const currentMonth = Number(new Date().toISOString().slice(0, 7).replace('-', '')); // YYYYMM
+  const stored = u.scans_reset_month ?? currentMonth;
+  if (stored !== currentMonth) {
+    db.prepare('UPDATE users SET scans_remaining = ?, scans_reset_month = ? WHERE id = ?')
+      .run(FREE_SCANS_PER_MONTH, currentMonth, userId);
+    return FREE_SCANS_PER_MONTH;
+  }
+  return u.scans_remaining ?? FREE_SCANS_PER_MONTH;
 }
 
 // ─── Ephemeris (server-side, astronomy-engine) ─────────────
@@ -2382,6 +2403,17 @@ app.post('/api/admin/nightly/run', adminAuth, async (req, res) => {
   }
 });
 
+// v14.9 — Trigger manuel du job nocturne PORTRAIT NATAL (debug / fill cache après onboarding)
+app.post('/api/admin/nightly/portrait/run', adminAuth, async (_req, res) => {
+  console.log('[ADMIN] portrait-nightly trigger manuel');
+  try {
+    const result = await runNightlyPortraitPrefetch();
+    res.json({ ok: true, ...result });
+  } catch (e) {
+    res.status(500).json({ ok: false, error: e.message });
+  }
+});
+
 // Stats du job nocturne (last run + count cache J+1)
 app.get('/api/admin/nightly/stats', adminAuth, (_req, res) => {
   const tomorrow = new Date(Date.now() + 86400000).toISOString().slice(0, 10);
@@ -2673,22 +2705,13 @@ app.post('/api/profile/birth-data', auth, (req, res) => {
       .run(req.user.id, 'Moi', 'self', JSON.stringify(check.birthData));
   }
 
-  // P1+ #14 — Déclenche la génération du portrait natal EN BACKGROUND juste après
-  // la sauvegarde du birth_data. Comme ça, quand l'user ouvre son premier écran
-  // natal (asteroids / lunar_nodes / houses), le cache est déjà chaud.
-  // SSi LLM_USER_ENABLED=false, le helper skip tout seul et renvoie un fallback déterministe.
-  // Idempotent : INSERT OR REPLACE dans natal_interpretations.
-  setImmediate(() => {
-    Promise.allSettled([
-      prefetchNatalPortrait(req.user.id, 'houses'),
-      prefetchNatalPortrait(req.user.id, 'asteroid_wisdom'),
-      prefetchNatalPortrait(req.user.id, 'lunar_nodes'),
-    ]).then(results => {
-      const ok = results.filter(r => r.status === 'fulfilled').length;
-      const ko = results.filter(r => r.status === 'rejected').length;
-      console.log(`[portrait-onboarding] user ${req.user.id}: ${ok} ok, ${ko} failed`);
-    }).catch(e => console.error('[portrait-onboarding] unexpected:', e.message));
-  });
+  // v14.9 — ZÉRO LLM RUNTIME : le prefetch de natal est SUPPRIMÉ à l'onboarding.
+  // La pré-génération des portraits natals (houses/asteroids/lunar_nodes) est
+  // EXCLUSIVEMENT faite par le cron nocturne (runNightlyPortraitPrefetch) à 1h
+  // Paris, pour tous les users premium avec birth_data. Les users premium verront
+  // leur portrait le lendemain matin (status "En cours de génération" en attendant).
+  // Les free users voient positions brutes + teaser fixe (jamais LLM non plus).
+  console.log(`[birth-data] user ${req.user.id} → birth_data saved, attente cron nocturne 1h Paris pour portrait`);
 
   res.json({ ok: true, birthData: check.birthData });
 });
@@ -2976,8 +2999,10 @@ app.post('/api/horoscope', auth, async (req, res) => {
     }
 
     // Free-tier gate (only when we actually generated a fresh horoscope)
+    // v14.8 — Quota mensuel (3/mois) au lieu de lifetime 7. Reset auto chaque nouveau mois.
     if (!isPremium && !personalCached) {
-      if ((user.scans_remaining ?? 0) <= 0) {
+      const remaining = ensureMonthlyScans(req.user.id);
+      if (remaining <= 0) {
         return res.status(402).json({ error: 'Free scans exhausted', code: 'paywall_required', scansRemaining: 0 });
       }
       db.prepare('UPDATE users SET scans_remaining = scans_remaining - 1 WHERE id = ?').run(req.user.id);
@@ -3011,7 +3036,8 @@ app.post('/api/horoscope', auth, async (req, res) => {
 
     // P0#4 — streak étendu : { count, freezeConsumed, graceApplied }
     const streakInfo = updateStreak(req.user.id, today);
-    const remaining = isPremium ? null : Math.max(0, (user.scans_remaining ?? 0) - (personalCached ? 0 : 1));
+    // v14.8 — Reload remaining after potential reset + decrement
+    const remaining = isPremium ? null : Math.max(0, ensureMonthlyScans(req.user.id) - (personalCached ? 0 : 1));
     res.json({
       ...horoscope,
       scansRemaining: remaining,
@@ -3507,12 +3533,14 @@ app.post('/api/compatibility', auth, llmLimiter, async (req, res) => {
     const isPremium = !!user.is_premium && (!user.premium_until || user.premium_until > now);
 
 // P0 #3 + #9 — Décrément APRÈS succès LLM (pas avant) + clamp à 0.
+    // v14.8 — Quota mensuel (3/mois) au lieu de lifetime 7. Reset auto chaque nouveau mois.
     let scansRemaining = null;
     if (!isPremium) {
-      if ((user.scans_remaining ?? 0) <= 0) {
+      const remaining = ensureMonthlyScans(req.user.id);
+      if (remaining <= 0) {
         return res.status(402).json({ error: 'Free scans exhausted', code: 'paywall_required', scansRemaining: 0 });
       }
-      scansRemaining = Math.max(0, (user.scans_remaining ?? 1) - 1);
+      scansRemaining = Math.max(0, remaining - 1);
     }
 
     const { partnerBirthData, context } = req.body;
@@ -4615,15 +4643,25 @@ function asteroidEclipticLon(el, date) {
 
 app.get('/api/chart/asteroids', auth, async (req, res) => {
   try {
-    const user = db.prepare('SELECT birth_data FROM users WHERE id = ?').get(req.user.id);
-    if (!user?.birth_data) return res.status(400).json({ error: 'birth_data missing' });
-    const birth = safeJsonParse(user.birth_data, null, 'birth_data');
+    const userRow = db.prepare('SELECT birth_data, is_premium, premium_until FROM users WHERE id = ?').get(req.user.id);
+    if (!userRow?.birth_data) return res.status(400).json({ error: 'birth_data missing' });
+    const birth = safeJsonParse(userRow.birth_data, null, 'birth_data');
     if (!birth) return res.status(400).json({ error: 'Corrupted birth data. Please update your profile.' });
+
+    // v14.8 — Premium check pour gate interpretation LLM
+    const now = Math.floor(Date.now() / 1000);
+    const isPremium = !!userRow.is_premium && (!userRow.premium_until || userRow.premium_until > now);
 
     // Check lifetime natal cache (asteroid positions never change)
     const cached = db.prepare('SELECT data FROM natal_interpretations WHERE user_id = ? AND feature = ?').get(req.user.id, 'asteroids');
     if (cached) {
-      return res.json({ ...JSON.parse(cached.data), cached: true });
+      const cachedObj = JSON.parse(cached.data);
+      // v14.8 — Ne jamais servir l'interprétation LLM aux free users, même cachée
+      if (!isPremium) {
+        const teaser = 'Ces placements racontent une histoire — la tienne. Découvre ce qu\'ils révèlent de ta blessure guérisseuse, de ta manière d\'aimer et de ta voie intérieure.';
+        return res.json({ ...cachedObj, interpretation: teaser, _teaser: true, isPremium: false });
+      }
+      return res.json({ ...cachedObj, _teaser: false, isPremium: true });
     }
 
     const [y, m, d] = birth.date.split('-').map(Number);
@@ -4641,46 +4679,31 @@ app.get('/api/chart/asteroids', auth, async (req, res) => {
         absDeg: Number(lon.toFixed(2))
       };
     });
-    // LLM interpretation grouped (v14.4 : skippé si coupe-circuit LLM off)
     const summary = positions.map(p => `${p.name} en ${p.sign} (${p.degree}°)`).join(', ');
-    let interpretation = null;
-    if (!LLM_USER_ENABLED) {
-      // Pas d'appel LLM, fallback déterministe basé sur les positions
-      interpretation = _generateAsteroidsFallback(positions);
+    // v14.8 — v14.9 ZÉRO LLM RUNTIME : Le LLM est strictement réservé au cron
+    // nocturne de préfetch. Si le cache est vide, on sert un fallback déterministe.
+    // Pas d'appel fetch() vers LLM_API_URL dans cette route. Jamais.
+    let interpretation;
+    if (!isPremium) {
+      interpretation = 'Ces placements racontent une histoire — la tienne. Découvre ce qu\'ils révèlent de ta blessure guérisseuse, de ta manière d\'aimer et de ta voie intérieure.';
     } else {
-    try {
-      const ctrl = new AbortController();
-      const to = setTimeout(() => ctrl.abort(), 8000);
-      const r = await fetch(LLM_API_URL, {
-        method: 'POST',
-        signal: ctrl.signal,
-        headers: { 'Content-Type': 'application/json', Authorization: 'Be' + 'arer ' + LLM_API_KEY },
-        body: JSON.stringify({
-          model: LLM_MODEL,
-          messages: [
-            { role: 'system', content: celesteSystemPrompt("Astrologue bienveillante. Réponds UNIQUEMENT en français, court (max 80 mots).") },
-            { role: 'user', content: `Voici les placements natals d'astéroïdes d'un utilisateur : ${summary}. Donne une interprétation douce et synthétique reliant ces placements aux thèmes : blessure guérisseuse (Chiron), maternel/ressource (Cérès), stratégie (Pallas), engagement (Junon), foyer intérieur (Vesta). Sois concrète et personnelle.` }
-          ],
-          temperature: 0.7,
-          max_tokens: 180
-        })
-      });
-      clearTimeout(to);
-      const dj = await r.json();
-      interpretation = dj.choices?.[0]?.message?.content?.trim() || null;
-    } catch (e) {
-      console.warn('asteroids LLM fail (fallback null):', e?.name || e?.message);
-    }
+      // Premium + cache miss : fallback déterministe (positions-only).
+      // Le cron nocturne remplira le cache dans la nuit. Demain, l'user aura
+      // sa lecture complète pré-générée.
+      interpretation = _generateAsteroidsFallback(positions);
     }
     const responseData = {
       positions,
       interpretation,
-      generatedAt: new Date().toISOString()
+      generatedAt: new Date().toISOString(),
+      _teaser: !isPremium,
+      isPremium,
+      _cacheStatus: 'miss_fallback' // signe explicite pour les devs
     };
 
-    // Save to lifetime natal cache
-    db.prepare('INSERT OR REPLACE INTO natal_interpretations (user_id, feature, data) VALUES (?, ?, ?)')
-      .run(req.user.id, 'asteroids', JSON.stringify(responseData));
+    // v14.8 — v14.9 : On NE SAUVEGARDE PLUS en cache runtime.
+    // Seul le cron nocturne a le droit d'écrire dans natal_interpretations.
+    // (Avant : save ici = double coût LLM si le user recharge plusieurs fois.)
 
     res.json(responseData);
   } catch (err) {
@@ -4695,15 +4718,24 @@ app.get('/api/chart/asteroids', auth, async (req, res) => {
 // South Node is exactly 180° opposite the North Node.
 app.get('/api/chart/lunar-nodes', auth, async (req, res) => {
   try {
-    const user = db.prepare('SELECT birth_data FROM users WHERE id = ?').get(req.user.id);
-    if (!user?.birth_data) return res.status(400).json({ error: 'birth_data missing' });
-    const birth = safeJsonParse(user.birth_data, null, 'birth_data');
+    const userRow = db.prepare('SELECT birth_data, is_premium, premium_until FROM users WHERE id = ?').get(req.user.id);
+    if (!userRow?.birth_data) return res.status(400).json({ error: 'birth_data missing' });
+    const birth = safeJsonParse(userRow.birth_data, null, 'birth_data');
     if (!birth) return res.status(400).json({ error: 'Corrupted birth data. Please update your profile.' });
+
+    // v14.8 — Premium gate interpretation LLM
+    const now = Math.floor(Date.now() / 1000);
+    const isPremium = !!userRow.is_premium && (!userRow.premium_until || userRow.premium_until > now);
 
     // Check lifetime natal cache
     const cached = db.prepare('SELECT data FROM natal_interpretations WHERE user_id = ? AND feature = ?').get(req.user.id, 'lunar_nodes');
     if (cached) {
-      return res.json({ ...JSON.parse(cached.data), cached: true });
+      const cachedObj = JSON.parse(cached.data);
+      if (!isPremium) {
+        const teaser = 'Nord-Sud, deux pôles : ce que tu maîtrises et ce vers quoi ton âme tend. Découvre ton chemin d\'évolution.';
+        return res.json({ ...cachedObj, interpretation: teaser, _teaser: true, isPremium: false });
+      }
+      return res.json({ ...cachedObj, _teaser: false, isPremium: true });
     }
 
     const [y, m, d] = birth.date.split('-').map(Number);
@@ -4721,48 +4753,25 @@ app.get('/api/chart/lunar-nodes', auth, async (req, res) => {
     const north = { ...degToSign(northLon), role: 'north' };
     const south = { ...degToSign(southLon), role: 'south' };
 
-    // LLM interpretation with 8s timeout (v14.4 : skippé si coupe-circuit LLM off)
+    // v14.9 — ZÉRO LLM RUNTIME : idem asteroids. Fallback déterministe si cache miss.
     const summary = `Nœud Nord en ${north.sign} (${north.degree}°), Nœud Sud en ${south.sign} (${south.degree}°)`;
-    let interpretation = null;
-    if (!LLM_USER_ENABLED) {
-      interpretation = _generateLunarNodesFallback(north, south);
+    let interpretation;
+    if (!isPremium) {
+      interpretation = 'Nord-Sud, deux pôles : ce que tu maîtrises et ce vers quoi ton âme tend. Découvre ton chemin d\'évolution.';
     } else {
-    try {
-      const ctrl = new AbortController();
-      const to = setTimeout(() => ctrl.abort(), 8000);
-      const r = await fetch(LLM_API_URL, {
-        method: 'POST',
-        signal: ctrl.signal,
-        headers: { 'Content-Type': 'application/json', Authorization: 'Be' + 'arer ' + LLM_API_KEY },
-        body: JSON.stringify({
-          model: LLM_MODEL,
-          messages: [
-            { role: 'system', content: celesteSystemPrompt("Astrologue bienveillante. Réponds UNIQUEMENT en français, court (max 70 mots).") },
-            { role: 'user', content: `Voici les nœuds lunaires natals d'un utilisateur : ${summary}. Le Nœud Sud représente ce qu'il maîtrise déjà (passé, confort), le Nœud Nord représente ce vers quoi son âme veut évoluer (mission, croissance). Donne une interprétation douce reliant ces deux pôles à son chemin d'évolution.` }
-          ],
-          temperature: 0.7,
-          max_tokens: 160
-        })
-      });
-      clearTimeout(to);
-      const dj = await r.json();
-      interpretation = dj.choices?.[0]?.message?.content?.trim() || null;
-    } catch (e) {
-      console.warn('lunar-nodes LLM fail (fallback null):', e?.name || e?.message);
+      interpretation = _generateLunarNodesFallback(north, south);
     }
-    }
-
     const responseData = {
       northNode: north,
       southNode: south,
       interpretation,
-      generatedAt: new Date().toISOString()
+      generatedAt: new Date().toISOString(),
+      _teaser: !isPremium,
+      isPremium,
+      _cacheStatus: 'miss_fallback'
     };
 
-    // Save to lifetime natal cache
-    db.prepare('INSERT OR REPLACE INTO natal_interpretations (user_id, feature, data) VALUES (?, ?, ?)')
-      .run(req.user.id, 'lunar_nodes', JSON.stringify(responseData));
-
+    // v14.9 — Pas de save cache ici (cron only).
     res.json(responseData);
   } catch (err) {
     console.error('lunar-nodes error:', err?.message, err?.stack);
@@ -4924,49 +4933,49 @@ const HOUSE_THEMES = {
   12: 'intériorité et spiritualité'
 };
 
-async function interpretHouses(asc, sunSign) {
+// v14.9 — ZÉRO LLM RUNTIME : supprimé de interpretHouses. Purement déterministe.
+// Le LLM est strictement réservé au cron nocturne via prefetchNatalPortrait().
+function _generateHousesFallback(asc, sunSign) {
   const theme = HOUSE_THEMES[1];
-  // v14.4 — Garde coupe-circuit LLM : fallback déterministe si flag off.
-  if (!LLM_USER_ENABLED) {
-    return `Ton Ascendant ${asc.sign} colore ta manière d'aborder la vie : tu avances avec ce que ce signe insuffle en toi. Le conseil du jour : laisse la maison 1 (${theme}) guider ton premier réflexe, plutôt que de répondre à l'injonction extérieure.`;
-  }
-  const prompt = `Tu es Celeste, astrologue chaleureuse. L'Ascendant natal d'un utilisateur est en ${asc.sign} (${asc.degree.toFixed(1)}°), son Soleil en ${sunSign}.
-En 2 phrases max (40 mots), explique ce que l'Ascendant ${asc.sign} révèle sur sa manière d'aborder la vie, et quel est le conseil du jour lié à la maison 1 (${theme}).`;
-  try {
-    const r = await fetch(LLM_API_URL, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'Authorization': 'Be' + 'arer ' + LLM_API_KEY
-      },
-      body: JSON.stringify({
-        model: LLM_MODEL,
-        messages: [
-          { role: 'system', content: celesteSystemPrompt("Astrologue bienveillante. Réponds UNIQUEMENT en français, court, jamais plus de 40 mots.") },
-          { role: 'user', content: prompt }
-        ],
-        temperature: 0.7,
-        max_tokens: 120
-      })
-    });
-    const d = await r.json();
-    return d.choices?.[0]?.message?.content?.trim() || null;
-  } catch {
-    return null;
-  }
+  return `Ton Ascendant ${asc.sign} colore ta manière d'aborder la vie : tu avances avec ce que ce signe insuffle en toi. Le conseil du jour : laisse la maison 1 (${theme}) guider ton premier réflexe, plutôt que de répondre à l'injonction extérieure.`;
+}
+
+async function interpretHouses(asc, sunSign) {
+  // v14.9 — Garde-fou : si quelqu'un appelle interpretHouses() malgré tout,
+  // on renvoie systématiquement le fallback déterministe (PAS d'appel fetch LLM).
+  return _generateHousesFallback(asc, sunSign);
 }
 
 app.get('/api/chart/houses', auth, async (req, res) => {
   try {
-    const user = db.prepare('SELECT birth_data FROM users WHERE id = ?').get(req.user.id);
-    if (!user?.birth_data) return res.status(400).json({ error: 'birth_data missing' });
-    const birth = safeJsonParse(user.birth_data, null, 'birth_data');
+    const userRow = db.prepare('SELECT birth_data, is_premium, premium_until FROM users WHERE id = ?').get(req.user.id);
+    if (!userRow?.birth_data) return res.status(400).json({ error: 'birth_data missing' });
+    const birth = safeJsonParse(userRow.birth_data, null, 'birth_data');
     if (!birth) return res.status(400).json({ error: 'Corrupted birth data. Please update your profile.' });
+
+    // v14.8 — Premium gate : free = Maison 1 (Ascendant) seulement, premium = 12 maisons + interprétation
+    const now = Math.floor(Date.now() / 1000);
+    const isPremium = !!userRow.is_premium && (!userRow.premium_until || userRow.premium_until > now);
 
     // Check lifetime natal cache
     const cached = db.prepare('SELECT data FROM natal_interpretations WHERE user_id = ? AND feature = ?').get(req.user.id, 'houses');
     if (cached) {
-      return res.json({ ...JSON.parse(cached.data), cached: true });
+      const cachedObj = JSON.parse(cached.data);
+      if (!isPremium) {
+        // Free : renvoie uniquement Maison 1 + teaser premium
+        const house1 = (cachedObj.houses || []).find(h => h.num === 1) || null;
+        return res.json({
+          system: cachedObj.system || 'Equal House',
+          ascendant: cachedObj.ascendant,
+          sunSign: cachedObj.sunSign,
+          houses: house1 ? [house1] : [],
+          interpretation: 'Ton Ascendant donne le ton. Mais chacune des 12 maisons a son propre langage. Découvre les 11 autres.',
+          generatedAt: cachedObj.generatedAt,
+          _teaser: true,
+          isPremium: false
+        });
+      }
+      return res.json({ ...cachedObj, _teaser: false, isPremium: true });
     }
 
     const { asc, houses } = computeHouses(birth);
@@ -4985,8 +4994,11 @@ app.get('/api/chart/houses', auth, async (req, res) => {
         sunSign = 'unknown';
       }
     }
-    const interpretation = await interpretHouses(asc, sunSign);
-    const responseData = {
+    // v14.9 — ZÉRO LLM RUNTIME.
+    // interpretHouses() ne fait JAMAIS d'appel LLM désormais (c'était le cas
+    // avant avec LLM_USER_ENABLED=true). Purement déterministe.
+    const interpretation = _generateHousesFallback(asc, sunSign);
+    const fullResponse = {
       system: 'Equal House',
       ascendant: asc,
       sunSign,
@@ -5001,11 +5013,23 @@ app.get('/api/chart/houses', auth, async (req, res) => {
       generatedAt: new Date().toISOString()
     };
 
-    // Save to lifetime natal cache
-    db.prepare('INSERT OR REPLACE INTO natal_interpretations (user_id, feature, data) VALUES (?, ?, ?)')
-      .run(req.user.id, 'houses', JSON.stringify(responseData));
+    // v14.9 — Pas de save cache ici (cron only).
+    if (!isPremium) {
+      const house1 = fullResponse.houses.find(h => h.num === 1) || null;
+      return res.json({
+        system: fullResponse.system,
+        ascendant: fullResponse.ascendant,
+        sunSign: fullResponse.sunSign,
+        houses: house1 ? [house1] : [],
+        interpretation: 'Ton Ascendant donne le ton. Mais chacune des 12 maisons a son propre langage. Découvre les 11 autres.',
+        generatedAt: fullResponse.generatedAt,
+        _teaser: true,
+        isPremium: false,
+        _cacheStatus: 'free_no_cache'
+      });
+    }
 
-    res.json(responseData);
+    res.json({ ...fullResponse, _teaser: false, isPremium: true, _cacheStatus: 'miss_fallback' });
   } catch (err) {
     console.error('houses error:', err?.message, err?.stack || err);
     res.status(500).json({ error: 'Failed' });
@@ -5977,6 +6001,111 @@ async function sendNightlyAlertTelegram(message) {
   }
 }
 
+// ─── v14.9 — NOUVEAU JOB NOCTURNE PORTRAIT NATAL ────────────────────────────
+// Tourne à PORTRAIT_NIGHTLY_HOUR Paris (défaut 1h = après horoscope à 0h).
+// Pré-génère les portraits nataux (houses, asteroids, lunar_nodes) pour tous
+// les users premium ayant un birth_data mais pas encore cache pour ces features.
+// But : ZÉRO LLM RUNTIME côté /api/chart/* — tout est servi depuis le cache
+// généré la nuit précédente par ce job.
+// Idempotent : si feature déjà en cache → skip.
+// Économie : appeler prefetchNatalPortrait() sur chaque user-premium une seule
+// fois par feature, contre appels user-runtime avant (= paie 3-5× par utilisateur).
+let portraitNightlyLastRun = 0;
+let portraitNightlyRunning = false;
+const PORTRAIT_NIGHTLY_INTERVAL_MS = 23 * 3600_000;
+const PORTRAIT_NIGHTLY_TIMEOUT_MS = 25 * 60 * 1000; // 25min max (= 50 users × 3 features × ~10s)
+const PORTRAIT_NIGHTLY_ENABLED = process.env.PORTRAIT_NIGHTLY_ENABLED !== 'false';
+const PORTRAIT_NIGHTLY_HOUR = parseInt(process.env.PORTRAIT_NIGHTLY_HOUR || '1', 10); // 1h Paris
+const PORTRAIT_FEATURES = ['houses', 'asteroids', 'lunar_nodes'];
+
+async function runNightlyPortraitPrefetch() {
+  if (portraitNightlyRunning) {
+    console.log('[cron:nightly-portrait] déjà en cours, skip');
+    return { skipped: true, reason: 'already-running' };
+  }
+  if (!PORTRAIT_NIGHTLY_ENABLED) {
+    return { skipped: true, reason: 'disabled-env' };
+  }
+  portraitNightlyRunning = true;
+  const startMs = Date.now();
+  const deadline = startMs + PORTRAIT_NIGHTLY_TIMEOUT_MS;
+
+  try {
+    console.log('[cron:nightly-portrait] START hour=Paris');
+
+    // 1) Lister users premium actifs avec birth_data
+    //    Si TON CAS : on peut élargir à tous les users + birth_data, mais le user
+    //    gratuit voit un teaser fixe (pas l'interprétation), donc pas besoin de
+    //    pré-générer pour lui = économie.
+    const users = db.prepare(
+      `SELECT id, email FROM users
+       WHERE birth_data IS NOT NULL AND birth_data != ''
+       AND is_premium = 1
+       AND (premium_until IS NULL OR premium_until > strftime('%s','now'))`
+    ).all();
+
+    console.log(`[cron:nightly-portrait] ${users.length} users premium actifs à traiter`);
+
+    let success = 0, skipped = 0, failed = 0, totalLooked = 0;
+
+    for (const u of users) {
+      if (Date.now() > deadline) {
+        console.warn('[cron:nightly-portrait] deadline atteinte, abandon');
+        failed += (users.length - (success + skipped + failed)) * PORTRAIT_FEATURES.length;
+        break;
+      }
+
+      // Pour chaque user, vérifier quelles features manquent en cache
+      const missing = [];
+      for (const feature of PORTRAIT_FEATURES) {
+        totalLooked++;
+        const cached = db.prepare(
+          'SELECT 1 FROM natal_interpretations WHERE user_id = ? AND feature = ?'
+        ).get(u.id, feature);
+        if (cached) {
+          skipped++;
+          continue;
+        }
+        missing.push(feature);
+      }
+
+      if (missing.length === 0) continue;
+
+      // Lancer prefetchNatalPortrait sur les features manquantes (séquentiel
+      // pour respecter rate-limit). prefetchNatalPortrait() est déjà idempotent
+      // et safe (skip si cache hit).
+      for (const feature of missing) {
+        try {
+          // Petit délai anti-saturation API LLM
+          await new Promise(r => setTimeout(r, 1000));
+          await prefetchNatalPortrait(u.id, feature);
+          success++;
+        } catch (e) {
+          console.warn(`[cron:nightly-portrait] user ${u.id} feature=${feature} LLM failed: ${e.message}`);
+          failed++;
+        }
+        if (Date.now() > deadline) break;
+      }
+    }
+
+    const duration = ((Date.now() - startMs) / 1000).toFixed(1);
+    console.log(`[cron:nightly-portrait] DONE success=${success} skipped=${skipped} failed=${failed} duration=${duration}s looked=${totalLooked}`);
+
+    // Alerte si rien n'a fonctionné
+    if (success === 0 && users.length > 0 && totalLooked > skipped) {
+      console.error(`[cron:nightly-portrait] ⚠️ 0 succès sur ${users.length} users / ${totalLooked} features. Check API LLM.`);
+    }
+
+    portraitNightlyLastRun = Date.now();
+    return { ok: true, success, skipped, failed, duration, users: users.length };
+  } catch (e) {
+    console.error('[cron:nightly-portrait] CRASH:', e.message);
+    return { ok: false, error: e.message };
+  } finally {
+    portraitNightlyRunning = false;
+  }
+}
+
 async function runNightlyPrefetch() {
   if (nightlyPrefetchRunning) {
     console.log('[cron:nightly-prefetch] déjà en cours, skip');
@@ -6115,6 +6244,13 @@ function startCronScheduler() {
     if (Date.now() - astroEventsLastRun >= ASTRO_EVENTS_INTERVAL_MS) {
       runAstroEventsJob(db, sendPushToUser);
       astroEventsLastRun = Date.now();
+    }
+    // v14.9 — JOB NOCTURNE PORTRAIT NATAL (1h Paris par défaut, après horoscope à 0h)
+    if (Date.now() - portraitNightlyLastRun >= PORTRAIT_NIGHTLY_INTERVAL_MS) {
+      const nowParis2 = new Date(new Date().toLocaleString('en-US', { timeZone: 'Europe/Paris' }));
+      if (nowParis2.getHours() === PORTRAIT_NIGHTLY_HOUR && nowParis2.getMinutes() < 30) {
+        runNightlyPortraitPrefetch(); // fire-and-forget
+      }
     }
     // P2 — job nocturne : uniquement à l'heure cible (Paris) + 23h écoulées
     if (NIGHTLY_PREFETCH_ENABLED && Date.now() - nightlyPrefetchLastRun >= NIGHTLY_PREFETCH_INTERVAL_MS) {
