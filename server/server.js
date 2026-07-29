@@ -5287,7 +5287,8 @@ app.get('/api/premium/status', auth, (req, res) => {
     if (user.is_premium === 1) plan = 'lifetime';
     else if (user.premium_until && user.premium_until > now) {
       const days = (user.premium_until - now) / 86400000;
-      plan = days > 365 ? 'yearly' : 'monthly';
+      // Plans 2026 : weekly (7j) ou yearly (365j).
+      plan = days > 180 ? 'yearly' : 'weekly';
     }
     const daysRemaining = (user.premium_until && user.premium_until > now)
       ? Math.ceil((user.premium_until - now) / 86400000) : null;

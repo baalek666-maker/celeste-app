@@ -8,11 +8,11 @@ export function Paywall({ onClose, onSubscribe }: {
   onClose: () => void;
   onSubscribe: (u: User) => void;
 }) {
-  // P0#3 — Ancien plan hebdomadaire (6,99€/sem = 363€/an, ratio ×9 annuel)
-  // retiré : dark pattern anchoring. Remplacé par un plan mensuel défendable
-  // (2,99€/mois ≈ 36€/an, ratio ×1,1 annuel). L'utilisateur peut comparer sans
-  // être manipulé. App Store/Play acceptent ; Apple Guideline 3.1.1 respectée.
-  const [plan, setPlan] = useState<'monthly' | 'yearly'>('yearly');
+  // P0#3 — Plans tarifaires 2026 :
+  //   Hebdo    : 6,99€/sem (≈ 363€/an)
+  //   Annuel   : 40€/an
+  // Prix dictés par user le 29 juillet 2026 — affichage transparent, VMF accuracy-first.
+  const [plan, setPlan] = useState<'weekly' | 'yearly'>('yearly');
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState('');
   const [configured, setConfigured] = useState<boolean | null>(null);
@@ -191,11 +191,10 @@ export function Paywall({ onClose, onSubscribe }: {
 
         {/* Plans */}
         <div className="space-y-3 mb-6">
-          {/* P1-6 — Annuel rendu plus incitatif sans changer les prix.
-              Ancien badge "2 mois offerts" était mathématiquement faux :
-              2,99€×12 = 35,88€/an vs annuel 39,99€ → annuel coûtait 4€ DE PLUS.
-              VMF = accuracy-first, pas dark pattern. On met en avant les VRAIS
-              bénéfices : essai 7j, prix bloqué, zéro friction. */}
+          {/* P1-6 — Annuel rendu plus incitatif :
+              Hebdo 6,99€/sem vs Annuel 40€/an → 9× moins cher à l'année.
+              VMF = accuracy-first. Avantages honnêtes : essai 7j, prix bloqué 12 mois,
+              résiliation 2 clics. */}
           <button onClick={() => setPlan('yearly')}
             className={`w-full p-4 rounded-2xl border-2 transition-all duration-300 text-left relative ${plan === 'yearly' ? 'border-gold-500/60 glass-gold ring-2 ring-gold-500/20' : 'border-night-700/50 glass'}`}>
             {plan === 'yearly' && (
@@ -212,22 +211,22 @@ export function Paywall({ onClose, onSubscribe }: {
                 <p className="text-gold-300/80 text-[11px] mt-1 font-medium">🔒 Prix bloqué 12 mois · Annulation en 2 clics</p>
               </div>
               <div className="text-right">
-                <p className="text-night-100 text-lg font-bold">3,33€</p>
-                <p className="text-night-400 text-xs">/mois</p>
+                <p className="text-night-100 text-lg font-bold">40€</p>
+                <p className="text-night-400 text-xs">/an</p>
               </div>
             </div>
           </button>
 
-          <button onClick={() => setPlan('monthly')}
-            className={`w-full p-4 rounded-2xl border-2 transition-all duration-300 text-left ${plan === 'monthly' ? 'border-cosmic-500/60 glass' : 'border-night-700/50 glass opacity-80'}`}>
+          <button onClick={() => setPlan('weekly')}
+            className={`w-full p-4 rounded-2xl border-2 transition-all duration-300 text-left ${plan === 'weekly' ? 'border-cosmic-500/60 glass' : 'border-night-700/50 glass opacity-80'}`}>
             <div className="flex items-center justify-between">
               <div>
-                <p className="text-night-100 font-bold">Mensuel</p>
-                <p className="text-night-400 text-xs mt-0.5">Sans engagement</p>
+                <p className="text-night-100 font-bold">Hebdomadaire</p>
+                <p className="text-night-400 text-xs mt-0.5">Sans engagement, résiliable à tout moment</p>
               </div>
               <div className="text-right">
-                <p className="text-night-100 text-lg font-bold">2,99€</p>
-                <p className="text-night-400 text-xs">/mois</p>
+                <p className="text-night-100 text-lg font-bold">6,99€</p>
+                <p className="text-night-400 text-xs">/semaine</p>
               </div>
             </div>
           </button>
@@ -264,7 +263,7 @@ export function Paywall({ onClose, onSubscribe }: {
               ? 'Indisponible'
               : plan === 'yearly'
                 ? 'Démarrer mon essai gratuit'
-                : "S'abonner pour 2,99€/mois"}
+                : "S'abonner pour 6,99€/semaine"}
         </button>
 
         {error && (
@@ -274,7 +273,7 @@ export function Paywall({ onClose, onSubscribe }: {
         <p className="text-night-500 text-xs text-center mt-4">
           {plan === 'yearly'
             ? '7 jours gratuits puis 40€/an. Annule à tout moment. Rappel avant prélèvement.'
-            : '2,99€/mois. Annule à tout moment.'}
+            : '6,99€/semaine. Annule à tout moment.'}
         </p>
 
         {/* Restore Purchases (Fix #2 — obligatoire App Store Guideline 3.1.5) */}

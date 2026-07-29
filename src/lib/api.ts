@@ -397,7 +397,7 @@ export const api = {
 
   // Premium — DEPRECATED. Use payment.startCheckout() instead.
   // This endpoint now returns 402 (Payment Required) on the server.
-  activatePremium: (plan: 'monthly' | 'annual') =>
+  activatePremium: (plan: 'weekly' | 'yearly') =>
     apiCall<{ isPremium: boolean; premiumUntil: number }>('/premium/activate', {
       method: 'POST',
       body: JSON.stringify({ plan }),
@@ -598,14 +598,14 @@ export const api = {
   // ─── Premium Status (Feature A3) ────────────────────
   getPremiumStatus: () => apiCall<{
     isPremium: boolean;
-    plan: 'free' | 'monthly' | 'yearly' | 'lifetime';
+    plan: 'free' | 'weekly' | 'yearly' | 'lifetime';
     premiumUntil: string | null;
     daysRemaining: number | null;
     benefits: string[];
   }>('/premium/status'),
 
   // ─── Billing (Stripe) ─────────────────────────────
-  startCheckout: (plan: 'monthly' | 'yearly') => apiCall<{ url: string; sessionId: string }>('/billing/create-checkout', {
+  startCheckout: (plan: 'weekly' | 'yearly') => apiCall<{ url: string; sessionId: string }>('/billing/create-checkout', {
     method: 'POST',
     body: JSON.stringify({ plan }),
   }, 30_000),

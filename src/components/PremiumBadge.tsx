@@ -3,7 +3,7 @@ import { api } from '../lib/api';
 
 type PremiumStatus = {
   isPremium: boolean;
-  plan: 'free' | 'monthly' | 'yearly' | 'lifetime';
+  plan: 'free' | 'weekly' | 'yearly' | 'lifetime';
   premiumUntil: string | null;
   daysRemaining: number | null;
   benefits: string[];
@@ -11,7 +11,7 @@ type PremiumStatus = {
 
 const PLAN_LABELS: Record<PremiumStatus['plan'], { label: string; icon: string; color: string }> = {
   free: { label: 'Gratuit', icon: '🌱', color: 'bg-gray-100 text-gray-700' },
-  monthly: { label: 'Mensuel', icon: '🌙', color: 'bg-blue-100 text-blue-700' },
+  weekly: { label: 'Hebdo', icon: '⚡', color: 'bg-cosmic-100 text-cosmic-700' },
   yearly: { label: 'Annuel', icon: '✨', color: 'bg-purple-100 text-purple-700' },
   lifetime: { label: 'À vie', icon: '👑', color: 'bg-amber-100 text-amber-800' }
 };

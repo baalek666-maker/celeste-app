@@ -9,7 +9,7 @@
  *   STRIPE_SECRET_KEY=sk_test_... ou sk_live_...
  *   STRIPE_WEBHOOK_SECRET=whsec_...
  *   STRIPE_PRICE_ANNUAL=price_...
- *   STRIPE_PRICE_MONTHLY=price_...
+ *   STRIPE_PRICE_WEEKLY=price_...
  *
  * Sans ces vars, /api/billing/status renvoie {configured: false} et le
  * frontend affiche un message "paiements en cours de configuration".
@@ -21,7 +21,7 @@ import express from 'express';
 const STRIPE_SECRET_KEY = process.env.STRIPE_SECRET_KEY || '';
 const STRIPE_WEBHOOK_SECRET = process.env.STRIPE_WEBHOOK_SECRET || '';
 const STRIPE_PRICE_ANNUAL = process.env.STRIPE_PRICE_ANNUAL || '';
-const STRIPE_PRICE_MONTHLY = process.env.STRIPE_PRICE_MONTHLY || '';
+const STRIPE_PRICE_WEEKLY = process.env.STRIPE_PRICE_WEEKLY || '';
 
 // ─── Consommables (one-time purchases) ───────────────────────────
 // Montants en centimes (Stripe n'accepte que des entiers).
@@ -38,12 +38,12 @@ const CONSUMABLES = {
 export const stripe = STRIPE_SECRET_KEY ? new Stripe(STRIPE_SECRET_KEY) : null;
 
 export function isStripeConfigured() {
-  return Boolean(stripe && STRIPE_WEBHOOK_SECRET && STRIPE_PRICE_ANNUAL && STRIPE_PRICE_MONTHLY);
+  return Boolean(stripe && STRIPE_WEBHOOK_SECRET && STRIPE_PRICE_ANNUAL && STRIPE_PRICE_WEEKLY);
 }
 
 export function getPriceIdForPlan(plan) {
   if (plan === 'yearly' || plan === 'annual') return STRIPE_PRICE_ANNUAL;
-  if (plan === 'monthly') return STRIPE_PRICE_MONTHLY;
+  if (plan === 'weekly') return STRIPE_PRICE_WEEKLY;
   return null;
 }
 
@@ -214,7 +214,7 @@ router.post('/start-trial', (req, res) => {
 
 /**
  * POST /api/billing/create-checkout
- * Body : { plan: 'monthly' | 'yearly' }
+ * Body : { plan: 'weekly' | 'yearly' }
  * Crée une session Stripe Checkout (subscription) et renvoie l'URL de redirection.
  *
  * metadata : on stocke { userId, plan } pour que le webhook sache qui activer
@@ -491,10 +491,11 @@ export function stripeWebhookHandler(req, res, db) {
 
         // ─── Branche SUBSCRIPTION (mode subscription) ──────────────
         const now = Date.now();
-        // P0#3 — monthly remplace weekly (30 jours au lieu de 7).
+        // P0#3 — Plans tarifaires 2026 (user 29/07/2026) :
+        //   weekly = 7 jours · yearly = 365 jours.
         const duration = plan === 'yearly' || plan === 'annual'
           ? 365 * 86400000
-          : 30 * 86400000;
+          : 7 * 86400000;
         const until = now + duration;
         db.prepare(`
           UPDATE users SET
