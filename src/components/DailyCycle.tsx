@@ -3,29 +3,26 @@ import { MoonPhase, Libration, MakeTime } from 'astronomy-engine';
 import { localISODate } from '../lib/storage';
 
 /**
- * DailyCycle v5 — le module épuré.
+ * DailyCycle v6 — le minimal absolu.
  *
- * Une saisie (date des dernières règles) → 1 écran, 3 blocs, chaque bloc = 1 information.
- * Aucune phrase ne fait plus de 8 mots. Aucun jargon. Aucune cosmétique.
+ * 1 ÉCRAN · 1 VISUEL · 1 PHRASE.
  *
- * v4 → v5 :
- *   - Anneau réduit à 2 phases (passée / à venir) au lieu de 4
- *   - Curseur retiré : juste un disque qui grandit sur la phase courante
- *   - Labels M/F/O/L retirés (trop technique)
- *   - Boutons 26/28/30/32 retirés (cosmétique)
- *   - "Jour X/28" simplifié en "Jour X"
- *   - Timeline : juste emoji + 1 mot, pas 3 lignes par jour
- *   - Footer : 1 ligne astro (Phase lunaire + signe)
- *   - Banner "cycle expiré" : conservé mais replié (apparaît seulement si +length+2j)
+ * Camille a 2 secondes le matin. Elle ne lit pas. Elle voit.
+ *
+ * v5 → v6 :
+ *   - Tout sauf : un chiffre géant (jour du cycle) + emoji + 1 phrase de 4 mots
+ *   - Couleur du chiffre change selon la phase (4 couleurs)
+ *   - Émoji phase lunaire en filigrane discret (pas de label)
+ *   - Saisie date = 1 tap "Aujourd'hui" au premier coup (zéro friction)
+ *   - Phrase changeante aussi sur la phase lunaire (8 variantes)
+ *
+ * Stockage : localStorage. Zéro backend. Zéro réseau.
  */
 
 const STORAGE_START = 'celeste_cycle_period_start';
-const STORAGE_LENGTH = 'celeste_cycle_length';
 const DEFAULT_CYCLE_LENGTH = 28;
-const MIN_CYCLE_LENGTH = 21;
-const MAX_CYCLE_LENGTH = 35;
 
-interface MoonInfo { phaseName: string; emoji: string; angle: number; signKey: string; }
+interface MoonInfo { phaseName: string; emoji: string; signKey: string; angle: number; }
 
 function computeMoonInfo(): MoonInfo {
   try {
@@ -38,7 +35,8 @@ function computeMoonInfo(): MoonInfo {
       const SIGNS = ['aries','taurus','gemini','cancer','leo','virgo','libra','scorpio','sagittarius','capricorn','aquarius','pisces'];
       signKey = SIGNS[Math.floor(mlon / 30)];
     } catch {}
-    let phaseName = ''; let emoji = '';
+    let phaseName = '';
+    let emoji = '';
     if (angle < 22.5 || angle >= 337.5)      { phaseName = 'Nouvelle lune'; emoji = '🌑'; }
     else if (angle < 67.5)                    { phaseName = 'Premier croissant'; emoji = '🌒'; }
     else if (angle < 112.5)                   { phaseName = 'Premier quartier'; emoji = '🌓'; }
@@ -47,8 +45,8 @@ function computeMoonInfo(): MoonInfo {
     else if (angle < 247.5)                   { phaseName = 'Gibbeuse décroissante'; emoji = '🌖'; }
     else if (angle < 292.5)                   { phaseName = 'Dernier quartier'; emoji = '🌗'; }
     else                                      { phaseName = 'Dernier croissant'; emoji = '🌘'; }
-    return { phaseName, emoji, angle, signKey };
-  } catch { return { phaseName: '', emoji: '🌙', angle: 0, signKey: '' }; }
+    return { phaseName, emoji, signKey, angle };
+  } catch { return { phaseName: '', emoji: '🌙', signKey: '', angle: 0 }; }
 }
 
 function readStart(): string | null {
@@ -57,10 +55,6 @@ function readStart(): string | null {
 }
 function writeStart(d: string) { try { localStorage.setItem(STORAGE_START, d); } catch {} }
 function clearStart() { try { localStorage.removeItem(STORAGE_START); } catch {} }
-function readLength(): number {
-  try { const v = Number(localStorage.getItem(STORAGE_LENGTH)); if (Number.isFinite(v) && v >= MIN_CYCLE_LENGTH && v <= MAX_CYCLE_LENGTH) return v; } catch {}
-  return DEFAULT_CYCLE_LENGTH;
-}
 
 function dayInCycle(start: string, length: number, refDate: Date = new Date()): number | null {
   try {
@@ -73,265 +67,170 @@ function dayInCycle(start: string, length: number, refDate: Date = new Date()): 
   } catch { return null; }
 }
 
-interface PhaseInfo { key: string; label: string; emoji: string; }
+interface PhaseInfo {
+  key: string;
+  /** couleur du chiffre + du fond */
+  color: string;
+  bgGradient: string;
+  /** emoji cycle (filigrane) */
+  emoji: string;
+  /** phrase de 4 mots max */
+  phrase: string;
+}
 
-function phaseForDay(day: number | null, length: number): PhaseInfo | null {
+function phaseInfo(day: number | null, length: number, moon: MoonInfo): PhaseInfo | null {
   if (day === null) return null;
   const ov = Math.round(length / 2);
-  if (day <= 5)         return { key: 'menstruelle',  label: 'Tu as tes règles',      emoji: '🌑' };
-  if (day < ov)          return { key: 'folliculaire', label: 'Tu montes en énergie',  emoji: '🌒' };
-  if (day === ov)        return { key: 'ovulatoire',   label: 'Tu ovules aujourd\'hui', emoji: '🌕' };
-  if (day === ov + 1)    return { key: 'ovulatoire',   label: 'Tu es au pic',          emoji: '🌕' };
-  return                       { key: 'luteale',     label: 'Tu redescends',         emoji: '🌘' };
-}
 
-/** 1 phrase d'action par jour, courte, directe, jamais poétique. */
-function tonightAction(phaseKey: string, moon: MoonInfo): string {
   const moonFull = moon.phaseName === 'Pleine lune';
   const moonNew = moon.phaseName === 'Nouvelle lune';
-  const moonWaxing = moon.angle > 0 && moon.angle < 180;
 
-  if (phaseKey === 'menstruelle') {
-    if (moonFull) return 'Bain chaud. Lit tôt.';
-    if (moonNew)  return 'Dors. Ton corps répare.';
-    return 'Pas de sport intense.';
-  }
-  if (phaseKey === 'folliculaire') {
-    if (moonWaxing) return 'Lance ce que tu repousses.';
-    return 'Planifie, écris, pose les bases.';
-  }
-  if (phaseKey === 'ovulatoire') {
-    if (moonFull) return 'Sors. Vois du monde.';
-    return 'Dis ce que tu penses.';
-  }
-  return 'Hydrate-toi, mange chaud.';
-}
+  // Rotation : on change de phrase tous les ~5 jours dans la même phase
+  // pour éviter la répétition. Basé sur la date du jour (pas le jour du cycle),
+  // pour qu'elle change même si la phase est longue.
+  const today = new Date();
+  const rotKey = Math.floor((today.getTime() / (1000 * 60 * 60 * 24 * 5)) % 3);
 
-/** 7 jours à venir : emoji + 1 mot-clé unique par jour. */
-function weekForecast(start: string, length: number, today: Date): { label: string; emoji: string; word: string }[] {
-  const days: { label: string; emoji: string; word: string }[] = [];
-  for (let i = 0; i < 7; i++) {
-    const d = new Date(today);
-    d.setDate(d.getDate() + i);
-    const dayNum = dayInCycle(start, length, d);
-    const phase = phaseForDay(dayNum, length);
-    const dayLabel = d.toLocaleDateString('fr-FR', { weekday: 'short' });
-    let word: string;
-    if (!phase) word = '—';
-    else if (phase.key === 'menstruelle') word = i === 0 ? 'repos' : 'douceur';
-    else if (phase.key === 'folliculaire') word = i === 0 ? 'monte' : 'crée';
-    else if (phase.key === 'ovulatoire') word = i === 0 ? 'brille' : 'agis';
-    else if (dayNum !== null && dayNum === length) word = 'règles';
-    else word = 'ralentis';
-    days.push({ label: dayLabel, emoji: phase?.emoji || '·', word });
+  if (day <= 5) {
+    const phrases = moonNew
+      ? ['Page blanche, repos.', 'Tout est lent.', 'Tu répares en silence.']
+      : moonFull
+        ? ['Sens amplifiés, doucement.', 'Émotions à fleur de peau.', 'Donne-toi de la place.']
+        : ['Ton corps te parle.', 'Écoute la lenteur.', 'Accorde-toi du repos.'];
+    return {
+      key: 'menstruelle',
+      color: '#a855f7',
+      bgGradient: 'from-purple-500/15 via-purple-500/5 to-transparent',
+      emoji: '🌑',
+      phrase: phrases[rotKey % phrases.length],
+    };
   }
-  return days;
+  if (day < ov) {
+    const phrases = moon.angle < 180
+      ? ['Énergie qui monte.', 'Tu redémarres, vas-y.', 'Lance ce que tu repousses.']
+      : ['Graines plantées, patience.', 'Tu prépares la suite.', 'Construis sans bruit.'];
+    return {
+      key: 'folliculaire',
+      color: '#c084fc',
+      bgGradient: 'from-purple-400/15 via-purple-400/5 to-transparent',
+      emoji: '🌒',
+      phrase: phrases[rotKey % phrases.length],
+    };
+  }
+  if (day === ov || day === ov + 1) {
+    const phrases = moonFull
+      ? ['Tu rayonnes, brille.', 'Magnétisme au max.', 'Le monde te regarde.']
+      : ['Tu es au pic.', 'Dis ce que tu penses.', 'Ton feu intérieur parle.'];
+    return {
+      key: 'ovulatoire',
+      color: '#f59e0b',
+      bgGradient: 'from-amber-500/20 via-amber-500/5 to-transparent',
+      emoji: '🌕',
+      phrase: phrases[rotKey % phrases.length],
+    };
+  }
+  const phrases = moon.angle >= 180
+    ? ['Tu ralentis, repose.', 'Hydrate-toi, couve-toi.', 'Tu as besoin de moins.']
+    : ['Tu redescends, écris.', 'Écoute ce qui revient.', 'Ton intuition murmure.'];
+  return {
+    key: 'luteale',
+    color: '#6366f1',
+    bgGradient: 'from-indigo-500/15 via-indigo-500/5 to-transparent',
+    emoji: '🌘',
+    phrase: phrases[rotKey % phrases.length],
+  };
 }
 
 export default function DailyCycle() {
   const moon = useMemo(() => computeMoonInfo(), []);
   const [start, setStart] = useState<string | null>(() => readStart());
-  const length = useMemo(() => readLength(), []);
   const [today] = useState(() => localISODate());
-  const [showDatePicker, setShowDatePicker] = useState(false);
 
-  const day = dayInCycle(start ?? '', length);
-  const phase = phaseForDay(day, length);
-  const action = phase ? tonightAction(phase.key, moon) : '';
-  const week = useMemo(() => start ? weekForecast(start, length, new Date()) : [], [start, length]);
+  const day = dayInCycle(start ?? '', DEFAULT_CYCLE_LENGTH);
+  const phase = phaseInfo(day, DEFAULT_CYCLE_LENGTH, moon);
 
-  const cycleExpired = useMemo(() => {
-    if (!start) return false;
-    try {
-      const sd = new Date(start + 'T00:00:00');
-      const ref = new Date(); ref.setHours(0,0,0,0);
-      return Math.floor((ref.getTime() - sd.getTime()) / 86400000) > length + 2;
-    } catch { return false; }
-  }, [start, length]);
+  const handleToday = () => { writeStart(today); setStart(today); };
+  const handleOtherDay = (v: string) => {
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(v)) return;
+    writeStart(v); setStart(v);
+  };
+  const handleReset = () => { clearStart(); setStart(null); };
 
-  const handleToday = () => { const t = localISODate(); writeStart(t); setStart(t); setShowDatePicker(false); };
-  const handleCustomDate = (v: string) => { if (!/^\d{4}-\d{2}-\d{2}$/.test(v)) return; writeStart(v); setStart(v); setShowDatePicker(false); };
-  const handleReset = () => { clearStart(); setStart(null); setShowDatePicker(false); };
+  const monthLabel = new Date().toLocaleDateString('fr-FR', { month: 'long' }).toUpperCase();
 
-  // ─── ÉCRAN 1 : pas encore de date ───
+  // ─── ÉCRAN SAISIE : zéro friction, 1 tap ───────────────────────────
   if (!start) {
     return (
-      <div className="space-y-4">
-        <p className="text-night-300 text-sm px-1">
-          Quand tes dernières règles ont-elles commencé ?
-        </p>
+      <div className="flex flex-col items-center justify-center min-h-[60vh] text-center">
         <button
           onClick={handleToday}
-          className="w-full glass-gold rounded-2xl p-5 border-2 border-gold-500/40 hover:border-gold-400 transition-all active:scale-[0.99]"
+          className="text-[140px] leading-none font-bold text-gold-gradient active:scale-95 transition-transform"
+          aria-label="Mes règles ont commencé aujourd'hui"
         >
-          <div className="flex items-center gap-4">
-            <div className="text-3xl">🌙</div>
-            <div className="flex-1 text-left">
-              <p className="text-night-100 font-semibold">Aujourd'hui</p>
-              <p className="text-night-400 text-xs mt-0.5">Un tap — je calcule la suite</p>
-            </div>
-            <span className="text-gold-400 text-xl">→</span>
-          </div>
+          1
         </button>
-        {!showDatePicker ? (
-          <button
-            onClick={() => setShowDatePicker(true)}
-            className="block mx-auto text-night-400 hover:text-gold-400 text-sm transition-colors"
-          >
-            ou un autre jour
-          </button>
-        ) : (
-          <div className="glass rounded-2xl p-4 animate-fade-in">
-            <input
-              type="date" max={today} autoFocus
-              onChange={(e) => handleCustomDate(e.target.value)}
-              className="w-full py-3 px-4 rounded-xl glass border border-night-700 text-night-100 focus:outline-none focus:border-gold-500/50 transition-colors"
-            />
-            <button onClick={() => setShowDatePicker(false)} className="mt-3 text-night-500 hover:text-night-300 text-xs transition-colors">
-              Annuler
-            </button>
-          </div>
-        )}
+        <p className="text-night-300 text-lg mt-2 mb-8">Tape pour aujourd'hui.</p>
+        <label className="text-night-500 text-xs hover:text-gold-400 cursor-pointer transition-colors">
+          ou un autre jour
+          <input
+            type="date"
+            max={today}
+            onChange={(e) => handleOtherDay(e.target.value)}
+            className="sr-only"
+          />
+        </label>
       </div>
     );
   }
 
-  // ─── ÉCRAN 2 : saisie faite, 3 blocs uniquement ───
+  // ─── ÉCRAN PRINCIPAL : UN chiffre + UN phrase ──────────────────────
   return (
-    <div className="space-y-5">
-      {/* Banner expiré — replié, discret */}
-      {cycleExpired && (
-        <button
-          onClick={handleToday}
-          className="w-full glass rounded-2xl p-3 border border-amber-500/30 bg-amber-500/5 text-left animate-fade-in active:scale-[0.99] transition-all"
+    <div
+      className={`relative flex flex-col items-center justify-center min-h-[70vh] text-center bg-gradient-to-b ${phase?.bgGradient || ''} rounded-2xl overflow-hidden`}
+      onDoubleClick={handleReset}
+      title="Double-clic pour recommencer"
+    >
+      {/* Filigrane lune — emoji très discret en arrière-plan */}
+      <div
+        className="absolute inset-0 flex items-center justify-center pointer-events-none select-none"
+        aria-hidden="true"
+      >
+        <span
+          className="opacity-[0.06] text-[280px] leading-none"
+          style={{ filter: 'blur(2px)' }}
         >
-          <p className="text-night-200 text-xs">
-            ⏰ Tes règles arrivent. <span className="text-gold-300 underline-offset-2 hover:underline">Taper ici si oui</span>.
-          </p>
-        </button>
-      )}
-
-      {/* BLOC 1 — T'en es là */}
-      <div className="text-center">
-        <div className="text-3xl mb-2 animate-float-slow">✦</div>
-        <p className="text-night-500 text-[10px] uppercase tracking-[0.3em] mb-3">T'en es là</p>
-        <CycleRing day={day ?? 0} length={length} phase={phase} />
-        <p className="text-night-100 text-base font-medium mt-4">
-          {phase?.label || '—'}
-        </p>
-        <p className="text-night-500 text-xs mt-1">Jour {day} · cycle de {length} jours</p>
+          {phase?.emoji || moon.emoji}
+        </span>
       </div>
 
-      {/* Séparateur */}
-      <div className="h-px bg-gradient-to-r from-transparent via-night-700/60 to-transparent" />
-
-      {/* BLOC 2 — Ce soir */}
-      {phase && (
-        <div>
-          <p className="text-night-500 text-[10px] uppercase tracking-[0.3em] mb-2">Ce soir</p>
-          <p className="text-night-100 text-lg font-medium leading-snug">{action}.</p>
+      {/* Contenu */}
+      <div className="relative z-10 flex flex-col items-center">
+        <p className="text-night-500 text-[10px] uppercase tracking-[0.3em] mb-2">
+          {monthLabel}
+        </p>
+        <div
+          className="text-[180px] leading-none font-bold tabular-nums"
+          style={{
+            color: phase?.color || '#F4D27A',
+            textShadow: `0 0 60px ${phase?.color || '#F4D27A'}40`,
+          }}
+        >
+          {day}
         </div>
-      )}
-
-      {/* Séparateur */}
-      <div className="h-px bg-gradient-to-r from-transparent via-night-700/60 to-transparent" />
-
-      {/* BLOC 3 — La semaine */}
-      <div>
-        <p className="text-night-500 text-[10px] uppercase tracking-[0.3em] mb-3">La semaine</p>
-        <div className="grid grid-cols-7 gap-1.5">
-          {week.map((d, i) => {
-            const isToday = i === 0;
-            return (
-              <div key={i} className={`text-center rounded-xl py-2.5 ${isToday ? 'bg-gold-500/10 border border-gold-500/30' : ''}`}>
-                <p className="text-[9px] uppercase tracking-wider text-night-500">{d.label}</p>
-                <p className="text-lg my-1">{d.emoji}</p>
-                <p className={`text-[10px] ${isToday ? 'text-gold-300 font-semibold' : 'text-night-400'}`}>{d.word}</p>
-              </div>
-            );
-          })}
-        </div>
+        <p className="text-night-100 text-xl mt-6 font-medium max-w-xs leading-snug">
+          {phase?.phrase || '—'}
+        </p>
       </div>
 
-      {/* Footer */}
-      <div className="flex items-center justify-between pt-2">
-        <p className="text-night-500 text-[11px]">
-          {moon.phaseName}{moon.signKey ? ` en ${moon.signKey}` : ''}
-        </p>
-        <button onClick={handleReset} className="text-night-500 hover:text-night-300 text-[11px] transition-colors">
-          Recommencer
+      {/* Footer micro — invisible sauf au tap */}
+      <div className="absolute bottom-3 left-0 right-0 flex justify-center">
+        <button
+          onClick={handleReset}
+          className="text-night-600 hover:text-night-400 text-[10px] transition-colors"
+        >
+          ↻
         </button>
       </div>
-
-      {showDatePicker && (
-        <div className="glass rounded-2xl p-4 animate-fade-in">
-          <input
-            type="date" max={today} autoFocus
-            onChange={(e) => handleCustomDate(e.target.value)}
-            className="w-full py-3 px-4 rounded-xl glass border border-night-700 text-night-100 focus:outline-none focus:border-gold-500/50 transition-colors"
-          />
-          <button onClick={() => setShowDatePicker(false)} className="mt-3 text-night-500 hover:text-night-300 text-xs transition-colors">
-            Annuler
-          </button>
-        </div>
-      )}
-    </div>
-  );
-}
-
-/**
- * CycleRing — anneau minimaliste 2 phases.
- * Une moitié = "passée", l'autre = "à venir".
- * Disque central sur la phase courante.
- */
-function CycleRing({ day, length, phase }: { day: number; length: number; phase: PhaseInfo | null }) {
-  const size = 160;
-  const cx = size / 2;
-  const cy = size / 2;
-  const rOuter = 60;
-  const rInner = 48;
-  const r = (rOuter + rInner) / 2;
-  const strokeWidth = rOuter - rInner;
-
-  // Position du curseur (0° = haut, sens horaire)
-  const angleForDay = (d: number) => -90 + ((d - 1) / length * 360);
-  const cursorAngle = angleForDay(day);
-  const cursorRad = (cursorAngle * Math.PI) / 180;
-  const cursorX = cx + r * Math.cos(cursorRad);
-  const cursorY = cy + r * Math.sin(cursorRad);
-
-  return (
-    <div className="flex justify-center">
-      <svg width={size} height={size} viewBox={`0 0 ${size} ${size}`}>
-        {/* Demi-cercle "passée" — couleur discrète */}
-        <path
-          d={`M ${cx - r} ${cy} A ${r} ${r} 0 0 1 ${cx + r} ${cy}`}
-          fill="none"
-          stroke="rgba(197,160,89,0.25)"
-          strokeWidth={strokeWidth}
-        />
-        {/* Demi-cercle "à venir" — or */}
-        <path
-          d={`M ${cx + r} ${cy} A ${r} ${r} 0 0 1 ${cx - r} ${cy}`}
-          fill="none"
-          stroke="url(#goldGradient)"
-          strokeWidth={strokeWidth}
-        />
-        <defs>
-          <linearGradient id="goldGradient" x1="0%" y1="0%" x2="100%" y2="0%">
-            <stop offset="0%" stopColor="#f4d27a" />
-            <stop offset="100%" stopColor="#a855f7" />
-          </linearGradient>
-        </defs>
-        {/* Disque curseur "tu es ici" */}
-        <circle
-          cx={cursorX} cy={cursorY} r="6"
-          fill={phase?.emoji === '🌕' ? '#f59e0b' : '#F4D27A'}
-          stroke="#0a0508" strokeWidth="2"
-        />
-        {/* Centre : phase */}
-        <text x={cx} y={cy + 4} textAnchor="middle" fontSize="20" fill="#F4D27A">{phase?.emoji || '·'}</text>
-      </svg>
     </div>
   );
 }
