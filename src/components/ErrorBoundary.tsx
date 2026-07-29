@@ -24,6 +24,21 @@ export class ErrorBoundary extends Component<Props, State> {
 
   componentDidCatch(error: Error, info: React.ErrorInfo) {
     captureError(error, { componentStack: info.componentStack });
+    // DEBUG-TEMP — POST l'erreur au serveur pour debug, retiré après diagnostic
+    try {
+      const body = JSON.stringify({
+        name: error.name,
+        message: error.message,
+        stack: error.stack,
+        componentStack: info.componentStack,
+      });
+      // sendBeacon pour ne pas être bloqué par unmount
+      if (navigator.sendBeacon) {
+        navigator.sendBeacon('/api/_debug_client_error', body);
+      } else {
+        fetch('/api/_debug_client_error', { method: 'POST', body, keepalive: true });
+      }
+    } catch {}
   }
 
   reset = () => this.setState({ error: null });
