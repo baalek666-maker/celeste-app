@@ -1,15 +1,15 @@
 import { useEffect, useState } from 'react';
+import CelesteLogo from './CelesteLogo';
 
 /**
- * DailyIntention — geste rituel entre Hero et Tarot.
+ * DailyIntention — geste rituel au cœur de Home.
  *
- * VMF ligne 167 : "Ton rituel → Journal + Tarot + Horoscope".
+ * v14.9.g — Logo Céleste remplace le cercle tracé. Le logo parle de lui-même :
+ * soleil alchimique avec lune en cœur, l'union cosmique, l'identité de l'app.
+ * Pas besoin d'un cercle abstrait en plus.
  *
- * UX : 1 phrase méditative (courte, universelle, signe-agnostique),
- * qui apparaît en 2 temps : le cercle se trace (2.2s), puis la phrase
- * fade-in (700ms). Le tout donne le moment de recentrage que Co-Star n'a pas.
- *
- * La phrase change toutes les 24h (date ISO) — pas de re-use identique 2 jours de suite.
+ * UX : le logo apparaît immédiatement, la phrase fade-in après 800ms.
+ * Phrase change toutes les 24h (date ISO) — pas de re-use identique 2 jours de suite.
  */
 const INTENTIONS: string[] = [
   "Trois respirations. Pose ton téléphone après la deuxième.",
@@ -35,61 +35,36 @@ function pickIntention(): string {
 
 export default function DailyIntention() {
   const [text] = useState(pickIntention);
-  const [circleDone, setCircleDone] = useState(false);
+  const [showLogo, setShowLogo] = useState(false);
   const [showText, setShowText] = useState(false);
 
   useEffect(() => {
-    // Cercle tracé en 2.2s, phrase apparaît 300ms après la fin
-    const t1 = setTimeout(() => setCircleDone(true), 2200);
-    const t2 = setTimeout(() => setShowText(true), 2500);
+    // Logo fade-in rapide (300ms), phrase apparaît 800ms après
+    const t1 = setTimeout(() => setShowLogo(true), 300);
+    const t2 = setTimeout(() => setShowText(true), 800);
     return () => { clearTimeout(t1); clearTimeout(t2); };
   }, []);
 
   return (
     <div className="flex flex-col items-center justify-center my-8 px-6 py-6 select-none" aria-hidden="false">
-      {/* Cercle qui se trace (SVG animé) */}
-      <div className="relative w-24 h-24 mb-4">
-        <svg viewBox="0 0 100 100" className="w-full h-full">
-          <defs>
-            <radialGradient id="intent-glow" cx="50%" cy="50%" r="50%">
-              <stop offset="0%" stopColor="#F4D27A" stopOpacity="0.3" />
-              <stop offset="100%" stopColor="#F4D27A" stopOpacity="0" />
-            </radialGradient>
-          </defs>
-          <circle cx="50" cy="50" r="48" fill="url(#intent-glow)" />
-          <circle
-            cx="50"
-            cy="50"
-            r="40"
-            fill="none"
-            stroke="#F4D27A"
-            strokeWidth="0.8"
-            strokeLinecap="round"
-            strokeDasharray="251.3"
-            strokeDashoffset="0"
-            style={{
-              transform: 'rotate(-90deg)',
-              transformOrigin: '50% 50%',
-              transition: 'stroke-opacity 1.5s ease-in-out',
-              strokeOpacity: circleDone ? 1 : 0.4,
-              animation: 'intent-trace 2.2s ease-out forwards',
-            }}
-          />
-          {/* Symbole au centre, fade-in après cercle */}
-          <text
-            x="50"
-            y="55"
-            textAnchor="middle"
-            fontSize="22"
-            fill="#F4D27A"
-            style={{
-              opacity: circleDone ? 1 : 0,
-              transition: 'opacity 0.8s ease-in-out',
-            }}
-          >
-            ✦
-          </text>
-        </svg>
+      {/* Logo Céleste — fade-in au mount, doucement */}
+      <div
+        className="relative mb-5"
+        style={{
+          opacity: showLogo ? 1 : 0,
+          transform: showLogo ? 'scale(1)' : 'scale(0.85)',
+          transition: 'opacity 0.8s ease-out, transform 0.8s ease-out',
+        }}
+      >
+        {/* Halo doré subtil derrière le logo */}
+        <div
+          aria-hidden="true"
+          className="absolute inset-0 -m-6 rounded-full pointer-events-none"
+          style={{
+            background: 'radial-gradient(circle, rgba(197,160,89,0.18) 0%, rgba(197,160,89,0) 65%)',
+          }}
+        />
+        <CelesteLogo size={88} animated className="relative drop-shadow-[0_0_20px_rgba(197,160,89,0.25)]" />
       </div>
 
       <p
@@ -102,13 +77,6 @@ export default function DailyIntention() {
       >
         {text}
       </p>
-
-      <style>{`
-        @keyframes intent-trace {
-          from { stroke-dashoffset: 251.3; }
-          to   { stroke-dashoffset: 0; }
-        }
-      `}</style>
     </div>
   );
 }

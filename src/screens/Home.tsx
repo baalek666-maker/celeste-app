@@ -13,7 +13,6 @@ import { SignatureFooter } from '../components/SignatureFooter';
 import { HomeSecondary } from '../components/HomeSecondary';
 import { TrialBanner } from '../components/TrialBanner';
 import { EmailVerificationBanner } from '../components/EmailVerificationBanner';
-import { QuickAccessBar } from '../components/QuickAccessBar';
 import { pushService } from '../lib/pushNotifications';
 import { getDailyDominantTransit, TRANSIT_INFO } from '../lib/dailyTransit';
 
@@ -124,8 +123,8 @@ export function Home({ user, onNavigate, isGuest }: { user: User; onNavigate: (s
           (cercle + phrase méditative qui change chaque jour via hash date).
           DailyIntention prend la place du hero, juste après QuickAccessBar. */}
 
-      {/* Barre d'accès rapide — 4 rituels */}
-      <QuickAccessBar />
+      {/* v14.9.g — QuickAccessBar SUPPRIMÉE (4 boutons Tarot/Énergie/Intention/Rituel).
+          L'user navigue via la bottom nav ou scroll. */}
 
       {/* v14.9.f — Intention du jour remontée en Zone 1 (place du hero) */}
       <div id="home-intention">
