@@ -8,7 +8,6 @@ import EveningRitualCard from '../components/EveningRitualCard';
 import MoodForecast from '../components/MoodForecast';
 import LiveAstroBanner from '../components/LiveAstroBanner';
 import DailyEnergy from '../components/DailyEnergy';
-import HeroPrediction from '../components/HeroPrediction';
 import DailyIntention from '../components/DailyIntention';
 import { SignatureFooter } from '../components/SignatureFooter';
 import { HomeSecondary } from '../components/HomeSecondary';
@@ -120,11 +119,18 @@ export function Home({ user, onNavigate, isGuest }: { user: User; onNavigate: (s
       {/* v14.9.e — Bloc Portrait Astral SUPPRIMÉ de Home. La page dédiée reste
           accessible via la nav. Mais on n'inonde plus l'accueil avec. */}
 
-      {/* Hero — la phrase qui tue */}
-      <HeroPrediction chart={chart} sunSignKey={chart.sun} firstName={firstName} streak={streak} />
+      {/* v14.9.f — HERO REMOVED : "Le ciel bouge pour toi aujourd'hui" était trop
+          générique, identique tous les jours. On le remplace par DailyIntention
+          (cercle + phrase méditative qui change chaque jour via hash date).
+          DailyIntention prend la place du hero, juste après QuickAccessBar. */}
 
       {/* Barre d'accès rapide — 4 rituels */}
       <QuickAccessBar />
+
+      {/* v14.9.f — Intention du jour remontée en Zone 1 (place du hero) */}
+      <div id="home-intention">
+        <DailyIntention />
+      </div>
 
       {/* ── ZONE 2 : RITUELS DU JOUR (scroll) ── */}
 
@@ -138,10 +144,7 @@ export function Home({ user, onNavigate, isGuest }: { user: User; onNavigate: (s
         <DailyEnergy compact />
       </div>
 
-      {/* Intention du jour */}
-      <div id="home-intention">
-        <DailyIntention />
-      </div>
+      {/* Intention du jour — déplacée en Zone 1 (voir ci-dessus) */}
 
       {/* Aujourd'hui en 10s — SUPPRIMÉ (carrousel Énergie/Lune/Transits, jugé non nécessaire) */}
 
