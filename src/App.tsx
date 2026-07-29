@@ -464,16 +464,8 @@ export function App() {
   // pré-import tous les chunks de la nav dès qu'on arrive sur Home, donc
   // le module est en cache quand l'user clique → Suspense ne suspend jamais.
   useEffect(() => {
+    // TEMP-DIAG : prefetch désactivé pour isoler l'erreur au refresh.
     if (screen !== 'home') return;
-    // Fire-and-forget : on garde les promises pour pas polluer la console.
-    void (async () => {
-      try { await import('./screens/Horoscope'); } catch {}
-      try { await import('./screens/Journal'); } catch {}
-      try { await import('./screens/Explorer'); } catch {}
-      try { await import('./screens/Settings'); } catch {}
-      try { await import('./screens/ChartView'); } catch {}
-      try { await import('./screens/Compatibility'); } catch {}
-    })();
   }, [screen]);
 
   const [navKey, setNavKey] = useState(0);

@@ -19,8 +19,20 @@ import { captureReferralFromURL } from './lib/referral-storage';
 captureReferralFromURL();
 
 // Catch uncaught errors that escape React's ErrorBoundary
-window.addEventListener('error', (e) => captureError(e.error ?? e.message));
-window.addEventListener('unhandledrejection', (e) => captureError(e.reason));
+function _postDebug(payload: unknown) {
+  try {
+    const body = JSON.stringify({
+      name: (payload as Error)?.name || 'Unknown',
+      message: (payload as Error)?.message || String(payload),
+      stack: (payload as Error)?.stack || '',
+      source: 'window',
+    });
+    if (navigator.sendBeacon) navigator.sendBeacon('/api/_debug_client_error', body);
+    else fetch('/api/_debug_client_error', { method: 'POST', body, keepalive: true });
+  } catch {}
+}
+window.addEventListener('error', (e) => { captureError(e.error ?? e.message); _postDebug(e.error ?? e.message); });
+window.addEventListener('unhandledrejection', (e) => { captureError(e.reason); _postDebug(e.reason); });
 
 createRoot(document.getElementById('root')!).render(
   // StrictMode désactivé pour debug P0
