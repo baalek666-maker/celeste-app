@@ -63,18 +63,68 @@ function findMatchingHouse(aspect: Aspect, houses: HouseData[]): HouseData | nul
   ) || null;
 }
 
-function makeHeroTitle(interpretation: string): string {
-  if (!interpretation) return "Le ciel t'écoute";
-  const firstSentence = interpretation.split(/[,.!?]/)[0]?.trim() || interpretation;
-  const words = firstSentence.split(/\s+/);
-  if (words.length <= 5) return firstSentence;
-  return words.slice(0, 4).join(' ') + '…';
+function makeHeroTitle(aspect: Aspect | { transitPlanetFr: string; natalPlanetFr: string; aspectFr: string }): string {
+  const t = aspect.transitPlanetFr || '';
+  // Format court et stable : "{planète en transit}" — pas de phrase tronquée
+  if (t) return `${t} en transit`;
+  return "Le ciel t'écoute";
 }
 
-function makeHeroSubtitle(interpretation: string): string {
-  if (!interpretation) return '';
-  const sentences = interpretation.split(/[.!?]/).map(s => s.trim()).filter(Boolean);
-  return sentences.sort((a, b) => a.length - b.length)[0] || sentences[0] || '';
+/**
+ * Subtitle = contenu qui APPORTE une valeur, sans répéter le titre.
+ * Règles :
+ *   - ne jamais reprendre la première phrase (c'est déjà le titre)
+ *   - si la 2e phrase existe et est assez longue → on l'utilise
+ *   - sinon : phrase d'action contextualisée via buildFallbackAdvice()
+ */
+function makeHeroSubtitle(
+  interpretation: string,
+  ctx: { nature: 'tension' | 'harmonique' | 'neutre'; transitFr: string; natalFr: string; aspectFr: string; houseTheme?: string | null },
+): string {
+  const sentences = (interpretation || '')
+    .split(/[.!?]/)
+    .map(s => s.trim())
+    .filter(Boolean);
+
+  // Stratégie 1 : prendre la 2e phrase (la 1ère est devenue le titre)
+  if (sentences.length >= 2 && sentences[1].length >= 40) {
+    return capitalize(sentences[1]);
+  }
+
+  // Stratégie 2 : la 3e, 4e… jusqu'à en trouver une longue
+  for (let i = 2; i < sentences.length; i++) {
+    if (sentences[i].length >= 50) return capitalize(sentences[i]);
+  }
+
+  // Stratégie 3 : fallback intelligent contextualisé
+  return buildFallbackAdvice(ctx);
+}
+
+function capitalize(s: string): string {
+  if (!s) return s;
+  return s.charAt(0).toUpperCase() + s.slice(1);
+}
+
+/**
+ * Génère un conseil actionnable quand l'interprétation backend est trop courte.
+ * Ton : coach bienveillant, 2e personne, signal temporel.
+ */
+function buildFallbackAdvice(ctx: {
+  nature: 'tension' | 'harmonique' | 'neutre';
+  transitFr: string;
+  natalFr: string;
+  aspectFr: string;
+  houseTheme?: string | null;
+}): string {
+  const theme = ctx.houseTheme ? ` dans ${ctx.houseTheme.toLowerCase()}` : '';
+  if (ctx.nature === 'tension') {
+    return `Tu peux ralentir${theme} et observer ce qui te frictionne — c'est souvent là que ${ctx.transitFr} réveille quelque chose en toi.`;
+  }
+  if (ctx.nature === 'harmonique') {
+    return `Aujourd'hui, ${ctx.transitFr} ${ctx.aspectFr} ${ctx.natalFr}${theme} : profite de cette fenêtre pour avancer sur ce qui te tient à cœur.`;
+  }
+  // neutre
+  return `${ctx.transitFr} ${ctx.aspectFr} ${ctx.natalFr}${theme} — un climat intérieur à écouter, sans forcer ni résister.`;
 }
 
 type CardData =
@@ -85,10 +135,12 @@ export default function TransitFeed({
   transits,
   houses,
   onClose,
+  inline = false,
 }: {
   transits: TransitsData;
   houses: HouseData[];
   onClose: () => void;
+  inline?: boolean;
 }) {
   // Tri : EXACT d'abord, puis tension, puis harmonique, puis orb
   const sortedAspects = [...transits.aspects].sort((a, b) => {
@@ -121,12 +173,13 @@ export default function TransitFeed({
     }
   };
 
-  // Lock body scroll
+  // Lock body scroll (uniquement en mode modal)
   useEffect(() => {
+    if (inline) return;
     const prev = document.body.style.overflow;
     document.body.style.overflow = 'hidden';
     return () => { document.body.style.overflow = prev; };
-  }, []);
+  }, [inline]);
 
   // Sync activeIndex avec le scroll natif (quand l'user swipe à la main)
   useEffect(() => {
@@ -208,12 +261,26 @@ export default function TransitFeed({
   const orphanStartIndex = transitCards.length;
 
   return (
-    <div className="fixed inset-0 z-[9999] bg-celeste-bg overflow-hidden">
+    <div className={inline ? 'relative w-full h-[640px] sm:h-[680px] overflow-hidden rounded-2xl bg-celeste-bg border border-cosmic-500/20' : 'fixed inset-0 z-[9999] bg-celeste-bg overflow-hidden'}>
       {/* Header */}
       <div className="absolute top-0 left-0 right-0 z-20 px-5 pt-12 pb-3 flex items-center justify-between bg-gradient-to-b from-celeste-bg via-celeste-bg/95 to-transparent">
-        <button onClick={onClose} className="text-celeste-text/70 text-sm flex items-center gap-1">
-          <span className="text-lg">‹</span> Retour
-        </button>
+        {inline ? (
+          <button
+            onClick={() => {
+              // En mode inline : scroll vers la section Transits du jour (sommaire) ou haut de la page
+              const target = document.getElementById('transits-section-top');
+              if (target) target.scrollIntoView({ behavior: 'smooth', block: 'start' });
+              else window.scrollTo({ top: 0, behavior: 'smooth' });
+            }}
+            className="text-celeste-text/70 text-sm flex items-center gap-1"
+          >
+            <span className="text-lg">‹</span> Haut
+          </button>
+        ) : (
+          <button onClick={onClose} className="text-celeste-text/70 text-sm flex items-center gap-1">
+            <span className="text-lg">‹</span> Retour
+          </button>
+        )}
         <p className="text-celeste-text/60 text-xs capitalize">{dateFormatted}</p>
         <div className="w-12" />
       </div>
@@ -348,6 +415,27 @@ function TransitCard({
   const style = NATURE_STYLE[aspect.nature] || NATURE_STYLE.neutre;
   const imageUrl = getTransitImage(aspect.transitPlanet, aspect.nature);
 
+  // Détection : le contenu du bloc scrollable dépasse-t-il la zone visible ?
+  const scrollRef = useRef<HTMLDivElement | null>(null);
+  const [canScrollDown, setCanScrollDown] = useState(false);
+  const updateScrollIndicator = () => {
+    const el = scrollRef.current;
+    if (!el) return;
+    const canDown = el.scrollHeight - el.scrollTop - el.clientHeight > 4;
+    setCanScrollDown(canDown);
+  };
+  useEffect(() => {
+    updateScrollIndicator();
+    const el = scrollRef.current;
+    if (!el) return;
+    el.addEventListener('scroll', updateScrollIndicator);
+    window.addEventListener('resize', updateScrollIndicator);
+    return () => {
+      el.removeEventListener('scroll', updateScrollIndicator);
+      window.removeEventListener('resize', updateScrollIndicator);
+    };
+  }, [aspect.interpretation, aspect.conseil, house?.theme]);
+
   return (
     <div className="relative w-full h-[460px] max-h-[64vh] rounded-2xl overflow-hidden celeste-card animate-fade-in shadow-2xl">
       {/* Image de fond (si dispo) ou fallback gradient */}
@@ -356,7 +444,8 @@ function TransitCard({
           className="absolute inset-0 bg-cover bg-center"
           style={{ backgroundImage: `url(${imageUrl})` }}
         >
-          <div className="absolute inset-0 bg-gradient-to-b from-celeste-bg/40 via-celeste-bg/60 to-celeste-bg/90" />
+          {/* Overlay sombre intermédiaire — laisse respirer l'image mais assure le contraste */}
+          <div className="absolute inset-0 bg-gradient-to-b from-black/65 via-black/55 to-celeste-bg/85" />
         </div>
       ) : (
         <div className={`absolute inset-0 bg-gradient-to-br ${style.gradient}`}>
@@ -368,75 +457,102 @@ function TransitCard({
       )}
 
       <div className="relative z-10 h-full flex flex-col p-4">
-        {/* Top: glyphs + EXACT + counter */}
-        <div className="flex items-center justify-between mb-2">
-          <div className="flex items-center gap-1.5 text-2xl">
-            <span title={aspect.transitPlanetFr} className="animate-glow drop-shadow-lg">{aspect.transitGlyph}</span>
-            {aspect.transitRetrograde && <span className="text-xs text-amber-400 font-mono self-start">℞</span>}
-            <span className={`text-xl ${style.text} drop-shadow-lg`}>{aspect.aspectGlyph}</span>
-            <span title={aspect.natalPlanetFr} className="drop-shadow-lg">{aspect.natalGlyph}</span>
+        {/* Fade indicator — fixé en bas de la zone scrollable (overlay) */}
+        {canScrollDown && (
+          <div
+            aria-hidden="true"
+            className="pointer-events-none absolute left-0 right-0 bottom-[68px] h-8 bg-gradient-to-t from-black/85 via-black/45 to-transparent z-20 flex items-end justify-center pb-1"
+          >
+            <span className="text-cosmic-300 text-[10px] animate-pulse">↓</span>
           </div>
-          {aspect.exact && (
-            <span className="text-[9px] px-2 py-0.5 rounded-full bg-gold-500/40 text-gold-100 font-bold border border-gold-500/50 backdrop-blur-sm">
-              EXACT
+        )}
+        {/* Bloc scrollable — tout sauf les actions */}
+        <div className="flex-1 overflow-y-auto" ref={scrollRef} style={{scrollbarWidth: 'none'}}>
+          {/* Top: glyphs + EXACT + counter */}
+          <div className="flex items-center justify-between mb-2">
+            <div className="flex items-center gap-1.5 text-2xl">
+              <span title={aspect.transitPlanetFr} className="animate-glow drop-shadow-lg">{aspect.transitGlyph}</span>
+              {aspect.transitRetrograde && <span className="text-xs text-amber-400 font-mono self-start">℞</span>}
+              <span className={`text-xl ${style.text} drop-shadow-lg`}>{aspect.aspectGlyph}</span>
+              <span title={aspect.natalPlanetFr} className="drop-shadow-lg">{aspect.natalGlyph}</span>
+            </div>
+            {aspect.exact && (
+              <span className="text-[9px] px-2 py-0.5 rounded-full bg-gold-500/40 text-gold-100 font-bold border border-gold-500/50 backdrop-blur-sm">
+                ACTIF
+              </span>
+            )}
+          </div>
+
+          {/* Hero emoji */}
+          <div className="flex justify-center mb-2">
+            <div className="w-12 h-12 rounded-full glass-gold flex items-center justify-center animate-glow backdrop-blur-sm">
+              <span className="text-2xl">{style.emoji}</span>
+            </div>
+          </div>
+
+          {/* Nature badge */}
+          <div className="flex justify-center mb-1.5">
+            <span className={`text-[9px] px-2 py-0.5 rounded-full bg-celeste-bg/50 ${style.text} font-semibold uppercase tracking-wider border ${style.border} backdrop-blur-sm`}>
+              {style.emoji} {style.label}
             </span>
+          </div>
+
+          {/* Title — texte or vif avec text-shadow fort pour ressortir sur l'image */}
+          <h3
+            className="text-2xl font-extrabold text-center mb-2 leading-tight px-1"
+            style={{
+              color: '#ffd700',
+              textShadow: '0 2px 12px rgba(0,0,0,1), 0 0 4px rgba(0,0,0,1)',
+            }}
+          >
+            {makeHeroTitle(aspect)}
+          </h3>
+
+          {/* Subtitle — texte blanc pur avec text-shadow */}
+          <p
+            className="text-[13px] text-center mb-2 leading-snug px-2 font-semibold"
+            style={{
+              color: '#ffffff',
+              textShadow: '0 1px 8px rgba(0,0,0,1), 0 0 3px rgba(0,0,0,1)',
+            }}
+          >
+            {makeHeroSubtitle(aspect.interpretation, {
+              nature: aspect.nature,
+              transitFr: aspect.transitPlanetFr,
+              natalFr: aspect.natalPlanetFr,
+              aspectFr: aspect.aspectFr,
+              houseTheme: house?.theme ?? null,
+            })}
+          </p>
+
+          {/* Divider */}
+          <div className="flex items-center gap-2 mb-2">
+            <div className="flex-1 h-px bg-gradient-to-r from-transparent via-cosmic-500/40 to-transparent" />
+            <span className="text-cosmic-400 text-[10px]">★</span>
+            <div className="flex-1 h-px bg-gradient-to-r from-transparent via-cosmic-500/40 to-transparent" />
+          </div>
+
+          {/* Conseil */}
+          {aspect.conseil && (
+            <div className="rounded-lg bg-celeste-bg/40 border border-cosmic-500/30 p-2 mb-2 backdrop-blur-sm">
+              <p className="text-[11px] text-celeste-text/90 flex items-start gap-1.5">
+                <span className="not-italic text-sm flex-shrink-0">💡</span>
+                <span className="italic line-clamp-3">{aspect.conseil}</span>
+              </p>
+            </div>
+          )}
+
+          {/* Maison (petite ligne) */}
+          {house && (
+            <div className="rounded-lg bg-celeste-bg/40 border border-celeste-primary/25 p-1.5 mb-2 backdrop-blur-sm">
+              <p className="text-[11px] text-celeste-text/80 flex items-center gap-1.5">
+                <span>{house.icon}</span>
+                <span className="font-semibold">Maison {house.num}</span>
+                <span className="text-celeste-text/60 truncate">— {house.theme}</span>
+              </p>
+            </div>
           )}
         </div>
-
-        {/* Hero emoji */}
-        <div className="flex justify-center mb-2">
-          <div className="w-12 h-12 rounded-full glass-gold flex items-center justify-center animate-glow backdrop-blur-sm">
-            <span className="text-2xl">{style.emoji}</span>
-          </div>
-        </div>
-
-        {/* Nature badge */}
-        <div className="flex justify-center mb-1.5">
-          <span className={`text-[9px] px-2 py-0.5 rounded-full bg-celeste-bg/50 ${style.text} font-semibold uppercase tracking-wider border ${style.border} backdrop-blur-sm`}>
-            {style.emoji} {style.label}
-          </span>
-        </div>
-
-        {/* Title */}
-        <h3 className="text-xl font-bold text-center mb-1.5 text-cosmic-gradient leading-tight drop-shadow-lg">
-          {makeHeroTitle(aspect.interpretation)}
-        </h3>
-
-        {/* Subtitle */}
-        <p className="text-xs text-celeste-text/90 text-center mb-2 leading-snug px-1 drop-shadow line-clamp-3">
-          {makeHeroSubtitle(aspect.interpretation)}
-        </p>
-
-        {/* Divider */}
-        <div className="flex items-center gap-2 mb-2">
-          <div className="flex-1 h-px bg-gradient-to-r from-transparent via-cosmic-500/40 to-transparent" />
-          <span className="text-cosmic-400 text-[10px]">★</span>
-          <div className="flex-1 h-px bg-gradient-to-r from-transparent via-cosmic-500/40 to-transparent" />
-        </div>
-
-        {/* Conseil */}
-        {aspect.conseil && (
-          <div className="rounded-lg bg-celeste-bg/40 border border-cosmic-500/30 p-2 mb-2 backdrop-blur-sm">
-            <p className="text-[11px] text-celeste-text/90 flex items-start gap-1.5">
-              <span className="not-italic text-sm flex-shrink-0">💡</span>
-              <span className="italic line-clamp-2">{aspect.conseil}</span>
-            </p>
-          </div>
-        )}
-
-        {/* Maison (petite ligne) */}
-        {house && (
-          <div className="rounded-lg bg-celeste-bg/40 border border-celeste-primary/25 p-1.5 mb-2 backdrop-blur-sm">
-            <p className="text-[11px] text-celeste-text/80 flex items-center gap-1.5">
-              <span>{house.icon}</span>
-              <span className="font-semibold">Maison {house.num}</span>
-              <span className="text-celeste-text/60 truncate">— {house.theme}</span>
-            </p>
-          </div>
-        )}
-
-        {/* Spacer */}
-        <div className="flex-1" />
 
         {/* Actions Tinder-like : SAVE (gauche) | SHARE (centre) | SKIP (droite) */}
         <div className="flex items-center justify-around gap-2">

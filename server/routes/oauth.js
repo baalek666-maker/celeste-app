@@ -348,7 +348,7 @@ router.post('/login', async (req, res) => {
         id: userObj.id,
         email: userObj.email,
         isPremium: false,
-        scansRemaining: 7,
+        scansRemaining: 3,
         displayName: name,
         avatarUrl: avatar_url,
         oauthProvider: provider,

@@ -4,7 +4,6 @@ import type { Screen } from '../App';
 import StreakCelebration from '../components/StreakCelebration';
 import DailyTarot from '../components/DailyTarot';
 import TarotCross from '../components/TarotCross';
-import TodayIn10s from '../components/TodayIn10s';
 import EveningRitualCard from '../components/EveningRitualCard';
 import MoodForecast from '../components/MoodForecast';
 import LiveAstroBanner from '../components/LiveAstroBanner';
@@ -28,7 +27,7 @@ import { getDailyDominantTransit, TRANSIT_INFO } from '../lib/dailyTransit';
  *
  * EN DESSOUS (scroll) :
  *   3. DailyTarot, DailyEnergy, DailyIntention, EveningRitualCard
- *   4. TodayIn10s, LiveAstroBanner, TarotCross, MoodForecast
+ *   4. LiveAstroBanner, TarotCross, MoodForecast
  *   5. SignatureFooter + HomeSecondary
  *
  * Les bannières (Trial, Email, Streak) restent en haut mais discrètes.
@@ -118,6 +117,28 @@ export function Home({ user, onNavigate, isGuest }: { user: User; onNavigate: (s
       <EmailVerificationBanner email={user.email} />
       <StreakCelebration streak={streak} />
 
+      {/* v14.8 — Teaser Portrait Astral : CTA premium pour free users */}
+      {!user.isPremium && (
+        <button
+          onClick={() => onNavigate('astro-portrait' as Screen)}
+          className="w-full mb-4 rounded-2xl p-4 text-left transition-all duration-300 hover:scale-[1.01] active:scale-[0.99] bg-gradient-to-r from-cosmic-500/15 to-gold-500/10 border border-cosmic-400/30 glass-cosmic"
+          aria-label="Découvrir mon portrait astral"
+        >
+          <div className="flex items-center gap-3">
+            <div className="text-2xl">🔮</div>
+            <div className="flex-1 min-w-0">
+              <p className="text-night-100 font-semibold text-sm">
+                Ton portrait astral personnalisé
+              </p>
+              <p className="text-night-300 text-xs mt-0.5">
+                Découvre ce que tes placements disent de toi. Lecture Premium.
+              </p>
+            </div>
+            <span className="text-gold-300 text-lg shrink-0">→</span>
+          </div>
+        </button>
+      )}
+
       {/* Hero — la phrase qui tue */}
       <HeroPrediction chart={chart} sunSignKey={chart.sun} firstName={firstName} streak={streak} />
 
@@ -141,8 +162,7 @@ export function Home({ user, onNavigate, isGuest }: { user: User; onNavigate: (s
         <DailyIntention />
       </div>
 
-      {/* Aujourd'hui en 10s */}
-      <TodayIn10s />
+      {/* Aujourd'hui en 10s — SUPPRIMÉ (carrousel Énergie/Lune/Transits, jugé non nécessaire) */}
 
       {/* Rituel du soir */}
       <div id="home-ritual">

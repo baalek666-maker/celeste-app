@@ -24,8 +24,13 @@ const KEY_ICONS: Record<string, string> = {
   vesta: '🔥'
 };
 
-export default function AsteroidInsights() {
-  const [data, setData] = useState<{ positions: Asteroid[]; interpretation: string | null } | null>(null);
+type AsteroidComponentProps = {
+  isPremium?: boolean;
+  onNavigate?: (screen: string) => void;
+};
+
+export default function AsteroidInsights({ isPremium: isPremiumProp, onNavigate }: AsteroidComponentProps = {}) {
+  const [data, setData] = useState<{ positions: Asteroid[]; interpretation: string | null; _teaser?: boolean; isPremium?: boolean } | null>(null);
   const [loading, setLoading] = useState(true);
   const [err, setErr] = useState<string | null>(null);
 
@@ -53,6 +58,9 @@ export default function AsteroidInsights() {
     </div>
   );
 
+  const isTeaser = data._teaser === true;
+  const showPaywallCta = isTeaser && !isPremiumProp;
+
   return (
     <div className="celeste-card mb-6">
       <div className="flex items-center justify-between mb-3">
@@ -77,6 +85,15 @@ export default function AsteroidInsights() {
         <p className="text-xs text-celeste-text/75 leading-relaxed italic">
           {data.interpretation}
         </p>
+      )}
+
+      {showPaywallCta && (
+        <button
+          onClick={() => onNavigate && onNavigate('paywall')}
+          className="mt-3 w-full text-xs font-semibold text-celeste-primary hover:text-celeste-primary/80 transition-colors"
+        >
+          ✨ Découvrir mon interprétation complète →
+        </button>
       )}
     </div>
   );

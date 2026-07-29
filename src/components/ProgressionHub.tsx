@@ -47,6 +47,14 @@ export default function ProgressionHub() {
 
   useEffect(() => load(), []);
 
+  // Écoute l'event fire par DailyTarot après un tirage → on recharge les données
+  // (XP, level, badge 'first_tarot' débloqué côté serveur).
+  useEffect(() => {
+    const onQuestCompleted = () => load();
+    window.addEventListener('celeste:quest-completed', onQuestCompleted);
+    return () => window.removeEventListener('celeste:quest-completed', onQuestCompleted);
+  }, []);
+
   const completeQuest = async (q: Quest) => {
     if (q.completed || busyKey) return;
     setBusyKey(q.quest_key);

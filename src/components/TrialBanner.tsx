@@ -28,42 +28,67 @@ export function TrialBanner({
   onNavigate?: (screen: string) => void;
 }) {
   const info = useMemo(() => {
+    const now = Math.floor(Date.now() / 1000);
+    const premiumUntil = user?.premiumUntil
+      ? (typeof user.premiumUntil === 'number'
+        ? user.premiumUntil
+        : Math.floor(new Date(user.premiumUntil as unknown as string).getTime() / 1000))
+      : 0;
+    const isLikelyPaidSubscription = premiumUntil > now + 30 * 86400;
+
+    // v14.8 — CTA DÉMARRAGE TRIAL : si user non-premium et trialStartedAt vide,
+    // on affiche une invitation douce à essayer 7 jours gratuit.
+    if (!user?.isPremium && !user?.trialStartedAt && !isLikelyPaidSubscription) {
+      return { mode: 'invite' as const };
+    }
+
+    // Trial en cours : bandeau décompte
     if (!user?.trialStartedAt) return null;
-    // trialStartedAt est en secondes (timestamp Unix) côté backend
     const start = typeof user.trialStartedAt === 'number'
       ? user.trialStartedAt
       : Math.floor(new Date(user.trialStartedAt as unknown as string).getTime() / 1000);
-    const now = Math.floor(Date.now() / 1000);
     const elapsedDays = Math.floor((now - start) / 86400);
     const daysLeft = Math.max(0, 7 - elapsedDays);
 
     // Le bandeau s'affiche uniquement pendant les 7 jours du trial
     if (daysLeft <= 0 || daysLeft > 7) return null;
-    return { daysLeft };
-  }, [user?.trialStartedAt]);
+    if (isLikelyPaidSubscription) return null;
+    return { mode: 'active' as const, daysLeft };
+  }, [user?.trialStartedAt, user?.isPremium, user?.premiumUntil]);
 
   if (!info) return null;
 
-  // On n'affiche le bandeau que si l'utilisateur n'a PAS encore un abonnement payant.
-  // Heuristique simple : si premiumUntil > now + 30 jours, c'est un vrai abonnement.
-  // Sinon c'est le trial (max 7 jours + marge).
-  const premiumUntil = user?.premiumUntil
-    ? (typeof user.premiumUntil === 'number'
-      ? user.premiumUntil
-      : Math.floor(new Date(user.premiumUntil as unknown as string).getTime() / 1000))
-    : 0;
-  const now = Math.floor(Date.now() / 1000);
-  const isLikelyPaidSubscription = premiumUntil > now + 30 * 86400;
-  if (isLikelyPaidSubscription) return null;
+  const handleClick = () => {
+    if (onNavigate) onNavigate('paywall');
+  };
 
+  // ── Mode "invite" : jamais essayé, propose 7 jours gratuit ─────────────
+  if (info.mode === 'invite') {
+    return (
+      <button
+        onClick={handleClick}
+        className="w-full mb-4 rounded-2xl p-4 text-left transition-all duration-300 hover:scale-[1.01] active:scale-[0.99] animate-fade-in bg-gradient-to-r from-gold-500/10 to-cosmic-500/10 border border-gold-500/20 glass-gold"
+        aria-label="Essayer Premium gratuitement pendant 7 jours"
+      >
+        <div className="flex items-center gap-3">
+          <div className="text-2xl">✨</div>
+          <div className="flex-1 min-w-0">
+            <p className="text-night-100 font-semibold text-sm">
+              Essaie Premium 7 jours, c'est offert
+            </p>
+            <p className="text-night-300 text-xs mt-0.5">
+              Toutes les lectures, sans carte bancaire. Annule quand tu veux.
+            </p>
+          </div>
+          <span className="text-gold-300 text-lg shrink-0">→</span>
+        </div>
+      </button>
+    );
+  }
+
+  // ── Mode "active" : trial en cours, décompte ──────────────────────────
   const isLastDay = info.daysLeft === 1;
   const isLast3Days = info.daysLeft <= 3;
-
-  const handleClick = () => {
-    if (onNavigate) {
-      onNavigate('paywall');
-    }
-  };
 
   return (
     <button

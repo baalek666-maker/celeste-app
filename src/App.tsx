@@ -623,7 +623,7 @@ export function App() {
         </div>
         {showNav && (
           <div className="fixed bottom-0 left-1/2 -translate-x-1/2 w-full max-w-md z-50">
-            <BottomNav items={navItems} labels={navLabels} active={screen} onNavigate={(s) => handleNavigate(s as Screen)} />
+            <BottomNav items={navItems} labels={navLabels} active={screen} onNavigate={(s) => handleNavigate(s as Screen)} showPremiumBadge={!user.isPremium} />
           </div>
         )}
       </div>

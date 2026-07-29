@@ -12,16 +12,14 @@
  */
 
 const PLANET_KEY: Record<string, string> = {
-  'Soleil': 'soleil',
-  'Lune': 'lune',
-  'Mercure': 'mercure',
-  'Vénus': 'venus',
-  'Mars': 'mars',
-  'Jupiter': 'jupiter',
-  'Saturne': 'saturne',
-  'Uranus': 'uranus',
-  'Neptune': 'neptune',
-  'Pluton': 'pluton',
+  // FR (capitalisé)
+  'Soleil': 'soleil', 'Lune': 'lune', 'Mercure': 'mercure', 'Vénus': 'venus',
+  'Mars': 'mars', 'Jupiter': 'jupiter', 'Saturne': 'saturne',
+  'Uranus': 'uranus', 'Neptune': 'neptune', 'Pluton': 'pluton',
+  // EN (lowercase, retourné par /personal-transits)
+  'sun': 'soleil', 'moon': 'lune', 'mercury': 'mercure', 'venus': 'venus',
+  'mars': 'mars', 'jupiter': 'jupiter', 'saturn': 'saturne',
+  'uranus': 'uranus', 'neptune': 'neptune', 'pluto': 'pluton',
 };
 
 const NATURE_KEY: Record<string, string> = {

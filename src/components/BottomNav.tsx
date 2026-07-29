@@ -3,6 +3,8 @@ interface NavProps {
   labels: Record<string, string>;
   active: string;
   onNavigate: (s: string) => void;
+  /** v14.8 — Badge ⚡ discret sur l'item Settings si user non-premium. */
+  showPremiumBadge?: boolean;
 }
 
 // ─── Alchemical / astrological glyph icons ───────────────
@@ -74,7 +76,7 @@ function NavIcon({ item, active }: { item: string; active: boolean }) {
   }
 }
 
-export function BottomNav({ items, labels, active, onNavigate }: NavProps) {
+export function BottomNav({ items, labels, active, onNavigate, showPremiumBadge }: NavProps) {
   const handleNav = (item: string) => {
     // Haptic feedback (mobile only, silent on desktop)
     if ('vibrate' in navigator) {
@@ -108,6 +110,12 @@ export function BottomNav({ items, labels, active, onNavigate }: NavProps) {
                 )}
                 <div className={`relative transition-all duration-300 ${isActive ? 'drop-shadow-[0_0_7px_rgba(197,160,89,0.55)]' : ''}`}>
                   <NavIcon item={item} active={isActive} />
+                  {/* v14.8 — Badge ⚡ discret sur l'icône Settings pour free users */}
+                  {showPremiumBadge && item === 'settings' && (
+                    <span className="absolute -top-1 -right-1 w-3.5 h-3.5 rounded-full bg-gradient-to-br from-gold-300 to-cosmic-400 text-[8px] flex items-center justify-center font-bold text-night-900 shadow-md animate-pulse-slow">
+                      ⚡
+                    </span>
+                  )}
                 </div>
               </div>
               <span className={`text-[10px] font-medium tracking-tight transition-all duration-300 ${isActive ? 'text-gold-400 font-display' : 'text-night-500'}`}>

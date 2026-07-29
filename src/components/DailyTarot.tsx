@@ -83,6 +83,13 @@ export default function DailyTarot() {
       setDrawn(card);
       setStoredDraw(card);
       setImgError(false);
+      // Gamification — côté serveur : incrémente quête 'tarot' qui débade 'first_tarot'.
+      // On fire un event pour que ProgressionHub recharge ses données (XP, badges, level).
+      api.completeQuest('tarot')
+        .then(() => {
+          window.dispatchEvent(new CustomEvent('celeste:quest-completed', { detail: { questKey: 'tarot' } }));
+        })
+        .catch(() => { /* silencieux — déjà complétée aujourd'hui ou réseau */ });
       // After summon animation, show face-down card
       setTimeout(() => setPhase('facedown'), 1400);
     } catch {
