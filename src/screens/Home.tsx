@@ -117,54 +117,8 @@ export function Home({ user, onNavigate, isGuest }: { user: User; onNavigate: (s
       <EmailVerificationBanner email={user.email} />
       <StreakCelebration streak={streak} />
 
-      {/* v14.9.c — Teaser Portrait Astral : redesign épuré, barre gold à gauche,
-          icône User SVG, badge PREMIUM, bouton CTA visible. Cohérent avec TrialBanner. */}
-      {!user.isPremium && (
-        <div
-          onClick={() => onNavigate('astro-portrait' as Screen)}
-          role="button"
-          tabIndex={0}
-          onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); onNavigate('astro-portrait' as Screen); } }}
-          className="relative w-full mb-4 rounded-2xl overflow-hidden bg-night-900 border-t-2 border-cosmic-500/60 cursor-pointer hover:bg-night-800/80 transition-colors animate-fade-in"
-          aria-label="Découvrir mon portrait astral"
-        >
-          {/* Barre gold latérale gauche */}
-          <div className="absolute left-0 top-0 bottom-0 w-1 bg-gradient-to-b from-cosmic-400 to-cosmic-600" />
-
-          <div className="px-5 pt-4 pb-4 pl-6">
-            <div className="flex items-start justify-between gap-3 mb-3">
-              <div className="flex items-center gap-2">
-                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" className="text-cosmic-400 shrink-0">
-                  <circle cx="12" cy="8" r="4" fill="currentColor" opacity="0.3" />
-                  <circle cx="12" cy="8" r="3.5" stroke="currentColor" strokeWidth="1.4" fill="none" />
-                  <path d="M4 21c0-4 4-6 8-6s8 2 8 6" stroke="currentColor" strokeWidth="1.4" fill="none" strokeLinecap="round" />
-                </svg>
-                <span className="text-cosmic-300 text-[10px] tracking-[0.2em] font-semibold uppercase">
-                  Toi
-                </span>
-              </div>
-              <span className="bg-night-800 text-cosmic-300 border border-cosmic-500/40 text-[10px] font-bold tracking-wider uppercase px-2 py-0.5 rounded-full">
-                Premium
-              </span>
-            </div>
-
-            <h3 className="text-night-50 text-lg leading-tight font-light mb-1.5" style={{ fontFamily: 'Georgia, "Cormorant Garamond", serif' }}>
-              Ton portrait <span className="text-cosmic-300 italic">astral</span>
-            </h3>
-
-            <p className="text-night-400 text-xs leading-relaxed mb-4">
-              Ce que tes placements disent de toi, en lecture complète.
-            </p>
-
-            <div className="flex items-center justify-center gap-2 bg-night-800 border border-cosmic-500/40 text-cosmic-300 text-sm font-semibold py-2.5 rounded-xl">
-              Découvrir
-              <svg width="14" height="14" viewBox="0 0 24 24" fill="none">
-                <path d="M5 12H19M19 12L13 6M19 12L13 18" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round" />
-              </svg>
-            </div>
-          </div>
-        </div>
-      )}
+      {/* v14.9.e — Bloc Portrait Astral SUPPRIMÉ de Home. La page dédiée reste
+          accessible via la nav. Mais on n'inonde plus l'accueil avec. */}
 
       {/* Hero — la phrase qui tue */}
       <HeroPrediction chart={chart} sunSignKey={chart.sun} firstName={firstName} streak={streak} />
