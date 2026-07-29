@@ -24,37 +24,6 @@ export class ErrorBoundary extends Component<Props, State> {
 
   componentDidCatch(error: Error, info: React.ErrorInfo) {
     captureError(error, { componentStack: info.componentStack });
-    // P0-FIX 'UNE ÉTINCELLE' : si l'erreur est un NotFoundError removeChild
-    // (causé par un iframe hors-React comme Google GIS ou un SW stale), on la
-    // swallow au lieu de monter le fallback. Le crash est cosmétique — la
-    // page continue de fonctionner en dessous.
-    if (
-      error?.name === 'NotFoundError' &&
-      (error?.message?.includes('removeChild') || error?.message?.includes('insertBefore'))
-    ) {
-      console.warn('[ErrorBoundary] Swallowed removeChild NotFoundError:', error.message);
-      // Reset le state pour éviter l'affichage du fallback même si getDerivedStateFromError
-      // a déjà été appelé.
-      this.setState({ error: null });
-    }
-    // DEBUG-TEMP — POST l'erreur au serveur + localStorage, retiré après diagnostic
-    try {
-      const payload = {
-        name: error.name,
-        message: error.message,
-        stack: error.stack,
-        componentStack: info.componentStack,
-        at: new Date().toISOString(),
-        url: typeof location !== 'undefined' ? location.href : '',
-      };
-      const body = JSON.stringify(payload);
-      if (navigator.sendBeacon) {
-        navigator.sendBeacon('/api/_debug_client_error', body);
-      } else {
-        fetch('/api/_debug_client_error', { method: 'POST', body, keepalive: true });
-      }
-      try { localStorage.setItem('__celeste_last_error', JSON.stringify(payload)); } catch {}
-    } catch {}
   }
 
   reset = () => this.setState({ error: null });
@@ -70,12 +39,6 @@ export class ErrorBoundary extends Component<Props, State> {
           <p className="text-night-300 text-sm mb-6">
             L'application a rencontré un imprévu. Tu peux réessayer sans perdre tes données.
           </p>
-          {/* DEBUG-TEMP — détails auto-dépliés en prod pour diagnostiquer */}
-          <details open className="text-left text-xs text-red-300 bg-night-900/60 rounded-xl p-3 mb-4">
-            <summary className="cursor-pointer text-night-400 mb-1">Détails techniques</summary>
-            <div className="font-bold mb-2 text-red-200">{this.state.error.name}: {this.state.error.message}</div>
-            <pre className="overflow-auto max-h-60 text-[10px] text-night-300 whitespace-pre-wrap">{this.state.error.stack}</pre>
-          </details>
           <button onClick={this.reset}
             className="w-full py-3 rounded-2xl bg-gradient-to-r from-cosmic-600 to-cosmic-700 text-white font-semibold">
             Réessayer

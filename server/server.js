@@ -3819,29 +3819,6 @@ app.post('/api/premium/activate', auth, (req, res) => {
 app.get('/api/billing/status', (req, res) => res.json({ configured: isStripeConfigured() }));
 app.use('/api/billing', auth, billingRouter);
 
-// DEBUG-TEMP — endpoint de capture d'erreurs client (à retirer après diagnostic)
-let _lastClientError = null;
-app.post('/api/_debug_client_error', (req, res) => {
-  try {
-    const { name, message, stack, componentStack } = req.body || {};
-    _lastClientError = { name, message, stack, componentStack, at: new Date().toISOString() };
-    console.error('[CLIENT ERROR]', name, message, '\n', (stack || '').slice(0, 500), '\nCOMP:', (componentStack || '').slice(0, 300));
-    // Aussi : append dans un fichier pour pouvoir le lire sans tunnel
-    try {
-      require('fs').appendFileSync('/tmp/celeste_client_errors.log',
-        `\n=== ${new Date().toISOString()} ===\nNAME: ${name}\nMSG: ${message}\nSTACK: ${(stack||'').slice(0, 800)}\nCOMP: ${(componentStack||'').slice(0, 400)}\n`,
-        'utf8'
-      );
-    } catch {}
-  } catch (e) { console.error('debug capture failed', e); }
-  res.status(204).end();
-});
-app.get('/api/_debug_client_error', (req, res) => res.json(_lastClientError || { error: 'none yet' }));
-app.get('/api/_debug_client_error_log', (req, res) => {
-  try { res.type('text/plain').send(require('fs').readFileSync('/tmp/celeste_client_errors.log', 'utf8')); }
-  catch { res.type('text/plain').send('(no log yet)'); }
-});
-
 // ═══════════════════════════════════════════════════════════════════════════
 // P0#4 — Streak freeze : endpoints.
 //   GET  /api/streak          → { count, freezesAvailable, lastDate, graceApplied }
