@@ -17,7 +17,9 @@ const CTA: Record<ReturnType<typeof getDailyDominantTransit>, {
   sub: string;
 }> = {
   mercury: { target: 'horoscope',    icon: '☿', label: 'Lis ton horoscope',         sub: 'Les mots du jour t\'attendent.' },
-  venus:   { target: 'compatibility', icon: '♀', label: 'Vibre avec quelqu\'un',    sub: 'Compare ton ciel à un autre.' },
+  // v14.9.i — Vénus CTA supprimé : le module Compatibilité (blessures/pouvoirs)
+  // n'est pas accessible. On remplace par Journal, accessible partout.
+  venus:   { target: 'journal',      icon: '♀', label: 'Écris ce qui t\'habite',     sub: 'Le journal sait ce que tu tais encore.' },
   mars:    { target: 'explorer',     icon: '♂', label: 'Explore une question',      sub: 'Un geste. Un mouvement. Une réponse.' },
   jupiter: { target: 'journal',      icon: '♃', label: 'Écris ce qui s\'ouvre',     sub: 'Note l\'élargissement, même infime.' },
   saturn:  { target: 'settings',     icon: '♄', label: 'Pose un rituel concret',    sub: 'Un petit geste ancré aujourd\'hui.' },
