@@ -24,20 +24,23 @@ export class ErrorBoundary extends Component<Props, State> {
 
   componentDidCatch(error: Error, info: React.ErrorInfo) {
     captureError(error, { componentStack: info.componentStack });
-    // DEBUG-TEMP — POST l'erreur au serveur pour debug, retiré après diagnostic
+    // DEBUG-TEMP — POST l'erreur au serveur + localStorage, retiré après diagnostic
     try {
-      const body = JSON.stringify({
+      const payload = {
         name: error.name,
         message: error.message,
         stack: error.stack,
         componentStack: info.componentStack,
-      });
-      // sendBeacon pour ne pas être bloqué par unmount
+        at: new Date().toISOString(),
+        url: typeof location !== 'undefined' ? location.href : '',
+      };
+      const body = JSON.stringify(payload);
       if (navigator.sendBeacon) {
         navigator.sendBeacon('/api/_debug_client_error', body);
       } else {
         fetch('/api/_debug_client_error', { method: 'POST', body, keepalive: true });
       }
+      try { localStorage.setItem('__celeste_last_error', JSON.stringify(payload)); } catch {}
     } catch {}
   }
 
@@ -54,8 +57,8 @@ export class ErrorBoundary extends Component<Props, State> {
           <p className="text-night-300 text-sm mb-6">
             L'application a rencontré un imprévu. Tu peux réessayer sans perdre tes données.
           </p>
-          {/* Debug: TOUJOURS afficher en prod (pas que DEV) pour pouvoir diagnostiquer */}
-          <details className="text-left text-xs text-red-300 bg-night-900/60 rounded-xl p-3 mb-4">
+          {/* DEBUG-TEMP — détails auto-dépliés en prod pour diagnostiquer */}
+          <details open className="text-left text-xs text-red-300 bg-night-900/60 rounded-xl p-3 mb-4">
             <summary className="cursor-pointer text-night-400 mb-1">Détails techniques</summary>
             <div className="font-bold mb-2 text-red-200">{this.state.error.name}: {this.state.error.message}</div>
             <pre className="overflow-auto max-h-60 text-[10px] text-night-300 whitespace-pre-wrap">{this.state.error.stack}</pre>
