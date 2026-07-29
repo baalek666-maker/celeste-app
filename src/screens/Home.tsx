@@ -8,6 +8,7 @@ import EveningRitualCard from '../components/EveningRitualCard';
 import MoodForecast from '../components/MoodForecast';
 import LiveAstroBanner from '../components/LiveAstroBanner';
 import DailyEnergy from '../components/DailyEnergy';
+import { DailyHero } from '../components/DailyHero';
 import DailyIntention from '../components/DailyIntention';
 import { SignatureFooter } from '../components/SignatureFooter';
 import { HomeSecondary } from '../components/HomeSecondary';
@@ -15,6 +16,8 @@ import { TrialBanner } from '../components/TrialBanner';
 import { EmailVerificationBanner } from '../components/EmailVerificationBanner';
 import { pushService } from '../lib/pushNotifications';
 import { getDailyDominantTransit, TRANSIT_INFO } from '../lib/dailyTransit';
+import { ZODIAC_SIGNS } from '../data/zodiac';
+import type { ZodiacSign } from '../types';
 
 /**
  * v12 — Home "Dashboard Rituel" (Proposition B)
@@ -118,18 +121,18 @@ export function Home({ user, onNavigate, isGuest }: { user: User; onNavigate: (s
       {/* v14.9.e — Bloc Portrait Astral SUPPRIMÉ de Home. La page dédiée reste
           accessible via la nav. Mais on n'inonde plus l'accueil avec. */}
 
-      {/* v14.9.f — HERO REMOVED : "Le ciel bouge pour toi aujourd'hui" était trop
-          générique, identique tous les jours. On le remplace par DailyIntention
-          (cercle + phrase méditative qui change chaque jour via hash date).
-          DailyIntention prend la place du hero, juste après QuickAccessBar. */}
+      {/* v14.9.h — DailyHero : Logo + Bonjour + badge NASA + carte aperçu transit.
+          S'inspire de la landing pour donner du poids visuel au haut de page. */}
+      <DailyHero
+        firstName={firstName}
+        sunSignName={ZODIAC_SIGNS[chart.sun as ZodiacSign]?.name}
+        sunSignGlyph={ZODIAC_SIGNS[chart.sun as ZodiacSign]?.symbol}
+        sunSignColor={ZODIAC_SIGNS[chart.sun as ZodiacSign]?.color}
+      />
 
-      {/* v14.9.g — QuickAccessBar SUPPRIMÉE (4 boutons Tarot/Énergie/Intention/Rituel).
-          L'user navigue via la bottom nav ou scroll. */}
-
-      {/* v14.9.f — Intention du jour remontée en Zone 1 (place du hero) */}
-      <div id="home-intention">
-        <DailyIntention />
-      </div>
+      {/* v14.9.h — Intention DESCENDUE en Zone 2 (entre Tarot et Énergie).
+          Le hero porte maintenant le hook transit (concret). L'intention
+          devient une respiration méditative entre 2 rituels actifs. */}
 
       {/* ── ZONE 2 : RITUELS DU JOUR (scroll) ── */}
 
@@ -138,12 +141,15 @@ export function Home({ user, onNavigate, isGuest }: { user: User; onNavigate: (s
         <DailyTarot />
       </div>
 
+      {/* Intention du jour — respiration méditative */}
+      <div id="home-intention">
+        <DailyIntention />
+      </div>
+
       {/* Énergie du jour */}
       <div id="home-energy">
         <DailyEnergy compact />
       </div>
-
-      {/* Intention du jour — déplacée en Zone 1 (voir ci-dessus) */}
 
       {/* Aujourd'hui en 10s — SUPPRIMÉ (carrousel Énergie/Lune/Transits, jugé non nécessaire) */}
 
