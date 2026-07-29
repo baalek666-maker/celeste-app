@@ -63,53 +63,28 @@ export function TrialBanner({
   };
 
   // ── Mode "invite" : jamais essayé, propose 7 jours gratuit ─────────────
-  // v14.9.c — redesign épuré : liseré or top, badge OFFERT, vrai bouton CTA,
-  // pas d'emoji (Sparkles SVG). Hiérarchie typo nette.
+  // v14.9.d — Mode discret : juste une ligne fine, pas de bouton CTA plein,
+  // pas de liseré or, pas de badge pill. Le portrait astral reste l'attraction
+  // principale ; le premium est suggéré en passant.
   if (info.mode === 'invite') {
     return (
       <div
-        className="relative w-full mb-4 rounded-2xl overflow-hidden bg-night-900 border-t-2 border-cosmic-500 animate-fade-in"
+        onClick={handleClick}
         role="button"
         tabIndex={0}
-        onClick={handleClick}
         onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); handleClick(); } }}
         aria-label="Essayer Premium gratuitement pendant 7 jours"
+        className="w-full mb-4 px-3 py-2 rounded-lg cursor-pointer hover:bg-night-800/30 transition-colors animate-fade-in"
       >
-        <div className="px-5 pt-4 pb-4">
-          <div className="flex items-start justify-between gap-3 mb-3">
-            <div className="flex items-center gap-2">
-              {/* Sparkles icon — minimal SVG, pas d'emoji */}
-              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" className="text-cosmic-400 shrink-0">
-                <path d="M12 2L13.5 8.5L20 10L13.5 11.5L12 18L10.5 11.5L4 10L10.5 8.5L12 2Z" fill="currentColor" />
-                <circle cx="19" cy="5" r="1.2" fill="currentColor" opacity="0.6" />
-                <circle cx="5" cy="19" r="1" fill="currentColor" opacity="0.5" />
-              </svg>
-              <span className="text-cosmic-300 text-[10px] tracking-[0.2em] font-semibold uppercase">
-                Premium
-              </span>
-            </div>
-            {/* Badge OFFERT — pill gold */}
-            <span className="bg-cosmic-500 text-night-950 text-[10px] font-bold tracking-wider uppercase px-2 py-0.5 rounded-full">
-              Offert
-            </span>
-          </div>
-
-          <h3 className="text-night-50 text-lg leading-tight font-light mb-1.5" style={{ fontFamily: 'Georgia, "Cormorant Garamond", serif' }}>
-            7 jours pour explorer
-            <br />
-            <span className="text-cosmic-300 italic">tout Premium</span>
-          </h3>
-
-          <p className="text-night-400 text-xs leading-relaxed mb-4">
-            Toutes les lectures, sans carte bancaire. Annule quand tu veux.
+        <div className="flex items-center gap-2.5 text-left">
+          <svg width="13" height="13" viewBox="0 0 24 24" fill="none" className="text-night-500 shrink-0">
+            <path d="M12 2L13.5 8.5L20 10L13.5 11.5L12 18L10.5 11.5L4 10L10.5 8.5L12 2Z" fill="currentColor" />
+          </svg>
+          <p className="flex-1 min-w-0 text-[12px] text-night-400 leading-snug">
+            <span className="text-night-300">Premium, 7 jours offerts</span>
+            <span className="text-night-500"> · sans carte bancaire</span>
           </p>
-
-          <div className="flex items-center justify-center gap-2 bg-gradient-to-r from-cosmic-400 to-cosmic-600 text-night-950 text-sm font-semibold py-2.5 rounded-xl shadow-lg shadow-cosmic-500/20">
-            Activer mes 7 jours
-            <svg width="14" height="14" viewBox="0 0 24 24" fill="none">
-              <path d="M5 12H19M19 12L13 6M19 12L13 18" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round" />
-            </svg>
-          </div>
+          <span className="text-night-500 text-xs shrink-0">→</span>
         </div>
       </div>
     );
