@@ -456,6 +456,26 @@ export function App() {
     if (s === screen) setNavKey(k => k + 1);
   };
 
+  // ─── Préchargement des screens lazy ─────────────────────────────
+  // Bug-fix : quand on est sur Home (non-lazy) et qu'on clique sur un autre
+  // onglet (Horoscope / Journal / Explorer / Settings, tous en React.lazy),
+  // Suspense affichait son fallback Splash pendant 50-300ms — l'user
+  // voyait rien se passer au 1er clic, devait recliquer. Solution : on
+  // pré-import tous les chunks de la nav dès qu'on arrive sur Home, donc
+  // le module est en cache quand l'user clique → Suspense ne suspend jamais.
+  useEffect(() => {
+    if (screen !== 'home') return;
+    // Fire-and-forget : on garde les promises pour pas polluer la console.
+    void (async () => {
+      try { await import('./screens/Horoscope'); } catch {}
+      try { await import('./screens/Journal'); } catch {}
+      try { await import('./screens/Explorer'); } catch {}
+      try { await import('./screens/Settings'); } catch {}
+      try { await import('./screens/ChartView'); } catch {}
+      try { await import('./screens/Compatibility'); } catch {}
+    })();
+  }, [screen]);
+
   const [navKey, setNavKey] = useState(0);
 
   // Fix #3 — Listener postMessage du Service Worker.
