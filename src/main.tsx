@@ -34,6 +34,16 @@ function _postDebug(payload: unknown) {
 window.addEventListener('error', (e) => { captureError(e.error ?? e.message); _postDebug(e.error ?? e.message); });
 window.addEventListener('unhandledrejection', (e) => { captureError(e.reason); _postDebug(e.reason); });
 
+// ROOT-CAUSE-FIX 'UNE ÉTINCELLE' : nettoyage défensif des résidus Google GIS
+// (script + iframe + conteneur g_id_*) d'une session précédente. Si l'iframe
+// GIS reste dans le DOM alors que React n'est plus en charge de son parent,
+// son code interne appelle removeChild au prochain cycle → NotFoundError.
+try {
+  document.querySelectorAll('script#google-gis-script').forEach(el => el.remove());
+  document.querySelectorAll('iframe[src*="accounts.google.com"]').forEach(el => el.remove());
+  document.querySelectorAll('[id^="g_id"]').forEach(el => el.remove());
+} catch {}
+
 createRoot(document.getElementById('root')!).render(
   // StrictMode désactivé pour debug P0
   <ErrorBoundary>

@@ -38,12 +38,14 @@ export function Auth({ onSuccess }: { onSuccess: (user: any) => void }) {
 
   // ── Charge le SDK Google Identity Services ────────────────────────────────
   useEffect(() => {
+    // Pas de client ID configuré : on n'injecte pas le script Google, donc pas
+    // de bouton hors-React à nettoyer → plus de NotFoundError removeChild
+    // quand Auth unmount au refresh (root-cause du bug 'UNE ÉTINCELLE').
     if (!GOOGLE_CLIENT_ID) {
       console.warn('[Auth] VITE_GOOGLE_CLIENT_ID non défini — bouton Google désactivé');
       return;
     }
     let cancelled = false;
-    let renderedButton: HTMLElement | null = null;
     const init = () => {
       if (cancelled || !window.google?.accounts?.id) return;
       try {
@@ -79,9 +81,8 @@ export function Auth({ onSuccess }: { onSuccess: (user: any) => void }) {
             locale: 'fr',
             logo_alignment: 'left',
           });
-          renderedButton = googleButtonRef.current;
         }
-        setGoogleReady(true);
+        if (!cancelled) setGoogleReady(true);
       } catch (e) {
         console.error('[Auth] Google init failed:', e);
       }
@@ -102,9 +103,9 @@ export function Auth({ onSuccess }: { onSuccess: (user: any) => void }) {
     // removeChild NotFoundError sur le iframe GIS lors du unmount (P0).
     return () => {
       cancelled = true;
-      if (renderedButton) {
-        try { renderedButton.innerHTML = ''; } catch { /* noop */ }
-      }
+      try {
+        if (googleButtonRef.current) googleButtonRef.current.innerHTML = '';
+      } catch { /* noop */ }
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [mode]); // Intentionnellement onSuccess exclu (lu via onSuccessRef pour stabilité)
