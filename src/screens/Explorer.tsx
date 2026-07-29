@@ -5,7 +5,6 @@ import { ChartView } from './ChartView';
 import { Compatibility } from './Compatibility';
 import DailySky from '../components/DailySky';
 import DailyDraws from '../components/DailyDraws';
-import DailyCycle from '../components/DailyCycle';
 import AsteroidWisdom from '../components/AsteroidWisdom';
 import ChineseAstrology from '../components/ChineseAstrology';
 import AstroPortrait from '../screens/AstroPortrait';
@@ -39,7 +38,6 @@ const LINKS_MODULES: Module[] = [
 const DAILY_MODULES: Module[] = [
   { key: 'sky',    label: 'Ton ciel aujourd\'hui', emoji: '🌌', desc: 'Transits, maisons activées, rituels — tout ton ciel du jour' },
   { key: 'draws',  label: 'Tes tirages',           emoji: '🃏', desc: 'Tarot du jour + ta progression (XP, quêtes, badges)' },
-  { key: 'cycle',  label: 'Cycle & Lune',          emoji: '🌙', desc: 'Croise ta phase hormonale avec la Lune — sans jugement' },
 ];
 
 function PilierHeader({ label, onBack }: { label: string; onBack: () => void }) {
@@ -104,7 +102,6 @@ export function Explorer({ user, onNavigate }: { user: User; onNavigate: (s: Scr
           {modKey === 'chinese'      && <ChineseAstrology user={user} />}
           {modKey === 'sky'          && <DailySky />}
           {modKey === 'draws'        && <DailyDraws />}
-          {modKey === 'cycle'        && <DailyCycle />}
         </div>
       </div>
     );
