@@ -313,13 +313,21 @@ router.post('/login', async (req, res) => {
     ).get(provider, oauth_id);
 
     if (!userRow) {
-      // Stratégie 2 : user existe via email (lier le compte OAuth au compte existant)
-      userRow = db.prepare('SELECT id, email FROM users WHERE email = ?').get(email);
-      if (userRow) {
+      // Stratégie 2 : user existe via email — MAIS uniquement si l'email est vérifié
+      // (email_verified=1). Sinon, n'importe quel attaquant contrôlant un compte Google
+      // pourrait hijacker n'importe quel compte Céleste existant (OAuth email-takeover).
+      // Sécurité ajoutée 2026-08-02 (audit P0).
+      userRow = db.prepare(
+        'SELECT id, email, email_verified FROM users WHERE email = ?'
+      ).get(email);
+      if (userRow && userRow.email_verified === 1) {
         db.prepare(`
           UPDATE users SET oauth_provider = ?, oauth_id = ?, avatar_url = COALESCE(?, avatar_url)
           WHERE id = ?
         `).run(provider, oauth_id, avatar_url, userRow.id);
+      } else {
+        // Email non vérifié ou inexistant → on force la création d'un nouveau compte (Stratégie 3)
+        userRow = null;
       }
     }
 

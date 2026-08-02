@@ -256,7 +256,7 @@ export function SettingsMenu({
         },
         birthData: user.birthData ?? null,
         natalChart: user.natalChart ?? null,
-        journal: localStorage.getItem('celeste-journal') ? JSON.parse(localStorage.getItem('celeste-journal')!) : [],
+        journal: localStorage.getItem('celeste_journal') ? JSON.parse(localStorage.getItem('celeste_journal')!) : [],
         favorites: localStorage.getItem('celeste-favorites') ? JSON.parse(localStorage.getItem('celeste-favorites')!) : [],
         notifications: localStorage.getItem('celeste-notifs') ? JSON.parse(localStorage.getItem('celeste-notifs')!) : null,
       };

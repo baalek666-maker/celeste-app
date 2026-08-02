@@ -427,17 +427,23 @@ export function stripeWebhookHandler(req, res, db) {
   }
 
   // Idempotence — éviter de traiter 2x le même event
+  // FIX P0 (audit 2026-08-02) : on utilise une transaction. L'INSERT et le
+  // traitement sont dans le même BEGIN/COMMIT. Si le switch throw, le
+  // ROLLBACK annule l'INSERT → Stripe peut retry proprement. Avant ce fix,
+  // l'INSERT était avant le switch : si le switch throwait, l'event était
+  // marqué traité mais le grant (premium/consumable) était perdu silencieusement.
   const existing = db.prepare('SELECT id FROM stripe_events WHERE id = ?').get(event.id);
   if (existing) {
     return res.json({ received: true, duplicate: true });
   }
-  db.prepare('INSERT INTO stripe_events (id, type, received_at) VALUES (?, ?, ?)').run(
-    event.id,
-    event.type,
-    Math.floor(Date.now() / 1000)
-  );
 
-  try {
+  const processWebhook = db.transaction(() => {
+    db.prepare('INSERT INTO stripe_events (id, type, received_at) VALUES (?, ?, ?)').run(
+      event.id,
+      event.type,
+      Math.floor(Date.now() / 1000)
+    );
+
     switch (event.type) {
       case 'checkout.session.completed': {
         const session = event.data.object;
@@ -540,9 +546,14 @@ export function stripeWebhookHandler(req, res, db) {
         // Event ignoré silencieusement
         break;
     }
+  }); // end transaction
+
+  try {
+    processWebhook();
     return res.json({ received: true });
   } catch (err) {
     console.error('[billing] webhook processing error:', err.message, err.stack);
+    // Si la transaction a échoué, l'INSERT est rollback → Stripe peut retry
     return res.status(500).json({ error: 'Webhook processing failed.' });
   }
 }

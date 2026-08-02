@@ -274,11 +274,13 @@ function ProfileForm({
         return;
       }
 
-      // Déduction du fuseau horaire : on utilise le fuseau du navigateur (correct dans ~90%
-      // des cas — users nés dans le même fuseau où ils vivent). Le fallback par longitude
-      // (Math.round(lon/15)) ignorait les fuseaux politiques et le DST (Paris → UTC+0 au lieu de +1/+2).
-      // TODO long terme : ajouter un sélecteur de fuseau horaire dans le formulaire.
-      const tz = -new Date().getTimezoneOffset() / 60;
+      // Déduction du fuseau horaire : on tente d'abord l'IANA retourné par Nominatim
+// (extratags.timezone), qui est correct dans 99% des cas. Fallback sur le fuseau
+// du navigateur (correct uniquement si l'user est né dans le même fuseau où il vit).
+// Ancien code : `Math.round(lon/15)` ignorait les fuseaux politiques et le DST.
+const tz = Number(geo[0]?.extratags?.timezone?.match(/([-+]\d{1,2}(?::?\d{2})?)/)?.[1])
+  || (geo[0]?.extratags?.['iana:tz'] ? Number((geo[0].extratags['iana:tz'] as string).match(/UTC([-+]\d{1,2})/)?.[1]) : NaN)
+  || -new Date().getTimezoneOffset() / 60;
 
       const birthData = {
         date, time, city: city.trim(),

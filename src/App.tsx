@@ -19,7 +19,6 @@ const Journal = lazy(() => import('./screens/Journal').then(m => ({ default: m.J
 const Paywall = lazy(() => import('./screens/Paywall').then(m => ({ default: m.Paywall })));
 const Settings = lazy(() => import('./screens/Settings').then(m => ({ default: m.Settings })));
 const Explorer = lazy(() => import('./screens/Explorer').then(m => ({ default: m.Explorer })));
-const Onboarding = lazy(() => import('./screens/Onboarding').then(m => ({ default: m.Onboarding })));
 const CompatRedeem = lazy(() => import('./screens/CompatRedeem').then(m => ({ default: m.CompatRedeem })));
 // v15.0 — Onboarding importé en direct (plus de lazy) pour fix le removeChild au mount
 // Le chunk lazy entrait en conflit avec le unmount de Home, causant

@@ -616,6 +616,17 @@ function ensureMonthlyScans(userId) {
   return u.scans_remaining ?? FREE_SCANS_PER_MONTH;
 }
 
+// FIX P1 (audit 2026-08-02) : décrémente scans_remaining de façon atomique et
+// retourne le nouveau count. Évite le double-décrement (avant : ensureMonthlyScans
+// lisait, puis un UPDATE inline décrémentait, puis une autre lecture recomptait).
+function decrementMonthlyScans(userId) {
+  const current = ensureMonthlyScans(userId);
+  if (current <= 0) return 0;
+  const newCount = current - 1;
+  db.prepare('UPDATE users SET scans_remaining = ? WHERE id = ?').run(newCount, userId);
+  return newCount;
+}
+
 // ─── Ephemeris (server-side, astronomy-engine) ─────────────
 const SIGNS = ['Bélier','Taureau','Gémeaux','Cancer','Lion','Vierge','Balance','Scorpion','Sagittaire','Capricorne','Verseau','Poissons'];
 
@@ -2711,7 +2722,13 @@ app.post('/api/profile/birth-data', auth, (req, res) => {
   // Paris, pour tous les users premium avec birth_data. Les users premium verront
   // leur portrait le lendemain matin (status "En cours de génération" en attendant).
   // Les free users voient positions brutes + teaser fixe (jamais LLM non plus).
-  console.log(`[birth-data] user ${req.user.id} → birth_data saved, attente cron nocturne 1h Paris pour portrait`);
+  // FIX P1 (audit 2026-08-02) : invalide le cache natal_interpretations quand
+  // l'utilisateur modifie ses données de naissance. Sinon, un user qui corrige
+  // son heure de naissance garde les anciennes interprétations asteroids/nodes
+  // à vie (lifetime cache with no invalidation = data bug silencieux).
+  db.prepare('DELETE FROM natal_interpretations WHERE user_id = ?').run(req.user.id);
+
+  console.log(`[birth-data] user ${req.user.id} → birth_data saved, natal_interpretations invalidated, attente cron nocturne pour portrait`);
 
   res.json({ ok: true, birthData: check.birthData });
 });
@@ -2821,9 +2838,12 @@ app.get('/api/yearly-recap', auth, (req, res) => {
     // 7. Mood dominant (mot le plus fréquent dans les entrées de journal)
     let moodWord = null;
     try {
+      // FIX P1 (audit 2026-08-02) : la colonne `content` n'existe pas dans
+      // journal_entries (le schéma a `user_note` + `horoscope_summary`).
+      // Avant ce fix, moodWord était toujours null.
       const entries = db.prepare(
-        `SELECT content FROM journal_entries
-         WHERE user_id = ? AND date >= ? AND date <= ? AND content IS NOT NULL`
+        `SELECT user_note FROM journal_entries
+         WHERE user_id = ? AND date >= ? AND date <= ? AND user_note IS NOT NULL`
       ).all(userId, isoYearStart, isoYearEnd);
       const wordCounts = new Map();
       const STOPWORDS = new Set([
@@ -3000,12 +3020,13 @@ app.post('/api/horoscope', auth, async (req, res) => {
 
     // Free-tier gate (only when we actually generated a fresh horoscope)
     // v14.8 — Quota mensuel (3/mois) au lieu de lifetime 7. Reset auto chaque nouveau mois.
+    // FIX P1 (audit 2026-08-02) : utilise decrementMonthlyScans (atomique)
+    // au lieu de ensureMonthlyScans + UPDATE inline (double-decrement bug).
     if (!isPremium && !personalCached) {
-      const remaining = ensureMonthlyScans(req.user.id);
+      const remaining = decrementMonthlyScans(req.user.id);
       if (remaining <= 0) {
         return res.status(402).json({ error: 'Free scans exhausted', code: 'paywall_required', scansRemaining: 0 });
       }
-      db.prepare('UPDATE users SET scans_remaining = scans_remaining - 1 WHERE id = ?').run(req.user.id);
     }
 
     // Helper: extrait le summary (general+amour+carriere+energie+mood+luckyColor) depuis le content JSON
@@ -3858,7 +3879,7 @@ app.get('/api/streak', auth, (req, res) => {
 app.post('/api/streak/freeze', auth, (req, res) => {
   try {
     const qty = Math.max(1, Math.min(10, Number(req.body?.quantity) || 1));
-    const u = db.prepare('SELECT streak_freezes FROM users WHERE id = ?').get(req.user.id);
+    const u = db.prepare('SELECT streak_freezes, is_admin FROM users WHERE id = ?').get(req.user.id);
     if (!u) return res.status(404).json({ error: 'user not found' });
 
     // Plus de gate IAP côté client. Cette route n'est plus utilisée pour les achats ;
@@ -3876,9 +3897,19 @@ app.post('/api/streak/freeze', auth, (req, res) => {
       });
     }
 
+    // SÉCURITÉ P0 (audit 2026-08-02) : un free-grant (qty=0) ne peut être déclenché
+    // que par un admin. Avant ce fix, tout user auth pouvait POST {quantity:0}
+    // pour accumuler des freezes gratuits en boucle.
+    if (!u.is_admin) {
+      return res.status(403).json({
+        error: 'admin_only',
+        message: 'Free grant réservé aux administrateurs.',
+      });
+    }
+
     const newCount = (u.streak_freezes ?? 0) + addQty;
     db.prepare('UPDATE users SET streak_freezes = ? WHERE id = ?').run(newCount, req.user.id);
-    console.log(`[streak/freeze] user ${req.user.id} +${addQty} freeze(s) → total ${newCount} (free grant)`);
+    console.log(`[streak/freeze] admin ${req.user.id} +${addQty} freeze(s) → total ${newCount}`);
     res.json({ ok: true, freezesAvailable: newCount });
   } catch (err) {
     console.error('[streak/freeze] error:', err.message);
@@ -4897,8 +4928,11 @@ function computeHouses(birth) {
   // Ascendant ≈ atan2(-cos(LST), sin(LST)*cos(ε) - tan(lat)*sin(ε))
   const [year, month, day] = birth.date.split('-').map(Number);
   const [hour, minute] = (birth.time || '12:00').split(':').map(Number);
-  const obsLat = birth.lat ?? 48.85;
-  const obsLng = birth.lng ?? 2.35;
+  // FIX P0 (audit 2026-08-02) : le BirthData du schéma utilise latitude/longitude.
+  // L'ancien code lisait birth.lat/birth.lng (snake-case) → tous les users recevaient
+  // Paris (48.85, 2.35) comme fallback silencieux.
+  const obsLat = birth.latitude ?? birth.lat ?? 48.85;
+  const obsLng = birth.longitude ?? birth.lng ?? 2.35;
   const date = new Date(Date.UTC(year, month - 1, day, hour, minute, 0));
   const astroTime = MakeTime(date);
   const lstHours = SiderealTime(astroTime) + obsLng / 15;

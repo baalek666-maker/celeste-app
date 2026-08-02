@@ -27,8 +27,7 @@ createRoot(document.getElementById('root')!).render(
   <ErrorBoundary>
     {/* Toujours visible, peu importe l'écran (auth/onboarding/home). */}
     <OfflineIndicator />
-    {/* ToastHost désactivé pour debug P0 */}
-    {/* <ToastHost /> */}
     <App />
+    <ToastHost />
   </ErrorBoundary>,
 );

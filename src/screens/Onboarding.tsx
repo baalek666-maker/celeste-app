@@ -22,6 +22,7 @@ export function Onboarding({ onComplete }: { onComplete: (u: User) => void }) {
   const handleSubmit = () => {
     if (!selectedPlace) return;
     setCalculating(true);
+    setStep(3); // Affiche l'animation "Calculating" (était manquant — bug P0)
     const c = selectedPlace;
     const finalTime = timeUnknown ? '12:00' : time;
     const birth: BirthData = {
@@ -29,10 +30,16 @@ export function Onboarding({ onComplete }: { onComplete: (u: User) => void }) {
       latitude: c.latitude, longitude: c.longitude, timezone: c.tzOffset,
     };
 
-    // Compute chart immediately (sync), fire-and-forget backend save, then
-    // transition after the cosmic animation window so the user gets feedback
-    // while the request actually completes in parallel.
-    const chart = calculateNatalChart(birth);
+    // Compute chart with error handling (was unprotected — crash on invalid date)
+    let chart;
+    try {
+      chart = calculateNatalChart(birth);
+    } catch (err) {
+      console.error('[Onboarding] calculateNatalChart failed:', err);
+      setCalculating(false);
+      setStep(2); // Retour à l'étape 2 en cas d'erreur
+      return;
+    }
     setBirthData(birth, chart);
     setOnboarded();
     const save = api.saveBirthData(birth)

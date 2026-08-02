@@ -6,6 +6,22 @@ import type { GeoPlace } from '../lib/geocode';
 import { ZODIAC_SIGNS } from '../data/zodiac';
 import type { ZodiacSign } from '../types';
 
+// Helper: normalize FR/EN sign key → ZodiacSign EN. Le backend renvoie des noms FR
+// (Bélier, Taureau…) mais le frontend utilise les clés EN (aries, taurus…). Sans
+// ce mapping, ZODIAC_SIGNS[inviterSun] retourne undefined → symbole fallback ✨.
+const SIGN_FR_TO_EN: Record<string, ZodiacSign> = {
+  'bélier': 'aries', 'taureau': 'taurus', 'gémeaux': 'gemini', 'cancer': 'cancer',
+  'lion': 'leo', 'vierge': 'virgo', 'balance': 'libra', 'scorpion': 'scorpio',
+  'sagittaire': 'sagittarius', 'capricorne': 'capricorn', 'verseau': 'aquarius', 'poissons': 'pisces',
+};
+function normalizeSign(s: string | undefined | null): ZodiacSign | undefined {
+  if (!s) return undefined;
+  const lower = s.toLowerCase().trim();
+  const enKeys: ZodiacSign[] = ['aries','taurus','gemini','cancer','leo','virgo','libra','scorpio','sagittarius','capricorn','aquarius','pisces'];
+  if (enKeys.includes(lower as ZodiacSign)) return lower as ZodiacSign;
+  return SIGN_FR_TO_EN[lower];
+}
+
 type Phase = 'loading' | 'form' | 'computing' | 'result' | 'error' | 'consumed';
 
 /**
@@ -137,8 +153,8 @@ export function CompatRedeem({ token, onDone }: { token: string; onDone: () => v
 
   // ─── Result state ───────────────────────────────────────
   if (phase === 'result' && result) {
-    const yourSunSym = inviterSun ? ZODIAC_SIGNS[inviterSun as ZodiacSign]?.symbol : '✨';
-    const theirSunSym = result.theirSun ? ZODIAC_SIGNS[result.theirSun as ZodiacSign]?.symbol : '✨';
+    const yourSunSym = inviterSun ? ZODIAC_SIGNS[normalizeSign(inviterSun) as ZodiacSign]?.symbol : '✨';
+    const theirSunSym = result.theirSun ? ZODIAC_SIGNS[normalizeSign(result.theirSun) as ZodiacSign]?.symbol : '✨';
     return (
       <div className="p-6 max-w-md mx-auto min-h-screen pb-24">
         <div className="text-center mb-6 pt-6">

@@ -38,6 +38,8 @@ export function ChartView({ user }: { user: User }) {
     try {
       if (navigator.share) {
         await navigator.share(shareData);
+        setShareStatus('copied'); // Reset après succès (était 'sharing' infini)
+        setTimeout(() => setShareStatus('idle'), 2000);
       } else if (navigator.clipboard) {
         await navigator.clipboard.writeText(`${shareData.text}\n${shareData.url}`);
         setShareStatus('copied');

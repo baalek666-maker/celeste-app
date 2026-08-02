@@ -324,7 +324,7 @@ export function Horoscope({ user, onNavigate }: { user: User; onNavigate: (s: Sc
           ctaLabel="Réessayer"
           onCta={() => { setLoading(true); setError(''); fetchHoroscope(true); }}
           secondaryCtaLabel="Revenir à l'accueil"
-          onSecondaryCta={() => window.location.hash = '#home'}
+          onSecondaryCta={() => onNavigate('home')}
         />
       </div>
     );

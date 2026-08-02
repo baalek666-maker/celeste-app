@@ -210,9 +210,22 @@ function registerGamificationRoutes(app, db, auth, callLLMWithRetry, getNatalPos
   });
 
   // ── POST /api/gamification/badge/:badgeId/grant (internal/manual) ──
+  // SÉCURITÉ P0 (audit 2026-08-02) : avant ce fix, tout user auth pouvait
+  // s'accorder n'importe quel badge par ID. Maintenant : whitelist contre
+  // BADGE_DEFS + admin-only.
   app.post('/api/gamification/badge/:badgeId/grant', auth, (req, res) => {
     const userId = req.user.id;
     const { badgeId } = req.params;
+    // Whitelist : le badge doit exister dans BADGE_DEFS
+    const validBadgeIds = BADGE_DEFS.map(b => b.id);
+    if (!validBadgeIds.includes(badgeId)) {
+      return res.status(400).json({ error: 'invalid_badge', message: 'Badge inconnu.' });
+    }
+    // Admin-only : seul un admin peut accorder manuellement un badge
+    const u = db.prepare('SELECT is_admin FROM users WHERE id = ?').get(userId);
+    if (!u?.is_admin) {
+      return res.status(403).json({ error: 'admin_only', message: 'Réservé aux administrateurs.' });
+    }
     const isNew = grantBadge(db, userId, badgeId);
     res.json({ ok: true, isNew, badgeId });
   });
