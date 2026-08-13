@@ -55,7 +55,7 @@ function ManageSubscriptionButton() {
       <button
         onClick={handleManage}
         disabled={loading}
-        className="w-full glass rounded-2xl p-4 flex items-center justify-between text-left hover:border-gold-500/30 border border-transparent transition-all disabled:opacity-50"
+        className="w-full glass rounded-2xl p-4 flex items-center justify-between text-left hover:border-gold-500/30 border border-transparent transition-colors duration-200 ease-out disabled:opacity-50"
       >
         <div>
           <span className="text-gold-400 text-sm font-medium">💳 Gérer mon abonnement{status.plan === 'lifetime' ? ' (à vie)' : ''}</span>
@@ -70,7 +70,7 @@ function ManageSubscriptionButton() {
     return (
       <button
         onClick={openAppStore}
-        className="w-full glass rounded-2xl p-4 flex items-center justify-between text-left hover:border-night-600 border border-transparent transition-all"
+        className="w-full glass rounded-2xl p-4 flex items-center justify-between text-left hover:border-night-600 border border-transparent transition-colors duration-200 ease-out"
       >
         <div>
           <span className="text-night-200 text-sm">📱 Mes abonnements (App Store / Google Play)</span>
@@ -162,7 +162,7 @@ function NotificationPanel() {
           className={`relative w-12 h-7 rounded-full transition-colors ${status.enabled ? 'bg-cosmic-500' : 'bg-night-700'}`}
         >
           <span
-            className={`absolute top-0.5 w-6 h-6 rounded-full bg-white shadow-md transition-all ${status.enabled ? 'left-5' : 'left-0.5'}`}
+            className={`absolute top-0.5 w-6 h-6 rounded-full bg-white shadow-md transition-colors duration-200 ease-out ${status.enabled ? 'left-5' : 'left-0.5'}`}
           />
         </button>
       </div>
@@ -329,23 +329,23 @@ export function SettingsMenu({
         <NotificationPanel />
         {user.birthData && (
           <button onClick={onEditBirthData}
-            className="w-full glass rounded-2xl p-4 flex items-center justify-between text-left hover:border-night-600 border border-transparent transition-all">
+            className="w-full glass rounded-2xl p-4 flex items-center justify-between text-left hover:border-night-600 border border-transparent transition-colors duration-200 ease-out">
             <span className="text-night-200 text-sm">Modifier mes données de naissance</span>
             <span className="text-night-400">→</span>
           </button>
         )}
         <button onClick={onShowFavorites}
-          className="w-full glass rounded-2xl p-4 flex items-center justify-between text-left hover:border-night-600 border border-transparent transition-all">
+          className="w-full glass rounded-2xl p-4 flex items-center justify-between text-left hover:border-night-600 border border-transparent transition-colors duration-200 ease-out">
           <span className="text-night-200 text-sm">⭐ Mes favoris</span>
           <span className="text-night-400">→</span>
         </button>
         <button onClick={onShowProfiles}
-          className="w-full glass rounded-2xl p-4 flex items-center justify-between text-left hover:border-night-600 border border-transparent transition-all">
+          className="w-full glass rounded-2xl p-4 flex items-center justify-between text-left hover:border-night-600 border border-transparent transition-colors duration-200 ease-out">
           <span className="text-night-200 text-sm">👥 Profils (famille, ami·es)</span>
           <span className="text-night-400">→</span>
         </button>
         <button onClick={onShowLegal}
-          className="w-full glass rounded-2xl p-4 flex items-center justify-between text-left hover:border-cosmic-500/40 border border-transparent transition-all">
+          className="w-full glass rounded-2xl p-4 flex items-center justify-between text-left hover:border-cosmic-500/40 border border-transparent transition-colors duration-200 ease-out">
           <span className="flex items-center gap-3">
             <span className="w-9 h-9 rounded-xl bg-cosmic-500/15 border border-cosmic-500/25 flex items-center justify-center text-cosmic-300">📜</span>
             <span className="text-night-200 text-sm">Informations légales</span>
@@ -353,7 +353,7 @@ export function SettingsMenu({
           <span className="text-night-400">→</span>
         </button>
         <button onClick={onLogout}
-          className="w-full glass rounded-2xl p-4 flex items-center justify-between text-left border border-transparent hover:border-red-900/50 transition-all">
+          className="w-full glass rounded-2xl p-4 flex items-center justify-between text-left border border-transparent hover:border-red-900/50 transition-colors duration-200 ease-out">
           <span className="flex items-center gap-3">
             <span className="w-9 h-9 rounded-xl bg-night-700/40 flex items-center justify-center text-night-300">🔓</span>
             <span className="text-red-400 text-sm">Se déconnecter / Réinitialiser</span>
@@ -364,7 +364,7 @@ export function SettingsMenu({
         <button
           onClick={handleExportData}
           disabled={exporting}
-          className="w-full glass rounded-2xl p-4 flex items-center justify-between text-left border border-transparent hover:border-cosmic-500/40 transition-all"
+          className="w-full glass rounded-2xl p-4 flex items-center justify-between text-left border border-transparent hover:border-cosmic-500/40 transition-colors duration-200 ease-out"
         >
           <span className="flex items-center gap-3">
             <span className="w-9 h-9 rounded-xl bg-cosmic-500/15 border border-cosmic-500/25 flex items-center justify-center text-cosmic-300">📦</span>
@@ -379,7 +379,7 @@ export function SettingsMenu({
         {!showDeleteAccount ? (
           <button
             onClick={() => setShowDeleteAccount(true)}
-            className="w-full glass rounded-2xl p-4 flex items-center justify-between text-left border border-transparent hover:border-red-500/30 transition-all mt-2"
+            className="w-full glass rounded-2xl p-4 flex items-center justify-between text-left border border-transparent hover:border-red-500/30 transition-colors duration-200 ease-out mt-2"
           >
             <span className="text-red-300 text-sm">🗑️ Supprimer mon compte (RGPD)</span>
             <span className="text-red-300">→</span>

@@ -188,7 +188,7 @@ function ApiDown({ onRetry }: { onRetry: () => void }) {
         </p>
         <button
           onClick={onRetry}
-          className="w-full py-3.5 rounded-2xl bg-gradient-to-r from-cosmic-600 to-cosmic-700 text-night-950 font-semibold transition-all hover:scale-[1.01] active:scale-[0.99] font-display tracking-wide"
+          className="w-full py-3.5 rounded-2xl bg-gradient-to-r from-cosmic-600 to-cosmic-700 text-night-950 font-semibold transition-colors duration-200 ease-out hover:scale-[1.01] active:scale-[0.99] font-display tracking-wide"
         >
           Réessayer
         </button>

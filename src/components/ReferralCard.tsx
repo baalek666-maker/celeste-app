@@ -106,7 +106,7 @@ export function ReferralCard() {
 
       <button
         onClick={handleShare}
-        className="w-full py-2.5 rounded-xl bg-gradient-to-r from-cosmic-600 to-cosmic-700 text-night-950 text-sm font-semibold transition-all hover:from-cosmic-500 hover:to-cosmic-600"
+        className="w-full py-2.5 rounded-xl bg-gradient-to-r from-cosmic-600 to-cosmic-700 text-night-950 text-sm font-semibold transition-colors duration-200 ease-out hover:from-cosmic-500 hover:to-cosmic-600"
       >
         📋 Copier mon lien
       </button>

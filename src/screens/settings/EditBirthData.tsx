@@ -93,7 +93,7 @@ export function EditBirthData({ user, onUpdate, onCancel }: {
       <button
         onClick={handleSave}
         disabled={saving}
-        className="w-full py-3.5 rounded-2xl bg-gradient-to-r from-cosmic-600 to-cosmic-700 disabled:opacity-50 text-night-950 font-semibold transition-all font-display tracking-wide"
+        className="w-full py-3.5 rounded-2xl bg-gradient-to-r from-cosmic-600 to-cosmic-700 disabled:opacity-50 text-night-950 font-semibold transition-colors duration-200 ease-out font-display tracking-wide"
       >
         {saving ? 'Recalcul…' : 'Enregistrer et recalculer'}
       </button>

@@ -402,7 +402,7 @@ export default function TarotCross() {
           <button
             onClick={handleDraw}
             disabled={loading}
-            className="w-full py-3 rounded-xl bg-gradient-to-r from-gold-400 to-gold-600 text-night-950 font-semibold text-sm hover:scale-[1.02] active:scale-[0.98] transition-all shadow-lg shadow-gold-500/20"
+            className="w-full py-3 rounded-xl bg-gradient-to-r from-gold-400 to-gold-600 text-night-950 font-semibold text-sm hover:scale-[1.02] active:scale-[0.98] transition-colors duration-200 ease-out shadow-lg shadow-gold-500/20"
           >
             {quota.isPremium
               ? '✦ Tirer les 3 cartes'
@@ -443,19 +443,19 @@ export default function TarotCross() {
             <div className="space-y-2">
               <button
                 onClick={() => handleBuy('ios')}
-                className="w-full py-3 rounded-xl bg-night-800 hover:bg-night-700 text-night-100 text-sm border border-night-700 transition-all"
+                className="w-full py-3 rounded-xl bg-night-800 hover:bg-night-700 text-night-100 text-sm border border-night-700 transition-colors duration-200 ease-out"
               >
                 Acheter sur iOS (App Store)
               </button>
               <button
                 onClick={() => handleBuy('android')}
-                className="w-full py-3 rounded-xl bg-night-800 hover:bg-night-700 text-night-100 text-sm border border-night-700 transition-all"
+                className="w-full py-3 rounded-xl bg-night-800 hover:bg-night-700 text-night-100 text-sm border border-night-700 transition-colors duration-200 ease-out"
               >
                 Acheter sur Android (Play Store)
               </button>
               <button
                 onClick={() => handleBuy('stripe')}
-                className="w-full py-3 rounded-xl bg-gradient-to-r from-gold-400 to-gold-600 text-night-950 font-semibold text-sm hover:scale-[1.02] active:scale-[0.98] transition-all shadow-lg shadow-gold-500/20"
+                className="w-full py-3 rounded-xl bg-gradient-to-r from-gold-400 to-gold-600 text-night-950 font-semibold text-sm hover:scale-[1.02] active:scale-[0.98] transition-colors duration-200 ease-out shadow-lg shadow-gold-500/20"
               >
                 Payer par carte · 2,99 €
               </button>

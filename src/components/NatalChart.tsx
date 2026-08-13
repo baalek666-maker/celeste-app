@@ -329,7 +329,7 @@ export default function NatalChart({ size }: { size?: number }) {
           {spread.map(p => {
             const [x, y] = lonToXY(p.lon, ascLon, planetR, cx, cy);
             return (
-              <g key={p.key} style={{ animation: 'planet-glow 4s ease-in-out infinite' }}>
+              <g key={p.key} className="animate-planet-glow">
                 {/* glow */}
                 <circle cx={x} cy={y} r="13" fill={p.meta.color} opacity="0.12" />
                 <circle cx={x} cy={y} r="9" fill={p.meta.color} opacity="0.25" />

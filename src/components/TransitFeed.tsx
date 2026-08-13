@@ -347,7 +347,7 @@ export default function TransitFeed({
               key={idx}
               onClick={() => scrollToCard(idx)}
               aria-label={`Carte ${idx + 1}`}
-              className={`transition-all rounded-full ${
+              className={`transition-colors duration-200 ease-out rounded-full ${
                 idx === activeIndex
                   ? 'w-6 h-1.5 bg-cosmic-400'
                   : 'w-1.5 h-1.5 bg-celeste-text/30'
@@ -365,7 +365,7 @@ export default function TransitFeed({
         onClick={() => scrollToCard(Math.max(activeIndex - 1, 0))}
         disabled={activeIndex === 0}
         aria-label="Carte précédente"
-        className={`absolute left-2 top-1/2 -translate-y-1/2 z-20 w-12 h-12 rounded-full glass border border-cosmic-500/40 backdrop-blur-md flex items-center justify-center transition-all active:scale-90 ${
+        className={`absolute left-2 top-1/2 -translate-y-1/2 z-20 w-12 h-12 rounded-full glass border border-cosmic-500/40 backdrop-blur-md flex items-center justify-center transition-colors duration-200 ease-out active:scale-90 ${
           activeIndex === 0 ? 'opacity-20' : 'opacity-80 hover:opacity-100 hover:border-cosmic-500/70'
         }`}
       >
@@ -375,7 +375,7 @@ export default function TransitFeed({
         onClick={() => scrollToCard(Math.min(activeIndex + 1, cards.length - 1))}
         disabled={activeIndex === cards.length - 1}
         aria-label="Carte suivante"
-        className={`absolute right-2 top-1/2 -translate-y-1/2 z-20 w-12 h-12 rounded-full glass border border-cosmic-500/40 backdrop-blur-md flex items-center justify-center transition-all active:scale-90 ${
+        className={`absolute right-2 top-1/2 -translate-y-1/2 z-20 w-12 h-12 rounded-full glass border border-cosmic-500/40 backdrop-blur-md flex items-center justify-center transition-colors duration-200 ease-out active:scale-90 ${
           activeIndex === cards.length - 1 ? 'opacity-20' : 'opacity-80 hover:opacity-100 hover:border-cosmic-500/70'
         }`}
       >
@@ -559,14 +559,14 @@ function TransitCard({
           <button
             onClick={onSave}
             disabled={isSaved}
-            className={`w-11 h-11 rounded-full glass border-2 ${isSaved ? 'border-emerald-500/50 opacity-50' : 'border-emerald-500/60 hover:border-emerald-400'} flex items-center justify-center transition-all active:scale-90`}
+            className={`w-11 h-11 rounded-full glass border-2 ${isSaved ? 'border-emerald-500/50 opacity-50' : 'border-emerald-500/60 hover:border-emerald-400'} flex items-center justify-center transition-colors duration-200 ease-out active:scale-90`}
             aria-label="Sauvegarder (swipe droite long)"
           >
             <span className="text-lg">{isSaved ? '✓' : '⭐'}</span>
           </button>
           <button
             onClick={onShare}
-            className="w-13 h-13 rounded-full bg-gradient-to-br from-cosmic-500 to-cosmic-700 flex items-center justify-center transition-all active:scale-90 shadow-lg shadow-cosmic-900/60"
+            className="w-13 h-13 rounded-full bg-gradient-to-br from-cosmic-500 to-cosmic-700 flex items-center justify-center transition-colors duration-200 ease-out active:scale-90 shadow-lg shadow-cosmic-900/60"
             style={{width: '52px', height: '52px'}}
             aria-label="Partager (swipe haut)"
           >
@@ -574,7 +574,7 @@ function TransitCard({
           </button>
           <button
             onClick={onSkip}
-            className="w-11 h-11 rounded-full glass border-2 border-rose-500/60 hover:border-rose-400 flex items-center justify-center transition-all active:scale-90"
+            className="w-11 h-11 rounded-full glass border-2 border-rose-500/60 hover:border-rose-400 flex items-center justify-center transition-colors duration-200 ease-out active:scale-90"
             aria-label="Passer (swipe gauche long)"
           >
             <span className="text-lg">✕</span>
@@ -681,7 +681,7 @@ function HouseCard({
         {/* Bouton Partager fixe en bas */}
         <button
           onClick={onShare}
-          className="w-12 h-12 mx-auto mt-2 rounded-full bg-gradient-to-br from-cosmic-500 to-cosmic-700 flex items-center justify-center flex-shrink-0 transition-all active:scale-90 shadow-lg shadow-cosmic-900/60"
+          className="w-12 h-12 mx-auto mt-2 rounded-full bg-gradient-to-br from-cosmic-500 to-cosmic-700 flex items-center justify-center flex-shrink-0 transition-colors duration-200 ease-out active:scale-90 shadow-lg shadow-cosmic-900/60"
           aria-label="Partager (swipe haut)"
         >
           <span className="text-xl">📤</span>

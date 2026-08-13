@@ -356,7 +356,7 @@ export default function SkyMap({ size }: SkyMapProps) {
           {spread.map(p => {
             const [x, y] = lonToXY(p.lon, planetR, cx, cy);
             return (
-              <g key={p.key} style={{ animation: 'skymap-pulse 3s ease-in-out infinite' }}>
+              <g key={p.key} className="animate-skymap-pulse">
                 <circle cx={x} cy={y} r="13" fill={p.meta.color} opacity="0.12" />
                 <circle cx={x} cy={y} r="9" fill={p.meta.color} opacity="0.25" />
                 <circle cx={x} cy={y} r="7.5" fill="#0c0a1e" stroke={p.meta.color} strokeWidth="1.2" />

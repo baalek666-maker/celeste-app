@@ -183,7 +183,7 @@ export function DailyQuestion({ chart }: { chart: NatalChart }) {
             key={opt}
             onClick={() => handleAnswer(opt)}
             disabled={saving}
-            className="w-full text-left p-3 rounded-xl glass border border-night-700 hover:border-cosmic-500/50 hover:bg-cosmic-500/5 text-sm text-night-200 transition-all duration-200 active:scale-[0.98] disabled:opacity-50"
+            className="w-full text-left p-3 rounded-xl glass border border-night-700 hover:border-cosmic-500/50 hover:bg-cosmic-500/5 text-sm text-night-200 transition-colors duration-200 ease-out duration-200 active:scale-[0.98] disabled:opacity-50"
           >
             {opt}
           </button>

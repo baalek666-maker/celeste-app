@@ -119,7 +119,7 @@ export default function DailyQuests({ onQuestCompleted }: DailyQuestsProps) {
         {/* Progress bar */}
         <div className="h-1 rounded-full bg-night-800/80 border border-gold-500/10 overflow-hidden mb-3">
           <div
-            className="h-full rounded-full transition-all duration-700 ease-out"
+            className="h-full rounded-full transition-colors duration-200 ease-out duration-700 ease-out"
             style={{ width: `${pct}%`, background: 'linear-gradient(90deg, #b8860b 0%, #d4ae5f 55%, #e2c47c 100%)' }}
           />
         </div>
@@ -135,7 +135,7 @@ export default function DailyQuests({ onQuestCompleted }: DailyQuestsProps) {
                   onClick={() => handleComplete(q)}
                   disabled={q.completed || busyKey !== null}
                   aria-pressed={q.completed}
-                  className={`group relative w-full flex items-center gap-3 rounded-xl px-2.5 py-2.5 text-left transition-all duration-300 ${
+                  className={`group relative w-full flex items-center gap-3 rounded-xl px-2.5 py-2.5 text-left transition-colors duration-200 ease-out ${
                     q.completed
                       ? 'bg-night-900/30'
                       : 'bg-night-800/30 hover:bg-night-700/50 hover:ring-1 hover:ring-gold-500/25 active:scale-[0.985]'
@@ -143,7 +143,7 @@ export default function DailyQuests({ onQuestCompleted }: DailyQuestsProps) {
                 >
                   {/* Left: circular checkbox */}
                   <span
-                    className={`shrink-0 w-[26px] h-[26px] rounded-full flex items-center justify-center border transition-all duration-300 ${
+                    className={`shrink-0 w-[26px] h-[26px] rounded-full flex items-center justify-center border transition-colors duration-200 ease-out ${
                       q.completed
                         ? 'bg-gradient-to-br from-gold-400/45 to-gold-600/35 border-gold-300/60 text-gold-100'
                         : 'border-gold-500/45 group-hover:border-gold-400/80 group-hover:shadow-[0_0_10px_rgba(197,160,89,0.35)]'
@@ -159,7 +159,7 @@ export default function DailyQuests({ onQuestCompleted }: DailyQuestsProps) {
                   </span>
 
                   {/* XP badge */}
-                  <span className={`shrink-0 text-[10px] font-display tracking-wide px-2 py-0.5 rounded-full border transition-all duration-300 ${
+                  <span className={`shrink-0 text-[10px] font-display tracking-wide px-2 py-0.5 rounded-full border transition-colors duration-200 ease-out ${
                     q.completed ? 'text-gold-500/40 border-gold-500/15 bg-transparent' : 'text-gold-300 border-gold-500/40 bg-gold-500/10'
                   }`}>
                     +{q.xp_reward} XP
@@ -178,8 +178,7 @@ export default function DailyQuests({ onQuestCompleted }: DailyQuestsProps) {
                   {toasts.filter((t) => t.key === q.quest_key).map((t) => (
                     <span
                       key={t.id}
-                      className="pointer-events-none absolute right-14 top-1/2 font-display text-sm font-semibold text-gold-300 drop-shadow-[0_0_6px_rgba(226,196,124,0.6)]"
-                      style={{ animation: 'dq-xp-rise 1.8s ease-out forwards' }}
+                      className="pointer-events-none absolute right-14 top-1/2 font-display text-sm font-semibold text-gold-300 drop-shadow-[0_0_6px_rgba(226,196,124,0.6)] animate-dq-xp"
                     >
                       +{t.xp} XP
                     </span>

@@ -64,7 +64,7 @@ export function Onboarding({ onComplete }: { onComplete: (u: User) => void }) {
         {STEP_LABELS.map((_, n) => (
           <div key={n} className="flex-1 h-1.5 rounded-full bg-night-800/80 overflow-hidden backdrop-blur-sm">
             <div
-              className={`h-full bg-gradient-to-r from-cosmic-500 via-cosmic-400 to-gold-400 transition-all duration-700 ease-out shadow-[0_0_8px_rgba(251,191,36,0.4)] ${
+              className={`h-full bg-gradient-to-r from-cosmic-500 via-cosmic-400 to-gold-400 transition-colors duration-200 ease-out duration-700 ease-out shadow-[0_0_8px_rgba(251,191,36,0.4)] ${
                 current >= n ? 'w-full' : 'w-0'
               }`}
             />
@@ -158,7 +158,7 @@ export function Onboarding({ onComplete }: { onComplete: (u: User) => void }) {
 
       <button
         onClick={() => setStep(1)}
-        className="w-full max-w-xs py-4 rounded-2xl bg-gradient-to-r from-cosmic-600 to-cosmic-700 text-white font-semibold text-lg shadow-lg shadow-cosmic-900/50 hover:shadow-cosmic-700/50 transition-all animate-glow"
+        className="w-full max-w-xs py-4 rounded-2xl bg-gradient-to-r from-cosmic-600 to-cosmic-700 text-white font-semibold text-lg shadow-lg shadow-cosmic-900/50 hover:shadow-cosmic-700/50 transition-colors duration-200 ease-out animate-glow"
       >
         Commencer
       </button>
@@ -189,7 +189,7 @@ export function Onboarding({ onComplete }: { onComplete: (u: User) => void }) {
       </label>
       <button
         onClick={() => { setTimeUnknown(!timeUnknown); if (!timeUnknown) setTime(''); }}
-        className={`w-full max-w-xs mb-3 py-3 rounded-2xl border text-sm font-medium transition-all ${timeUnknown ? 'glass border-cosmic-500 text-cosmic-300' : 'glass border-night-700 text-night-300 hover:border-cosmic-500/50'}`}
+        className={`w-full max-w-xs mb-3 py-3 rounded-2xl border text-sm font-medium transition-colors duration-200 ease-out ${timeUnknown ? 'glass border-cosmic-500 text-cosmic-300' : 'glass border-night-700 text-night-300 hover:border-cosmic-500/50'}`}
       >
         {timeUnknown ? '✓ Je ne connais pas mon heure' : '🕐 Je ne connais pas mon heure de naissance'}
       </button>
@@ -208,7 +208,7 @@ export function Onboarding({ onComplete }: { onComplete: (u: User) => void }) {
         <button
           disabled={!date || (!time && !timeUnknown)}
           onClick={() => setStep(2)}
-          className="w-full py-4 rounded-2xl bg-gradient-to-r from-cosmic-600 to-cosmic-700 disabled:opacity-30 disabled:cursor-not-allowed text-white font-semibold text-lg transition-all"
+          className="w-full py-4 rounded-2xl bg-gradient-to-r from-cosmic-600 to-cosmic-700 disabled:opacity-30 disabled:cursor-not-allowed text-white font-semibold text-lg transition-colors duration-200 ease-out"
         >
           Continuer
         </button>
@@ -260,7 +260,7 @@ export function Onboarding({ onComplete }: { onComplete: (u: User) => void }) {
           id="onboarding-submit"
           disabled={!selectedPlace}
           onClick={handleSubmit}
-          className="w-full py-4 rounded-2xl bg-gradient-to-r from-gold-500 to-gold-600 disabled:opacity-30 disabled:cursor-not-allowed text-night-950 font-semibold text-lg shadow-lg shadow-gold-900/50 transition-all"
+          className="w-full py-4 rounded-2xl bg-gradient-to-r from-gold-500 to-gold-600 disabled:opacity-30 disabled:cursor-not-allowed text-night-950 font-semibold text-lg shadow-lg shadow-gold-900/50 transition-colors duration-200 ease-out"
         >
           Révéler mon thème ✨
         </button>

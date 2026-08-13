@@ -196,7 +196,7 @@ export default function TodayIn10s() {
               key={s.key}
               onClick={() => setActiveIdx(i)}
               aria-label={`Slide ${i + 1}`}
-              className="transition-all"
+              className="transition-colors duration-200 ease-out"
               style={{
                 width: i === activeIdx ? 18 : 6,
                 height: 6,

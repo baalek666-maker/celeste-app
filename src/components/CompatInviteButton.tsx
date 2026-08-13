@@ -71,7 +71,7 @@ export function CompatInviteButton({ context }: { context: 'romantic' | 'family'
           <button
             onClick={handleInvite}
             disabled={loading}
-            className="w-full py-3 rounded-2xl bg-gradient-to-r from-cosmic-500 to-cosmic-700 text-white font-medium text-sm transition-all hover:from-cosmic-400 hover:to-cosmic-600 active:scale-[0.99] disabled:opacity-50 disabled:cursor-wait flex items-center justify-center gap-2"
+            className="w-full py-3 rounded-2xl bg-gradient-to-r from-cosmic-500 to-cosmic-700 text-white font-medium text-sm transition-colors duration-200 ease-out hover:from-cosmic-400 hover:to-cosmic-600 active:scale-[0.99] disabled:opacity-50 disabled:cursor-wait flex items-center justify-center gap-2"
           >
             {loading ? (
               <>

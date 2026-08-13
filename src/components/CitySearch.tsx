@@ -111,7 +111,7 @@ export function CitySearch({ placeholder = '🔎 Rechercher une ville...', onSel
               key={`${place.city}-${idx}`}
               type="button"
               onClick={() => handleSelect(place)}
-              className="w-full py-3 px-4 rounded-xl text-left transition-all glass border border-transparent hover:border-gold-500/40 flex items-center gap-3"
+              className="w-full py-3 px-4 rounded-xl text-left transition-colors duration-200 ease-out glass border border-transparent hover:border-gold-500/40 flex items-center gap-3"
             >
               <span className="shrink-0 w-5 h-5 rounded-full bg-night-800/60 text-night-600 flex items-center justify-center text-xs" aria-hidden="true">○</span>
               <span className="flex-1 min-w-0">

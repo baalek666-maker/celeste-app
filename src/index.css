@@ -467,6 +467,13 @@
   .animate-mystic,
   .animate-breathe,
   .animate-shimmer,
+  .animate-planet-glow,
+  .animate-skymap-pulse,
+  .animate-tarot-glow-fast,
+  .animate-tarot-glow,
+  .animate-dq-xp,
+  .animate-prog-xp,
+  .animate-prog-lvl,
   .splash-dot {
     animation: none !important;
     opacity: 1 !important;
@@ -663,3 +670,44 @@ html {
   50%  { transform: translateY(55vh)  rotate(220deg); opacity: 0.85; }
   100% { transform: translateY(110vh) rotate(720deg); opacity: 0; }
 }
+
+/* ═════ Component animations (migrated from inline styles) ═════ */
+@keyframes planet-glow {
+  0%, 100% { filter: drop-shadow(0 0 4px rgba(197,160,89,0.3)) drop-shadow(0 0 8px rgba(197,160,89,0.15)); }
+  50% { filter: drop-shadow(0 0 8px rgba(197,160,89,0.5)) drop-shadow(0 0 16px rgba(197,160,89,0.25)); }
+}
+.animate-planet-glow { animation: planet-glow 4s var(--ease-in-out) infinite; }
+
+@keyframes skymap-pulse {
+  0%, 100% { opacity: 0.6; }
+  50% { opacity: 1; }
+}
+.animate-skymap-pulse { animation: skymap-pulse 3s var(--ease-in-out) infinite; }
+
+@keyframes dq-xp-rise {
+  from { opacity: 0; transform: translateY(8px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+.animate-dq-xp { animation: dq-xp-rise 1.8s var(--ease-out) forwards; }
+
+@keyframes tarot-glow-fast {
+  0%, 100% { filter: drop-shadow(0 0 6px rgba(197,160,89,0.3)); }
+  50% { filter: drop-shadow(0 0 12px rgba(197,160,89,0.6)); }
+}
+.animate-tarot-glow-fast { animation: tarot-glow-fast 0.8s var(--ease-in-out) infinite; }
+
+@keyframes tarot-glow-slow {
+  0%, 100% { filter: drop-shadow(0 0 8px rgba(197,160,89,0.25)); }
+  50% { filter: drop-shadow(0 0 16px rgba(197,160,89,0.5)); }
+}
+.animate-tarot-glow { animation: tarot-glow-slow 1.5s var(--ease-in-out) infinite; }
+
+@keyframes prog-xp {
+  from { width: 0%; }
+}
+.animate-prog-xp { animation: prog-xp 1.4s var(--ease-out) forwards; }
+
+@keyframes prog-lvl {
+  from { width: 0%; }
+}
+.animate-prog-lvl { animation: prog-lvl 2.2s var(--ease-out) forwards; }

@@ -153,7 +153,7 @@ export default function ProgressionHub() {
                   key={q.quest_key}
                   disabled={q.completed || busyKey === q.quest_key}
                   onClick={() => completeQuest(q)}
-                  className={`w-full flex items-center gap-3 p-3 rounded-xl text-left transition-all relative overflow-hidden ${
+                  className={`w-full flex items-center gap-3 p-3 rounded-xl text-left transition-colors duration-200 ease-out relative overflow-hidden ${
                     q.completed
                       ? 'bg-night-900/60 opacity-60'
                       : 'bg-night-800/30 hover:bg-night-800/60 border border-gold-500/15 hover:border-gold-500/40'
@@ -213,7 +213,7 @@ export default function ProgressionHub() {
               <button
                 disabled={!note.trim() || submittingNote}
                 onClick={submitChallenge}
-                className="mt-2 px-4 py-2 glass-gold rounded-xl text-gold-200 text-xs font-semibold disabled:opacity-40 transition-all"
+                className="mt-2 px-4 py-2 glass-gold rounded-xl text-gold-200 text-xs font-semibold disabled:opacity-40 transition-colors duration-200 ease-out"
               >
                 {submittingNote ? '...' : 'Marquer comme fait ✓'}
               </button>
@@ -263,7 +263,7 @@ export default function ProgressionHub() {
             <button
               key={b.id}
               onClick={() => setBadgeActive(badgeActive === b.id ? null : b.id)}
-              className={`flex flex-col items-center gap-1 p-2 rounded-xl transition-all ${
+              className={`flex flex-col items-center gap-1 p-2 rounded-xl transition-colors duration-200 ease-out ${
                 b.earned ? 'hover:scale-105 cursor-pointer' : 'opacity-50 hover:opacity-70 cursor-pointer'
               }`}
             >
@@ -309,16 +309,14 @@ export default function ProgressionHub() {
       {toasts.map(t => (
         <div
           key={t.id}
-          className="fixed top-1/3 left-1/2 -translate-x-1/2 pointer-events-none z-50"
-          style={{ animation: 'prog-xp 1.4s ease-out forwards' }}
+          className="fixed top-1/3 left-1/2 -translate-x-1/2 pointer-events-none z-50 animate-prog-xp"
         >
           <span className="text-gold-300 font-bold text-2xl drop-shadow-lg">+{t.xp} XP</span>
         </div>
       ))}
       {levelUp.active && (
         <div
-          className="fixed inset-0 flex items-center justify-center pointer-events-none z-50"
-          style={{ animation: 'prog-lvl 2.2s ease-out forwards' }}
+          className="fixed inset-0 flex items-center justify-center pointer-events-none z-50 animate-prog-lvl"
         >
           <div className="glass-gold rounded-3xl px-8 py-6 text-center">
             <p className="text-gold-300 text-xs uppercase tracking-widest mb-1">Niveau supérieur</p>

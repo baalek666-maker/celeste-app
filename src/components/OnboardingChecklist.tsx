@@ -61,7 +61,7 @@ export default function OnboardingChecklist({ onNavigate }: { onNavigate?: (scre
       {/* Progress bar */}
       <div className="h-1.5 bg-celeste-primary/10 rounded-full overflow-hidden mb-3">
         <div
-          className="h-full bg-celeste-accent transition-all"
+          className="h-full bg-celeste-accent transition-colors duration-200 ease-out"
           style={{ width: `${pct}%` }}
         />
       </div>

@@ -166,7 +166,7 @@ export default function DailyEnergy({ compact = false }: { compact?: boolean } =
             </div>
             <div className="h-1.5 rounded-full bg-night-700/40 overflow-hidden">
               <div
-                className="h-full rounded-full transition-all duration-1000"
+                className="h-full rounded-full transition-colors duration-200 ease-out duration-1000"
                 style={{ width: `${e.score * 10}%`, background: energyGradient(e.score) }}
               />
             </div>
@@ -201,7 +201,7 @@ export default function DailyEnergy({ compact = false }: { compact?: boolean } =
         {!showReflectZone && !savedReflection && (
           <button
             onClick={() => { setShowReflectZone(true); setTimeout(() => textareaRef.current?.focus(), 100); }}
-            className="w-full glass-gold rounded-xl py-2.5 px-4 text-left group transition-all hover:scale-[1.01]"
+            className="w-full glass-gold rounded-xl py-2.5 px-4 text-left group transition-colors duration-200 ease-out hover:scale-[1.01]"
           >
             <p className="text-gold-300 text-xs font-medium mb-0.5">💭 Réflexion du jour</p>
             <p className="text-night-300 text-[11px] leading-snug">{data.reflectionPrompt}</p>
@@ -244,7 +244,7 @@ export default function DailyEnergy({ compact = false }: { compact?: boolean } =
         {savedReflection && !showReflectZone && (
           <button
             onClick={() => { setShowReflectZone(true); setTimeout(() => textareaRef.current?.focus(), 100); }}
-            className="w-full glass rounded-xl p-3 text-left border border-emerald-500/20 transition-all hover:border-emerald-500/40"
+            className="w-full glass rounded-xl p-3 text-left border border-emerald-500/20 transition-colors duration-200 ease-out hover:border-emerald-500/40"
           >
             <div className="flex items-center gap-2 mb-1">
               <span className="text-emerald-400 text-xs">✓ Réflexion sauvegardée</span>

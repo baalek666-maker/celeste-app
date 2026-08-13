@@ -53,7 +53,7 @@ function ModuleCard({ mod, index, onClick }: { mod: Module; index: number; onCli
   return (
     <button
       onClick={onClick}
-      className="w-full glass rounded-2xl p-4 text-left hover:border-gold-500/40 border border-transparent transition-all duration-300 group stagger-card"
+      className="w-full glass rounded-2xl p-4 text-left hover:border-gold-500/40 border border-transparent transition-colors duration-200 ease-out group stagger-card"
       style={{ animationDelay: `${0.05 * index}s` }}
     >
       <div className="flex items-center gap-3">
@@ -64,7 +64,7 @@ function ModuleCard({ mod, index, onClick }: { mod: Module; index: number; onCli
           <p className="text-night-100 font-semibold text-sm">{mod.label}</p>
           <p className="text-night-400 text-xs mt-0.5">{mod.desc}</p>
         </div>
-        <span className="text-night-500 group-hover:text-gold-400 group-hover:translate-x-1 transition-all text-sm">→</span>
+        <span className="text-night-500 group-hover:text-gold-400 group-hover:translate-x-1 transition-colors duration-200 ease-out text-sm">→</span>
       </div>
     </button>
   );
@@ -150,7 +150,7 @@ export function Explorer({ user, onNavigate }: { user: User; onNavigate: (s: Scr
           <button
             key={p.key}
             onClick={() => { setPilier(p.key); window.scrollTo(0, 0); }}
-            className="w-full glass rounded-2xl p-5 text-left hover:border-gold-500/40 border border-transparent transition-all duration-300 group stagger-card"
+            className="w-full glass rounded-2xl p-5 text-left hover:border-gold-500/40 border border-transparent transition-colors duration-200 ease-out group stagger-card"
             style={{ animationDelay: `${0.08 * i}s` }}
           >
             <div className="flex items-center gap-4">
@@ -161,7 +161,7 @@ export function Explorer({ user, onNavigate }: { user: User; onNavigate: (s: Scr
                 <p className="text-night-100 font-semibold text-base">{p.label}</p>
                 <p className="text-night-400 text-xs mt-0.5">{p.desc}</p>
               </div>
-              <span className="text-night-500 group-hover:text-gold-400 group-hover:translate-x-1 transition-all">→</span>
+              <span className="text-night-500 group-hover:text-gold-400 group-hover:translate-x-1 transition-colors duration-200 ease-out">→</span>
             </div>
           </button>
         ))}
@@ -171,7 +171,7 @@ export function Explorer({ user, onNavigate }: { user: User; onNavigate: (s: Scr
       {!user.isPremium && (
         <button
           onClick={() => onNavigate('paywall')}
-          className="w-full mt-6 glass-gold rounded-2xl p-5 text-left hover:border-gold-500/40 transition-all border border-gold-500/20"
+          className="w-full mt-6 glass-gold rounded-2xl p-5 text-left hover:border-gold-500/40 transition-colors duration-200 ease-out border border-gold-500/20"
         >
           <div className="flex items-center gap-3">
             <span className="text-2xl">✦</span>

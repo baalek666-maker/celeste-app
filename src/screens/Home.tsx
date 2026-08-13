@@ -78,13 +78,13 @@ export function Home({ user, onNavigate, isGuest }: { user: User; onNavigate: (s
             </p>
             <button
               onClick={() => onNavigate('onboarding')}
-              className="w-full max-w-xs mx-auto block py-3.5 rounded-2xl bg-gradient-to-r from-gold-400 to-gold-600 text-night-950 font-semibold transition-all hover:scale-[1.02] active:scale-[0.98] shadow-lg shadow-gold-500/30 mb-3"
+              className="w-full max-w-xs mx-auto block py-3.5 rounded-2xl bg-gradient-to-r from-gold-400 to-gold-600 text-night-950 font-semibold transition-colors duration-200 ease-out hover:scale-[1.02] active:scale-[0.98] shadow-lg shadow-gold-500/30 mb-3"
             >
               Créer mon thème ✨
             </button>
             <button
               onClick={() => onNavigate('journal')}
-              className="w-full max-w-xs mx-auto block py-3 rounded-2xl glass border border-night-700 text-night-200 text-sm font-medium transition-all hover:border-gold-500/30 active:scale-[0.98]"
+              className="w-full max-w-xs mx-auto block py-3 rounded-2xl glass border border-night-700 text-night-200 text-sm font-medium transition-colors duration-200 ease-out hover:border-gold-500/30 active:scale-[0.98]"
             >
               📔 Tester le journal
             </button>

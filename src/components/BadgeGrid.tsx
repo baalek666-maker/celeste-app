@@ -97,7 +97,7 @@ export default function BadgeGrid({ badges }: { badges?: Badge[] }) {
           {list.map((b) => (
             <div key={b.id} className="flex flex-col items-center gap-1.5">
               <span
-                className={`relative flex items-center justify-center w-12 h-12 rounded-full transition-all ${
+                className={`relative flex items-center justify-center w-12 h-12 rounded-full transition-colors duration-200 ease-out ${
                   b.earned
                     ? 'bg-gradient-to-br from-gold-400/30 to-gold-600/20 border border-gold-400/40'
                     : 'bg-night-800/50 border border-night-700/40'

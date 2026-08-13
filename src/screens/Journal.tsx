@@ -177,7 +177,7 @@ export function Journal({ user }: { user: User }) {
         <div className="flex gap-2 mb-4">
           {[1, 2, 3, 4, 5].map(n => (
             <button key={n} onClick={() => setRating(n)}
-              className={`text-2xl transition-all ${rating >= n ? 'text-gold-400' : 'text-night-700'}`}>
+              className={`text-2xl transition-colors duration-200 ease-out ${rating >= n ? 'text-gold-400' : 'text-night-700'}`}>
               {rating >= n ? '★' : '☆'}
             </button>
           ))}
@@ -196,7 +196,7 @@ export function Journal({ user }: { user: User }) {
           className="w-full p-3 rounded-xl glass border border-night-700 text-night-100 text-sm placeholder:text-night-600 focus:outline-none focus:border-cosmic-500 resize-none"
         />
         <button onClick={handleSave} disabled={!note.trim()}
-          className="w-full mt-3 py-3 rounded-xl bg-gradient-to-r from-cosmic-600 to-cosmic-700 disabled:opacity-30 text-white font-medium transition-all">
+          className="w-full mt-3 py-3 rounded-xl bg-gradient-to-r from-cosmic-600 to-cosmic-700 disabled:opacity-30 text-white font-medium transition-colors duration-200 ease-out">
           Enregistrer
         </button>
       </div>

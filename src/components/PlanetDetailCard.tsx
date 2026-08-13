@@ -66,7 +66,7 @@ export const PlanetDetailCard = React.memo(function PlanetDetailCard({ planet, s
   }, [expanded]);
 
   return (
-    <div className="glass rounded-2xl overflow-hidden transition-all duration-300">
+    <div className="glass rounded-2xl overflow-hidden transition-colors duration-200 ease-out duration-300">
       {/* Header — always visible, clickable */}
       <button
         onClick={() => setExpanded(!expanded)}
@@ -96,7 +96,7 @@ export const PlanetDetailCard = React.memo(function PlanetDetailCard({ planet, s
       {/* Expanded body */}
       <div
         ref={bodyRef}
-        className="overflow-hidden transition-all duration-400 ease-in-out"
+        className="overflow-hidden transition-colors duration-200 ease-out duration-400 ease-in-out"
         style={{
           maxHeight: expanded ? '6000px' : '0px',
           opacity: expanded ? 1 : 0,

@@ -175,7 +175,7 @@ export default function TransitShare({
           </button>
           <button
             onClick={handleCopy}
-            className="w-full py-3 rounded-2xl glass border border-cosmic-500/30 hover:border-cosmic-500/60 text-celeste-text/85 font-medium text-sm transition-all"
+            className="w-full py-3 rounded-2xl glass border border-cosmic-500/30 hover:border-cosmic-500/60 text-celeste-text/85 font-medium text-sm transition-colors duration-200 ease-out"
           >
             {copyState === 'copied' ? '✓ Copié !' : '📋 Copier le texte'}
           </button>

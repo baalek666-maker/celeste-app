@@ -61,7 +61,7 @@ export function StreakShopRow({ isGuest = false }: StreakShopRowProps) {
   }
 
   return (
-    <div className="w-full glass rounded-2xl p-4 border border-transparent hover:border-gold-500/30 transition-all">
+    <div className="w-full glass rounded-2xl p-4 border border-transparent hover:border-gold-500/30 transition-colors duration-200 ease-out">
       <div className="flex items-center gap-3">
         <span className="w-10 h-10 rounded-xl bg-gradient-to-br from-gold-500/20 to-cosmic-500/20 border border-gold-500/25 flex items-center justify-center text-lg">
           🛡️
@@ -78,7 +78,7 @@ export function StreakShopRow({ isGuest = false }: StreakShopRowProps) {
         <button
           onClick={handleBuy}
           disabled={buying}
-          className="px-3 py-2 rounded-xl bg-gradient-to-r from-gold-400 to-gold-600 text-night-950 font-semibold text-xs transition-all hover:scale-[1.04] active:scale-[0.96] disabled:opacity-50 shadow-md shadow-gold-500/20"
+          className="px-3 py-2 rounded-xl bg-gradient-to-r from-gold-400 to-gold-600 text-night-950 font-semibold text-xs transition-colors duration-200 ease-out hover:scale-[1.04] active:scale-[0.96] disabled:opacity-50 shadow-md shadow-gold-500/20"
         >
           {buying ? '…' : '+1 · 0,99€'}
         </button>

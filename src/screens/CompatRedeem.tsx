@@ -253,7 +253,7 @@ export function CompatRedeem({ token, onDone }: { token: string; onDone: () => v
       </div>
 
       <button onClick={handleSubmit}
-        className="w-full mt-5 py-3.5 rounded-2xl bg-gradient-to-r from-cosmic-500 to-cosmic-700 text-white font-medium text-sm transition-all hover:from-cosmic-400 hover:to-cosmic-600 active:scale-[0.99]">
+        className="w-full mt-5 py-3.5 rounded-2xl bg-gradient-to-r from-cosmic-500 to-cosmic-700 text-white font-medium text-sm transition-colors duration-200 ease-out hover:from-cosmic-400 hover:to-cosmic-600 active:scale-[0.99]">
         Voir notre compatibilité →
       </button>
 

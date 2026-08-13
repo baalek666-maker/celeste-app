@@ -35,7 +35,7 @@ export function QuickAccessBar() {
         <button
           key={item.id}
           onClick={() => scrollTo(item.id)}
-          className="flex flex-col items-center justify-center gap-1 py-3 rounded-xl glass border border-night-700/20 transition-all active:scale-95 hover:border-night-500/40"
+          className="flex flex-col items-center justify-center gap-1 py-3 rounded-xl glass border border-night-700/20 transition-colors duration-200 ease-out active:scale-95 hover:border-night-500/40"
         >
           <span className="text-base opacity-80">{item.icon}</span>
           <span className="text-[10px] text-night-400">{item.label}</span>

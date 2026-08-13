@@ -55,7 +55,7 @@ export default function XpBar() {
 
   return (
     <div
-      className={`glass-gold rounded-2xl px-3.5 py-3 mb-5 flex items-center gap-3 transition-all duration-500 ${
+      className={`glass-gold rounded-2xl px-3.5 py-3 mb-5 flex items-center gap-3 transition-colors duration-200 ease-out duration-500 ${
         leveledUp ? 'scale-[1.02] ring-1 ring-gold-300/60' : ''
       }`}
       style={leveledUp ? { boxShadow: '0 0 36px rgba(226,196,124,0.5)' } : undefined}

@@ -104,7 +104,7 @@ export default function MoodCheckin() {
                 <button
                   key={m.score}
                   onClick={() => setSelectedMood(m.score)}
-                  className={`flex-1 py-2.5 rounded-xl text-center transition-all ${
+                  className={`flex-1 py-2.5 rounded-xl text-center transition-colors duration-200 ease-out ${
                     selectedMood === m.score
                       ? 'glass-gold scale-105 border border-gold-500/30'
                       : 'glass border border-transparent hover:border-night-600/30'
@@ -124,7 +124,7 @@ export default function MoodCheckin() {
                 <button
                   key={e.score}
                   onClick={() => setSelectedEnergy(e.score)}
-                  className={`flex-1 py-2.5 rounded-xl text-center transition-all ${
+                  className={`flex-1 py-2.5 rounded-xl text-center transition-colors duration-200 ease-out ${
                     selectedEnergy === e.score
                       ? 'glass-gold scale-105 border border-gold-500/30'
                       : 'glass border border-transparent hover:border-night-600/30'

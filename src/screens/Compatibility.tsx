@@ -204,7 +204,7 @@ export function Compatibility({ user }: { user: User }) {
                 { v: 'colleague', label: '💼 Travail', t: 'Travail' },
               ] as const).map((c) => (
                 <button key={c.v} onClick={() => setContext(c.v)}
-                  className={`py-2.5 rounded-xl text-xs font-medium transition-all ${context === c.v ? 'bg-cosmic-600 text-white' : 'text-night-400'}`}
+                  className={`py-2.5 rounded-xl text-xs font-medium transition-colors duration-200 ease-out ${context === c.v ? 'bg-cosmic-600 text-white' : 'text-night-400'}`}
                   title={c.t}>
                   {c.label}
                 </button>
@@ -215,11 +215,11 @@ export function Compatibility({ user }: { user: User }) {
           {/* Mode toggle */}
           <div className="flex gap-2 mb-6 p-1 glass rounded-2xl">
             <button onClick={() => setMode('quick')}
-              className={`flex-1 py-2.5 rounded-xl text-sm font-medium transition-all ${mode === 'quick' ? 'bg-cosmic-600 text-white' : 'text-night-400'}`}>
+              className={`flex-1 py-2.5 rounded-xl text-sm font-medium transition-colors duration-200 ease-out ${mode === 'quick' ? 'bg-cosmic-600 text-white' : 'text-night-400'}`}>
               Rapide (signe)
             </button>
             <button onClick={() => setMode('detailed')}
-              className={`flex-1 py-2.5 rounded-xl text-sm font-medium transition-all ${mode === 'detailed' ? 'bg-cosmic-600 text-white' : 'text-night-400'}`}>
+              className={`flex-1 py-2.5 rounded-xl text-sm font-medium transition-colors duration-200 ease-out ${mode === 'detailed' ? 'bg-cosmic-600 text-white' : 'text-night-400'}`}>
               Détaillé (thème)
             </button>
           </div>
@@ -256,7 +256,7 @@ export function Compatibility({ user }: { user: User }) {
               <div className="grid grid-cols-3 gap-3">
                 {ZODIAC_ORDER.map((sign) => (
                   <button key={sign} onClick={() => setTheirSign(sign)}
-                    className={`py-3 rounded-xl border transition-all duration-300 ${theirSign === sign ? 'glass-gold border-gold-500/60 scale-110 shadow-[0_0_18px_rgba(251,191,36,0.45)]' : 'glass border-transparent opacity-70 hover:opacity-100'}`}>
+                    className={`py-3 rounded-xl border transition-colors duration-200 ease-out ${theirSign === sign ? 'glass-gold border-gold-500/60 scale-110 shadow-[0_0_18px_rgba(251,191,36,0.45)]' : 'glass border-transparent opacity-70 hover:opacity-100'}`}>
                     <span className="text-xl block" style={{ color: ZODIAC_SIGNS[sign].color }}>
                       {ZODIAC_SIGNS[sign].symbol}
                     </span>
@@ -288,7 +288,7 @@ export function Compatibility({ user }: { user: User }) {
 
           <button onClick={handleAnalyze}
             disabled={mode === 'detailed' && !pDate}
-            className="w-full py-4 rounded-2xl bg-gradient-to-r from-cosmic-600 to-cosmic-700 disabled:opacity-50 text-white font-semibold text-lg transition-all">
+            className="w-full py-4 rounded-2xl bg-gradient-to-r from-cosmic-600 to-cosmic-700 disabled:opacity-50 text-white font-semibold text-lg transition-colors duration-200 ease-out">
             Analyser la compatibilité
           </button>
         </>
@@ -366,7 +366,7 @@ export function Compatibility({ user }: { user: User }) {
           </div>
 
           <button onClick={handleShare}
-            className="w-full py-3 rounded-2xl glass border border-cosmic-500/40 text-cosmic-200 font-medium transition-all flex items-center justify-center gap-2 hover:border-cosmic-500/70 active:scale-[0.99] mb-4">
+            className="w-full py-3 rounded-2xl glass border border-cosmic-500/40 text-cosmic-200 font-medium transition-colors duration-200 ease-out flex items-center justify-center gap-2 hover:border-cosmic-500/70 active:scale-[0.99] mb-4">
             <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#c084fc"
               strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
               <circle cx="18" cy="5" r="3" />
@@ -405,7 +405,7 @@ export function Compatibility({ user }: { user: User }) {
           )}
 
           <button onClick={() => setResult(null)}
-            className="w-full py-3 rounded-2xl glass border border-night-600 text-night-200 font-medium transition-all">
+            className="w-full py-3 rounded-2xl glass border border-night-600 text-night-200 font-medium transition-colors duration-200 ease-out">
             ← Nouvelle analyse
           </button>
         </div>

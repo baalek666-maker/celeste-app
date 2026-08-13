@@ -136,7 +136,7 @@ export default function DailyTarot() {
         <button
           onClick={draw}
           disabled={loading}
-          className="w-full rounded-2xl p-8 transition-all hover:scale-[1.02] active:scale-[0.97] disabled:opacity-50 disabled:cursor-not-allowed"
+          className="w-full rounded-2xl p-8 transition-colors duration-200 ease-out hover:scale-[1.02] active:scale-[0.97] disabled:opacity-50 disabled:cursor-not-allowed"
           style={{
             background: 'linear-gradient(135deg, rgba(197,160,89,0.15) 0%, rgba(40,30,15,0.85) 100%)',
             border: '2px solid rgba(197,160,89,0.35)',
@@ -203,7 +203,7 @@ export default function DailyTarot() {
               animation: 'tarot-card-spin 1.4s ease-in-out',
             }}
           >
-            <span className="text-4xl" style={{ animation: 'tarot-glow 0.8s ease-in-out infinite' }}>✦</span>
+            <span className="text-4xl animate-tarot-glow-fast">✦</span>
           </div>
         </div>
         <p className="text-gold-300 text-sm tracking-widest uppercase mt-6 animate-pulse">
@@ -269,7 +269,7 @@ export default function DailyTarot() {
             </div>
             {/* Central glyph */}
             <div className="relative flex flex-col items-center">
-              <div className="text-6xl mb-2" style={{ animation: 'tarot-glow 1.5s ease-in-out infinite' }}>✦</div>
+              <div className="text-6xl mb-2 animate-tarot-glow">✦</div>
               <div className="text-gold-500/40 text-xs tracking-[0.3em] uppercase">Céleste</div>
             </div>
             {/* Corner flourishes */}
@@ -430,7 +430,7 @@ export default function DailyTarot() {
                   <button
                     type="button"
                     onClick={toggleFlip}
-                    className="w-full flex items-center justify-center gap-2 py-2 px-3 rounded-xl glass border border-night-700/40 hover:border-night-500/60 transition-all active:scale-[0.97]"
+                    className="w-full flex items-center justify-center gap-2 py-2 px-3 rounded-xl glass border border-night-700/40 hover:border-night-500/60 transition-colors duration-200 ease-out active:scale-[0.97]"
                     aria-label={flipSide === 'verso' ? 'Revenir à la carte' : 'Voir la lecture détaillée'}
                   >
                     <span className="text-sm">👆</span>
@@ -448,13 +448,13 @@ export default function DailyTarot() {
         <div className="flex items-center justify-center gap-2 mt-3">
           <button
             onClick={share}
-            className="flex items-center gap-1.5 glass rounded-full px-4 py-2 text-night-300 hover:text-gold-300 hover:border-gold-500/30 border border-transparent transition-all text-xs font-medium active:scale-95"
+            className="flex items-center gap-1.5 glass rounded-full px-4 py-2 text-night-300 hover:text-gold-300 hover:border-gold-500/30 border border-transparent transition-colors duration-200 ease-out text-xs font-medium active:scale-95"
           >
             <span>↗</span> Partager
           </button>
           <button
             onClick={() => setShowHistory(s => !s)}
-            className="flex items-center gap-1.5 glass rounded-full px-4 py-2 text-night-300 hover:text-gold-300 hover:border-gold-500/30 border border-transparent transition-all text-xs font-medium active:scale-95"
+            className="flex items-center gap-1.5 glass rounded-full px-4 py-2 text-night-300 hover:text-gold-300 hover:border-gold-500/30 border border-transparent transition-colors duration-200 ease-out text-xs font-medium active:scale-95"
           >
             <span>📜</span> Historique
           </button>

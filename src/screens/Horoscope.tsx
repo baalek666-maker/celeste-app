@@ -391,7 +391,7 @@ export function Horoscope({ user, onNavigate }: { user: User; onNavigate: (s: Sc
               <div className="flex items-center gap-2">
                 <button
                   onClick={handleAcceptPush}
-                  className="px-4 py-2 rounded-xl bg-gradient-to-r from-gold-400 to-gold-600 text-night-950 font-semibold text-xs transition-all hover:scale-[1.02] active:scale-[0.98] shadow-md shadow-gold-500/30"
+                  className="px-4 py-2 rounded-xl bg-gradient-to-r from-gold-400 to-gold-600 text-night-950 font-semibold text-xs transition-colors duration-200 ease-out hover:scale-[1.02] active:scale-[0.98] shadow-md shadow-gold-500/30"
                 >
                   Activer
                 </button>
@@ -434,7 +434,7 @@ export function Horoscope({ user, onNavigate }: { user: User; onNavigate: (s: Sc
           <button
             onClick={handleShare}
             aria-label="Partager"
-            className="w-10 h-10 rounded-full glass flex items-center justify-center border border-night-700 hover:border-cosmic-500/40 transition-all active:scale-90"
+            className="w-10 h-10 rounded-full glass flex items-center justify-center border border-night-700 hover:border-cosmic-500/40 transition-colors duration-200 ease-out active:scale-95"
           >
             <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#c084fc"
               strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
@@ -450,7 +450,7 @@ export function Horoscope({ user, onNavigate }: { user: User; onNavigate: (s: Sc
             onClick={handleRefresh}
             disabled={refreshing}
             aria-label="Actualiser"
-            className="w-10 h-10 rounded-full glass flex items-center justify-center border border-night-700 hover:border-gold-500/40 transition-all active:scale-90 disabled:opacity-60"
+            className="w-10 h-10 rounded-full glass flex items-center justify-center border border-night-700 hover:border-gold-500/40 transition-colors duration-200 ease-out active:scale-95 disabled:opacity-60"
           >
             <svg
               width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#fbbf24"
@@ -500,7 +500,7 @@ export function Horoscope({ user, onNavigate }: { user: User; onNavigate: (s: Sc
             <button
               key={tab.key}
               onClick={() => setActiveSection(tab.key)}
-              className={`flex-1 py-2.5 px-2 rounded-xl text-sm font-medium transition-all duration-200 ${
+              className={`flex-1 py-2.5 px-2 rounded-xl text-sm font-medium transition-colors duration-200 ease-out duration-200 ${
                 activeSection === tab.key
                   ? `glass-dark ${tab.active} ${tab.glow}`
                   : `${tab.idle} hover:text-night-200`
@@ -554,7 +554,7 @@ export function Horoscope({ user, onNavigate }: { user: User; onNavigate: (s: Sc
                 </div>
                 <button
                   onClick={() => handleToggleFav('general', horoscope.general)}
-                  className="text-lg px-2 py-1 rounded-lg hover:bg-night-800/50 active:scale-90 transition-all"
+                  className="text-lg px-2 py-1 rounded-lg hover:bg-night-800/50 active:scale-90 transition-colors duration-200 ease-out"
                   aria-label={isFavorited('general') ? 'Retirer des favoris' : 'Ajouter aux favoris'}
                 >
                   {isFavorited('general') ? '★' : '☆'}
@@ -589,7 +589,7 @@ export function Horoscope({ user, onNavigate }: { user: User; onNavigate: (s: Sc
                 </div>
                 <button
                   onClick={() => handleToggleFav('love', horoscope.love)}
-                  className="text-lg px-2 py-1 rounded-lg hover:bg-night-800/50 active:scale-90 transition-all"
+                  className="text-lg px-2 py-1 rounded-lg hover:bg-night-800/50 active:scale-90 transition-colors duration-200 ease-out"
                   aria-label={isFavorited('love') ? 'Retirer des favoris' : 'Ajouter aux favoris'}
                 >
                   {isFavorited('love') ? '★' : '☆'}
@@ -623,7 +623,7 @@ export function Horoscope({ user, onNavigate }: { user: User; onNavigate: (s: Sc
                 </div>
               <button
                   onClick={() => handleToggleFav('career', horoscope.career)}
-                  className="text-lg px-2 py-1 rounded-lg hover:bg-night-800/50 active:scale-90 transition-all"
+                  className="text-lg px-2 py-1 rounded-lg hover:bg-night-800/50 active:scale-90 transition-colors duration-200 ease-out"
                   aria-label={isFavorited('career') ? 'Retirer des favoris' : 'Ajouter aux favoris'}
                 >
                   {isFavorited('career') ? '★' : '☆'}
@@ -705,7 +705,7 @@ export function Horoscope({ user, onNavigate }: { user: User; onNavigate: (s: Sc
               return (
                 <div
                   key={day.date}
-                  className={`glass rounded-2xl p-4 border transition-all ${
+                  className={`glass rounded-2xl p-4 border transition-colors duration-200 ease-out ${
                     isToday
                       ? 'border-gold-500/60 bg-gold-500/5 shadow-lg shadow-gold-500/10'
                       : 'border-night-700/30'
@@ -807,7 +807,7 @@ export function Horoscope({ user, onNavigate }: { user: User; onNavigate: (s: Sc
         {recentEntries.length === 0 ? (
           <button
             onClick={() => onNavigate('journal')}
-            className="w-full glass rounded-2xl p-4 text-left border border-cosmic-500/20 hover:border-cosmic-500/40 transition-all active:scale-[0.98]"
+            className="w-full glass rounded-2xl p-4 text-left border border-cosmic-500/20 hover:border-cosmic-500/40 transition-colors duration-200 ease-out active:scale-[0.98]"
           >
             <div className="flex items-center gap-3">
               <span className="text-2xl">✍️</span>
@@ -823,7 +823,7 @@ export function Horoscope({ user, onNavigate }: { user: User; onNavigate: (s: Sc
               <button
                 key={entry.id}
                 onClick={() => onNavigate('journal')}
-                className="w-full glass rounded-2xl p-4 text-left border border-night-700/40 hover:border-gold-500/30 transition-all active:scale-[0.98]"
+                className="w-full glass rounded-2xl p-4 text-left border border-night-700/40 hover:border-gold-500/30 transition-colors duration-200 ease-out active:scale-[0.98]"
               >
                 <div className="flex items-start justify-between mb-1">
                   <p className="text-night-300 text-xs capitalize">

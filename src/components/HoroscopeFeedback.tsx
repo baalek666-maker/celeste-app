@@ -77,7 +77,7 @@ export default function HoroscopeFeedback({ date }: { date?: string }) {
               onMouseEnter={() => setHover(n)}
               onClick={() => submit(n)}
               aria-label={`${n} étoile${n > 1 ? 's' : ''}`}
-              className="text-3xl leading-none p-1 transition-all duration-300 ease-out hover:scale-125 active:scale-90"
+              className="text-3xl leading-none p-1 transition-colors duration-200 ease-out duration-300 ease-out hover:scale-125 active:scale-90"
               style={{
                 color: on ? '#e2c47c' : '#3a3a3a',
                 textShadow: on ? '0 0 12px rgba(197,160,89,0.6)' : 'none',

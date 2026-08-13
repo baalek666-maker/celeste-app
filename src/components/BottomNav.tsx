@@ -97,9 +97,9 @@ export function BottomNav({ items, labels, active, onNavigate, showPremiumBadge 
               onClick={() => handleNav(item)}
               aria-current={isActive ? 'page' : undefined}
               aria-label={labels[item]}
-              className="flex flex-col items-center gap-1 px-1.5 py-1.5 transition-all duration-300 active:scale-90"
+              className="flex flex-col items-center gap-1 px-1.5 py-1.5 transition-colors duration-150 ease-out active:scale-95"
             >
-              <div className={`relative transition-all duration-300 ${isActive ? 'scale-110' : 'scale-100'}`}>
+              <div className={`relative transition-transform duration-150 ease-out ${isActive ? 'scale-110' : 'scale-100'}`}>
                 {/* Gold glow background on active */}
                 {isActive && (
                   <div className="absolute inset-0 -m-2 rounded-full bg-gold-500/15 animate-glow" />
@@ -108,7 +108,7 @@ export function BottomNav({ items, labels, active, onNavigate, showPremiumBadge 
                 {isActive && (
                   <div className="absolute -top-2.5 left-1/2 -translate-x-1/2 w-1 h-1 rounded-full bg-gold-400 animate-fade-in" />
                 )}
-                <div className={`relative transition-all duration-300 ${isActive ? 'drop-shadow-[0_0_7px_rgba(197,160,89,0.55)]' : ''}`}>
+                <div className={`relative transition-transform duration-150 ease-out ${isActive ? 'drop-shadow-[0_0_7px_rgba(197,160,89,0.55)]' : ''}`}>
                   <NavIcon item={item} active={isActive} />
                   {/* v14.8 — Badge ⚡ discret sur l'icône Settings pour free users */}
                   {showPremiumBadge && item === 'settings' && (
@@ -118,7 +118,7 @@ export function BottomNav({ items, labels, active, onNavigate, showPremiumBadge 
                   )}
                 </div>
               </div>
-              <span className={`text-[10px] font-medium tracking-tight transition-all duration-300 ${isActive ? 'text-gold-400 font-display' : 'text-night-500'}`}>
+              <span className={`text-[10px] font-medium tracking-tight transition-transform duration-150 ease-out ${isActive ? 'text-gold-400 font-display' : 'text-night-500'}`}>
                 {labels[item]}
               </span>
             </button>

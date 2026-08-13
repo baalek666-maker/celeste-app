@@ -62,7 +62,7 @@ export function ChartView({ user }: { user: User }) {
         <button
           onClick={handleShare}
           disabled={shareStatus === 'sharing'}
-          className="glass-gold rounded-full px-3 py-1.5 flex items-center gap-1.5 text-xs font-medium text-gold-300 border border-gold-500/20 hover:border-gold-500/40 transition-all disabled:opacity-50"
+          className="glass-gold rounded-full px-3 py-1.5 flex items-center gap-1.5 text-xs font-medium text-gold-300 border border-gold-500/20 hover:border-gold-500/40 transition-colors duration-200 ease-out disabled:opacity-50"
           aria-label="Partager mon thème astral"
         >
           {shareStatus === 'sharing' ? '…' : shareStatus === 'copied' ? '✓ Copié' : shareStatus === 'error' ? '✕' : '🔗'}

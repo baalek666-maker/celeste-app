@@ -159,7 +159,7 @@ export default function ChineseAstrology({ user }: { user: User }) {
               onClick={() => setSelectedAnimal(a.id === selectedAnimal ? null : a.id)}
               className="flex flex-col items-center gap-1 group"
             >
-              <div className={`w-12 h-12 rounded-xl flex items-center justify-center text-xl transition-all ${selectedAnimal === a.id ? 'glass border border-gold-500/40 scale-110' : 'glass border border-night-700/30 group-hover:scale-105'}`}>
+              <div className={`w-12 h-12 rounded-xl flex items-center justify-center text-xl transition-colors duration-200 ease-out ${selectedAnimal === a.id ? 'glass border border-gold-500/40 scale-110' : 'glass border border-night-700/30 group-hover:scale-105'}`}>
                 {a.emoji}
               </div>
               <span className="text-night-300 text-[10px]">{a.name}</span>
@@ -201,7 +201,7 @@ export default function ChineseAstrology({ user }: { user: User }) {
             <button
               key={a.id}
               onClick={() => setSelectedAnimal(a.id === selectedAnimal ? null : a.id)}
-              className={`flex flex-col items-center gap-1 p-2 rounded-xl transition-all ${selectedAnimal === a.id ? 'glass border border-gold-500/30 scale-105' : 'glass border border-night-700/20 hover:scale-105'}`}
+              className={`flex flex-col items-center gap-1 p-2 rounded-xl transition-colors duration-200 ease-out ${selectedAnimal === a.id ? 'glass border border-gold-500/30 scale-105' : 'glass border border-night-700/20 hover:scale-105'}`}
             >
               <span className="text-xl">{a.emoji}</span>
               <span className="text-night-400 text-[10px]">{a.name}</span>

@@ -138,7 +138,7 @@ export default function AstroPortrait({ onBack }: { onBack?: () => void } = {}) 
               onClick={ttsToggle}
               aria-label={ttsSpeaking ? 'Arrêter la lecture' : 'Lire le portrait à voix haute'}
               title={ttsSpeaking ? 'Arrêter' : 'Écouter mon portrait'}
-              className={`ml-auto w-9 h-9 rounded-full flex items-center justify-center border transition-all ${
+              className={`ml-auto w-9 h-9 rounded-full flex items-center justify-center border transition-colors duration-200 ease-out ${
                 ttsSpeaking
                   ? 'border-gold-400/80 bg-gold-500/15 text-gold-200 animate-gold-glow'
                   : 'border-gold-500/30 bg-night-800/40 text-gold-300 hover:border-gold-400/60 hover:bg-gold-500/10 active:scale-95'
@@ -168,7 +168,7 @@ export default function AstroPortrait({ onBack }: { onBack?: () => void } = {}) 
             <span className="text-4xl text-gold-500/60 mb-4 animate-twinkle">✦</span>
             <p className="text-night-300 mb-6 max-w-xs">{error}</p>
             <button onClick={() => load()}
-              className="px-8 py-3 rounded-2xl glass-gold border border-gold-500/30 text-gold-200 font-medium hover:border-gold-500/60 active:scale-[0.98] transition-all">
+              className="px-8 py-3 rounded-2xl glass-gold border border-gold-500/30 text-gold-200 font-medium hover:border-gold-500/60 active:scale-[0.98] transition-colors duration-200 ease-out">
               Réessayer
             </button>
           </div>

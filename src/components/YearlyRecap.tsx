@@ -170,7 +170,7 @@ export function YearlyRecapCollapsible() {
       {!open ? (
         <button
           onClick={() => setOpen(true)}
-          className="w-full glass rounded-2xl p-4 flex items-center justify-between text-left hover:border-gold-500/30 border border-transparent transition-all"
+          className="w-full glass rounded-2xl p-4 flex items-center justify-between text-left hover:border-gold-500/30 border border-transparent transition-colors duration-200 ease-out"
         >
           <div className="flex items-center gap-3">
             <span className="text-xl">✨</span>

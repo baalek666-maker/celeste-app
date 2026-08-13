@@ -123,7 +123,7 @@ export function YiJingOracle() {
         {/* Hexagramme du jour */}
         <button
           onClick={() => { setSelectedHex(todayHex); setMode('detail'); }}
-          className="w-full glass-gold rounded-2xl p-5 mb-4 border border-gold-500/30 hover:border-gold-500/60 transition-all text-left animate-fade-in"
+          className="w-full glass-gold rounded-2xl p-5 mb-4 border border-gold-500/30 hover:border-gold-500/60 transition-colors duration-200 ease-out text-left animate-fade-in"
           style={{ animationDelay: '0.05s' }}
         >
           <p className="text-night-400 text-xs uppercase tracking-wider mb-3">Hexagramme du jour</p>
@@ -145,7 +145,7 @@ export function YiJingOracle() {
         {/* Tirage */}
         <button
           onClick={() => { startCast(); setMode('cast'); }}
-          className="w-full glass rounded-2xl p-5 mb-4 border border-transparent hover:border-gold-500/30 transition-all text-left animate-fade-in"
+          className="w-full glass rounded-2xl p-5 mb-4 border border-transparent hover:border-gold-500/30 transition-colors duration-200 ease-out text-left animate-fade-in"
           style={{ animationDelay: '0.05s' }}
         >
           <div className="flex items-center gap-4">
@@ -201,7 +201,7 @@ export function YiJingOracle() {
           ) : currentThrow < 6 ? (
             <button
               onClick={throwNext}
-              className="px-6 py-3 glass-gold rounded-full text-gold-300 text-sm font-semibold border border-gold-500/40 hover:border-gold-500/70 transition-all"
+              className="px-6 py-3 glass-gold rounded-full text-gold-300 text-sm font-semibold border border-gold-500/40 hover:border-gold-500/70 transition-colors duration-200 ease-out"
             >
               Lancer les pieces
             </button>
@@ -214,7 +214,7 @@ export function YiJingOracle() {
           <div className="space-y-4">
             <button
               onClick={() => { setSelectedHex(mainHexagram); setMode('detail'); }}
-              className="w-full glass-gold rounded-2xl p-5 border border-gold-500/30 text-left hover:border-gold-500/60 transition-all"
+              className="w-full glass-gold rounded-2xl p-5 border border-gold-500/30 text-left hover:border-gold-500/60 transition-colors duration-200 ease-out"
             >
               <p className="text-night-400 text-xs uppercase tracking-wider mb-3">Hexagramme principal</p>
               <div className="flex items-center gap-5 mb-3">
@@ -240,7 +240,7 @@ export function YiJingOracle() {
             {transformedHexagram && (
               <button
                 onClick={() => { setSelectedHex(transformedHexagram); setMode('detail'); }}
-                className="w-full glass rounded-2xl p-5 border border-transparent hover:border-gold-500/30 transition-all text-left"
+                className="w-full glass rounded-2xl p-5 border border-transparent hover:border-gold-500/30 transition-colors duration-200 ease-out text-left"
               >
                 <p className="text-night-400 text-xs uppercase tracking-wider mb-3">Hexagramme transforme</p>
                 <div className="flex items-center gap-5">
@@ -261,7 +261,7 @@ export function YiJingOracle() {
 
             <button
               onClick={startCast}
-              className="w-full py-3 text-night-400 text-xs border border-night-700 rounded-full hover:border-gold-500/40 hover:text-gold-400 transition-all"
+              className="w-full py-3 text-night-400 text-xs border border-night-700 rounded-full hover:border-gold-500/40 hover:text-gold-400 transition-colors duration-200 ease-out"
             >
               Nouveau tirage
             </button>

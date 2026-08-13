@@ -94,7 +94,7 @@ function HoroscopePreview() {
             key={i}
             aria-label={`Aperçu ${i + 1}`}
             onClick={() => setIdx(i)}
-            className={`w-1.5 h-1.5 rounded-full transition-all ${
+            className={`w-1.5 h-1.5 rounded-full transition-colors duration-300 ease-out ${
               i === idx ? 'bg-gold-400 w-4' : 'bg-night-600 hover:bg-night-400'
             }`}
           />
@@ -107,7 +107,7 @@ function HoroscopePreview() {
           style={{ background: current.color }}
         />
         {/* Symbole astro en filigrane */}
-        <div className="absolute top-2 right-2 text-4xl opacity-15 transition-all duration-500" key={`sym-${idx}`}>
+        <div className="absolute top-2 right-2 text-4xl opacity-15 transition-colors duration-300 ease-out duration-500" key={`sym-${idx}`}>
           {current.symbol}
         </div>
         <div className="flex items-center justify-between mb-2">
@@ -180,7 +180,7 @@ export function Landing({ onStart, onLogin, onGuest }: LandingProps) {
 
         <button
           onClick={onStart}
-          className="group relative w-full max-w-xs mx-auto block py-4 rounded-2xl bg-gradient-to-r from-gold-400 to-gold-600 text-night-950 font-semibold font-display tracking-wide transition-all hover:scale-[1.02] active:scale-[0.98] shadow-lg shadow-gold-500/30 animate-fade-in-up overflow-hidden"
+          className="group relative w-full max-w-xs mx-auto block py-4 rounded-2xl bg-gradient-to-r from-gold-400 to-gold-600 text-night-950 font-semibold font-display tracking-wide transition-colors duration-300 ease-out hover:scale-[1.02] active:scale-[0.98] shadow-lg shadow-gold-500/30 animate-fade-in-up overflow-hidden"
           style={{ animationDelay: '0.5s' }}
         >
           <span className="relative z-10">Commencer mon thème ✨</span>
@@ -219,7 +219,7 @@ export function Landing({ onStart, onLogin, onGuest }: LandingProps) {
           {FEATURES.map((f, i) => (
             <div
               key={f.title}
-              className="glass rounded-2xl p-5 border border-night-700 hover:border-gold-500/30 transition-all animate-fade-in-up group"
+              className="glass rounded-2xl p-5 border border-night-700 hover:border-gold-500/30 transition-colors duration-300 ease-out animate-fade-in-up group"
               style={{ animationDelay: `${0.1 + i * 0.12}s` }}
             >
               <div className="flex items-start gap-4">
@@ -311,7 +311,7 @@ export function Landing({ onStart, onLogin, onGuest }: LandingProps) {
         </div>
         <button
           onClick={onStart}
-          className="group relative w-full max-w-xs mx-auto block py-4 rounded-2xl bg-gradient-to-r from-gold-400 to-gold-600 text-night-950 font-semibold font-display tracking-wide transition-all hover:scale-[1.02] active:scale-[0.98] shadow-lg shadow-gold-500/30 overflow-hidden"
+          className="group relative w-full max-w-xs mx-auto block py-4 rounded-2xl bg-gradient-to-r from-gold-400 to-gold-600 text-night-950 font-semibold font-display tracking-wide transition-colors duration-300 ease-out hover:scale-[1.02] active:scale-[0.98] shadow-lg shadow-gold-500/30 overflow-hidden"
         >
           <span className="relative z-10">Découvrir mon ciel ✨</span>
           <span className="absolute inset-0 bg-gradient-to-r from-transparent via-white/30 to-transparent translate-x-[-100%] group-hover:translate-x-[100%] transition-transform duration-700" />

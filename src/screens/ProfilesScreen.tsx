@@ -132,7 +132,7 @@ export function ProfilesScreen({ user, onClose }: { user: User; onClose: () => v
           </div>
         )}
         {!loading && profiles.map(p => (
-          <div key={p.id} className={`rounded-2xl border p-4 transition-all ${
+          <div key={p.id} className={`rounded-2xl border p-4 transition-colors duration-200 ease-out ${
             p.isSelf
               // P1 — Profil actif : anneau doré continu + glow pulsé, vs default
               ? 'border-gold-500/50 bg-gradient-to-br from-gold-500/10 via-night-900 to-gold-500/5 shadow-[0_0_28px_rgba(251,191,36,0.18)] relative overflow-hidden'
@@ -147,7 +147,7 @@ export function ProfilesScreen({ user, onClose }: { user: User; onClose: () => v
             <div className="flex items-start justify-between gap-3">
               <div className="flex items-center gap-3 flex-1 min-w-0">
                 {/* P1 — Avatar dans un anneau doré pour le profil self */}
-                <div className={`w-12 h-12 rounded-full flex items-center justify-center text-2xl flex-shrink-0 transition-all ${
+                <div className={`w-12 h-12 rounded-full flex items-center justify-center text-2xl flex-shrink-0 transition-colors duration-200 ease-out ${
                   p.isSelf
                     ? 'bg-gold-500/20 border-2 border-gold-400 shadow-[0_0_16px_rgba(251,191,36,0.45)]'
                     : 'bg-white/10 border border-white/15'

@@ -109,7 +109,7 @@ export default function RuneOracle() {
               <button
                 key={i}
                 onClick={() => startDraw(i)}
-                className="w-full glass rounded-xl p-4 text-left hover:border-gold-500/50 transition-all"
+                className="w-full glass rounded-xl p-4 text-left hover:border-gold-500/50 transition-colors duration-200 ease-out"
               >
                 <div className="flex items-center justify-between mb-1">
                   <span className="font-serif text-night-100 text-lg">
@@ -170,7 +170,7 @@ export default function RuneOracle() {
               {ELDER_FUTHARK.slice(aett.start - 1, aett.end).map((rune) => (
                 <div
                   key={rune.id}
-                  className="aspect-square rounded-lg bg-night-950/50 border border-gold-500/10 flex flex-col items-center justify-center hover:border-gold-500/40 transition-all"
+                  className="aspect-square rounded-lg bg-night-950/50 border border-gold-500/10 flex flex-col items-center justify-center hover:border-gold-500/40 transition-colors duration-200 ease-out"
                 >
                   <span className="text-2xl text-night-100">
                     {rune.symbol}
@@ -231,7 +231,7 @@ export default function RuneOracle() {
               <button
                 onClick={() => revealRune(i)}
                 disabled={revealed[i]}
-                className={`w-full glass rounded-xl p-6 flex items-center justify-center transition-all ${
+                className={`w-full glass rounded-xl p-6 flex items-center justify-center transition-colors duration-200 ease-out ${
                   revealed[i]
                     ? "border-gold-500/40"
                     : "hover:border-gold-500/60 hover:scale-[1.02]"
@@ -359,7 +359,7 @@ export default function RuneOracle() {
 
       <button
         onClick={reset}
-        className="w-full py-3 rounded-xl bg-gold-500/20 border border-gold-500/40 text-gold-400 hover:bg-gold-500/30 transition-all font-medium"
+        className="w-full py-3 rounded-xl bg-gold-500/20 border border-gold-500/40 text-gold-400 hover:bg-gold-500/30 transition-colors duration-200 ease-out font-medium"
       >
         Nouveau tirage
       </button>

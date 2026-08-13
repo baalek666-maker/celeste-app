@@ -39,7 +39,7 @@ export function LegalModal({ onBack }: { onBack: () => void }) {
           href="/legal/privacy.html"
           target="_blank"
           rel="noopener noreferrer"
-          className="block w-full py-3 px-4 rounded-xl glass border border-night-700 text-night-100 text-sm hover:border-cosmic-500/50 transition-all mb-2"
+          className="block w-full py-3 px-4 rounded-xl glass border border-night-700 text-night-100 text-sm hover:border-cosmic-500/50 transition-colors duration-200 ease-out mb-2"
         >
           🔒 Politique de confidentialité →
         </a>
@@ -47,7 +47,7 @@ export function LegalModal({ onBack }: { onBack: () => void }) {
           href="/legal/terms.html"
           target="_blank"
           rel="noopener noreferrer"
-          className="block w-full py-3 px-4 rounded-xl glass border border-night-700 text-night-100 text-sm hover:border-cosmic-500/50 transition-all"
+          className="block w-full py-3 px-4 rounded-xl glass border border-night-700 text-night-100 text-sm hover:border-cosmic-500/50 transition-colors duration-200 ease-out"
         >
           📜 Conditions générales d'utilisation (CGU) →
         </a>

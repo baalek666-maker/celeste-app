@@ -87,7 +87,7 @@ export function PortraitPdfButton() {
       <button
         onClick={handleDownload}
         disabled={downloading}
-        className="w-full glass rounded-2xl p-4 border border-transparent hover:border-gold-500/30 active:scale-[0.99] transition-all disabled:opacity-60"
+        className="w-full glass rounded-2xl p-4 border border-transparent hover:border-gold-500/30 active:scale-[0.99] transition-colors duration-200 ease-out disabled:opacity-60"
       >
         <div className="flex items-center gap-3">
           <span className="w-10 h-10 rounded-xl bg-gradient-to-br from-gold-500/20 to-cosmic-500/20 border border-gold-500/25 flex items-center justify-center text-xl">
@@ -131,19 +131,19 @@ export function PortraitPdfButton() {
             <div className="space-y-2">
               <button
                 onClick={() => handleBuy('ios')}
-                className="w-full py-3 rounded-xl bg-night-800 hover:bg-night-700 text-night-100 text-sm border border-night-700 transition-all"
+                className="w-full py-3 rounded-xl bg-night-800 hover:bg-night-700 text-night-100 text-sm border border-night-700 transition-colors duration-200 ease-out"
               >
                 Acheter sur iOS (App Store)
               </button>
               <button
                 onClick={() => handleBuy('android')}
-                className="w-full py-3 rounded-xl bg-night-800 hover:bg-night-700 text-night-100 text-sm border border-night-700 transition-all"
+                className="w-full py-3 rounded-xl bg-night-800 hover:bg-night-700 text-night-100 text-sm border border-night-700 transition-colors duration-200 ease-out"
               >
                 Acheter sur Android (Play Store)
               </button>
               <button
                 onClick={() => handleBuy('stripe')}
-                className="w-full py-3 rounded-xl bg-gradient-to-r from-gold-400 to-gold-600 text-night-950 font-semibold text-sm hover:scale-[1.02] active:scale-[0.97] transition-all shadow-lg shadow-gold-500/20"
+                className="w-full py-3 rounded-xl bg-gradient-to-r from-gold-400 to-gold-600 text-night-950 font-semibold text-sm hover:scale-[1.02] active:scale-[0.97] transition-colors duration-200 ease-out shadow-lg shadow-gold-500/20"
               >
                 Payer par carte · 9,99 €
               </button>

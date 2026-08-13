@@ -89,7 +89,7 @@ export default function OfflineIndicator() {
   return (
     <div className="fixed top-2 left-1/2 -translate-x-1/2 z-50 pointer-events-auto">
       <div
-        className={`flex items-center gap-2 px-3 py-1.5 rounded-full text-xs shadow-lg backdrop-blur-md transition-all ${
+        className={`flex items-center gap-2 px-3 py-1.5 rounded-full text-xs shadow-lg backdrop-blur-md transition-colors duration-200 ease-out ${
           !online
             ? 'bg-amber-500/90 text-black'
             : lastDrainInfo

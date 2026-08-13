@@ -42,7 +42,7 @@ export function HomeSecondary({
     <div className="mb-6">
       <button
         onClick={() => setOpen(!open)}
-        className="w-full flex items-center justify-between px-3 py-2 rounded-xl glass border border-night-700/40 text-[11px] text-night-400 hover:text-night-200 transition-all"
+        className="w-full flex items-center justify-between px-3 py-2 rounded-xl glass border border-night-700/40 text-[11px] text-night-400 hover:text-night-200 transition-colors duration-200 ease-out"
       >
         <span className="flex items-center gap-2">
           <span className="w-1.5 h-1.5 rounded-full bg-gold-400 animate-pulse" />
@@ -60,7 +60,7 @@ export function HomeSecondary({
           {!pushEnabled ? (
             <button
               onClick={optInPush}
-              className="w-full flex items-center gap-2 px-3 py-2 rounded-xl glass border border-cosmic-500/30 text-[11px] text-cosmic-200 hover:border-cosmic-500/50 transition-all text-left"
+              className="w-full flex items-center gap-2 px-3 py-2 rounded-xl glass border border-cosmic-500/30 text-[11px] text-cosmic-200 hover:border-cosmic-500/50 transition-colors duration-200 ease-out text-left"
             >
               <span>🔔</span>
               <span>Activer les rappels quotidiens (7h30 · 18h · 22h)</span>

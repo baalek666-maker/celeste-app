@@ -195,7 +195,7 @@ export function Paywall({ onClose, onSubscribe }: {
             Placé AVANT les plans payants : conversion maximale, zéro friction. */}
         <button onClick={handleStartTrial}
           disabled={trialBusy || busy}
-          className="w-full p-4 mb-4 rounded-2xl border-2 border-cosmic-500/40 glass-cosmic transition-all duration-300 text-left group hover:border-cosmic-400/60 disabled:opacity-50 disabled:cursor-not-allowed">
+          className="w-full p-4 mb-4 rounded-2xl border-2 border-cosmic-500/40 glass-cosmic transition-colors duration-200 ease-out text-left group hover:border-cosmic-400/60 disabled:opacity-50 disabled:cursor-not-allowed">
           <div className="flex items-center gap-3">
             <div className="w-10 h-10 rounded-full bg-cosmic-500/20 flex items-center justify-center text-xl group-hover:scale-110 transition-transform">
               🎁
@@ -219,7 +219,7 @@ export function Paywall({ onClose, onSubscribe }: {
               VMF = accuracy-first. Avantages honnêtes : essai 7j, prix bloqué 12 mois,
               résiliation 2 clics. */}
           <button onClick={() => setPlan('yearly')}
-            className={`w-full p-4 rounded-2xl border-2 transition-all duration-300 text-left relative ${plan === 'yearly' ? 'border-gold-500/60 glass-gold ring-2 ring-gold-500/20' : 'border-night-700/50 glass'}`}>
+            className={`w-full p-4 rounded-2xl border-2 transition-colors duration-200 ease-out text-left relative ${plan === 'yearly' ? 'border-gold-500/60 glass-gold ring-2 ring-gold-500/20' : 'border-night-700/50 glass'}`}>
             {plan === 'yearly' && (
               <span className="absolute -top-2.5 left-4 px-2.5 py-0.5 rounded-full bg-gradient-to-r from-gold-400 to-gold-600 text-night-950 text-[10px] font-bold tracking-wide uppercase shadow-md">
                 ★ Recommandé
@@ -241,7 +241,7 @@ export function Paywall({ onClose, onSubscribe }: {
           </button>
 
           <button onClick={() => setPlan('weekly')}
-            className={`w-full p-4 rounded-2xl border-2 transition-all duration-300 text-left ${plan === 'weekly' ? 'border-cosmic-500/60 glass' : 'border-night-700/50 glass opacity-80'}`}>
+            className={`w-full p-4 rounded-2xl border-2 transition-colors duration-200 ease-out text-left ${plan === 'weekly' ? 'border-cosmic-500/60 glass' : 'border-night-700/50 glass opacity-80'}`}>
             <div className="flex items-center justify-between">
               <div>
                 <p className="text-night-100 font-bold">Hebdomadaire</p>
@@ -279,7 +279,7 @@ export function Paywall({ onClose, onSubscribe }: {
         {/* CTA — vrai checkout Stripe */}
         <button onClick={handleSubscribe}
           disabled={busy || configured === false}
-          className="w-full py-4 rounded-2xl bg-gradient-to-r from-gold-400 to-gold-600 text-night-950 font-bold text-lg shadow-lg shadow-gold-900/50 transition-all duration-300 hover:scale-[1.01] animate-gold-glow disabled:opacity-50 disabled:cursor-not-allowed disabled:hover:scale-100">
+          className="w-full py-4 rounded-2xl bg-gradient-to-r from-gold-400 to-gold-600 text-night-950 font-bold text-lg shadow-lg shadow-gold-900/50 transition-colors duration-200 ease-out hover:scale-[1.01] animate-gold-glow disabled:opacity-50 disabled:cursor-not-allowed disabled:hover:scale-100">
           {busy
             ? 'Redirection…'
             : configured === false
@@ -302,7 +302,7 @@ export function Paywall({ onClose, onSubscribe }: {
         {/* Restore Purchases (Fix #2 — obligatoire App Store Guideline 3.1.5) */}
         <button onClick={handleRestorePurchases}
           disabled={restoring}
-          className="w-full mt-4 py-2.5 rounded-xl glass border border-night-700 text-night-200 text-sm hover:border-cosmic-500/50 transition-all disabled:opacity-50">
+          className="w-full mt-4 py-2.5 rounded-xl glass border border-night-700 text-night-200 text-sm hover:border-cosmic-500/50 transition-colors duration-200 ease-out disabled:opacity-50">
           {restoring ? 'Restauration…' : '♻️ Restaurer mes achats'}
         </button>
         {restoreMsg && (

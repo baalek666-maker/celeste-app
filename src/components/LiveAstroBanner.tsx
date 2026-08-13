@@ -100,7 +100,7 @@ export default function LiveAstroBanner() {
             <button
               key={i}
               onClick={() => setIdx(i)}
-              className={`h-1 rounded-full transition-all ${i === idx ? 'w-6 bg-gold-400' : 'w-1 bg-white/20'}`}
+              className={`h-1 rounded-full transition-colors duration-200 ease-out ${i === idx ? 'w-6 bg-gold-400' : 'w-1 bg-white/20'}`}
               aria-label={`Événement ${i + 1}`}
             />
           ))}

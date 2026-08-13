@@ -87,7 +87,7 @@ export default function DailyRituals() {
 
       <div className="relative grid grid-cols-2 gap-2.5">
         {/* Matin */}
-        <div className={`relative rounded-2xl p-3 border transition-all duration-300 overflow-hidden ${
+        <div className={`relative rounded-2xl p-3 border transition-colors duration-200 ease-out duration-300 overflow-hidden ${
           ritual.completedMorning
             ? 'bg-gold-500/10 border-gold-500/40'
             : 'bg-gradient-to-br from-amber-900/20 via-gold-500/5 to-transparent border-gold-500/30 hover:border-gold-400/50'
@@ -118,7 +118,7 @@ export default function DailyRituals() {
         </div>
 
         {/* Soir */}
-        <div className={`relative rounded-2xl p-3 border transition-all duration-300 overflow-hidden ${
+        <div className={`relative rounded-2xl p-3 border transition-colors duration-200 ease-out duration-300 overflow-hidden ${
           ritual.completedEvening
             ? 'bg-cosmic-500/15 border-cosmic-400/40'
             : 'bg-gradient-to-br from-cosmic-700/30 via-indigo-500/10 to-transparent border-cosmic-500/40 hover:border-cosmic-400/60'

@@ -167,13 +167,13 @@ export function Auth({ onSuccess }: { onSuccess: (user: any) => void }) {
         <div className="flex gap-2 mb-6 p-1 glass rounded-2xl animate-fade-in" style={{ animationDelay: '0.1s' }}>
           <button
             onClick={() => setMode('register')}
-            className={`flex-1 py-2.5 rounded-xl text-sm font-medium transition-all duration-300 ${mode === 'register' ? 'bg-gradient-to-r from-cosmic-600 to-cosmic-700 text-white shadow-lg shadow-cosmic-900/40' : 'text-night-400'}`}
+            className={`flex-1 py-2.5 rounded-xl text-sm font-medium transition-colors duration-200 ease-out ${mode === 'register' ? 'bg-gradient-to-r from-cosmic-600 to-cosmic-700 text-white shadow-lg shadow-cosmic-900/40' : 'text-night-400'}`}
           >
             Créer un compte
           </button>
           <button
             onClick={() => setMode('login')}
-            className={`flex-1 py-2.5 rounded-xl text-sm font-medium transition-all duration-300 ${mode === 'login' ? 'bg-gradient-to-r from-cosmic-600 to-cosmic-700 text-white shadow-lg shadow-cosmic-900/40' : 'text-night-400'}`}
+            className={`flex-1 py-2.5 rounded-xl text-sm font-medium transition-colors duration-200 ease-out ${mode === 'login' ? 'bg-gradient-to-r from-cosmic-600 to-cosmic-700 text-white shadow-lg shadow-cosmic-900/40' : 'text-night-400'}`}
           >
             Se connecter
           </button>
@@ -188,7 +188,7 @@ export function Auth({ onSuccess }: { onSuccess: (user: any) => void }) {
             disabled={oauthLoading !== null || loading}
             aria-label="Se connecter avec Apple (disponible sur iOS)"
             title="Sign in with Apple — disponible sur l'app iOS"
-            className="w-full py-3.5 rounded-2xl bg-black/60 text-white/80 font-semibold flex items-center justify-center gap-2 hover:bg-black/80 transition-all active:scale-[0.99] disabled:opacity-50 cursor-not-allowed"
+            className="w-full py-3.5 rounded-2xl bg-black/60 text-white/80 font-semibold flex items-center justify-center gap-2 hover:bg-black/80 transition-colors duration-200 ease-out active:scale-[0.99] disabled:opacity-50 cursor-not-allowed"
             data-build="v60-sw-bust"
           >
             <svg width="18" height="18" viewBox="0 0 24 24" fill="white" aria-hidden="true">
@@ -257,7 +257,7 @@ export function Auth({ onSuccess }: { onSuccess: (user: any) => void }) {
           <button
             type="submit"
             disabled={loading}
-            className="w-full py-3.5 rounded-2xl bg-gradient-to-r from-cosmic-600 via-cosmic-600 to-cosmic-700 text-white font-semibold text-lg transition-all duration-300 disabled:opacity-70 shadow-lg shadow-cosmic-900/40 hover:shadow-cosmic-700/50 hover:scale-[1.01] active:scale-[0.99]"
+            className="w-full py-3.5 rounded-2xl bg-gradient-to-r from-cosmic-600 via-cosmic-600 to-cosmic-700 text-white font-semibold text-lg transition-colors duration-200 ease-out disabled:opacity-70 shadow-lg shadow-cosmic-900/40 hover:shadow-cosmic-700/50 hover:scale-[1.01] active:scale-[0.99]"
           >
             {loading ? (
               <span className="flex items-center justify-center gap-3">

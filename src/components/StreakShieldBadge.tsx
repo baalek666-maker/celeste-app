@@ -77,7 +77,7 @@ export function StreakShieldBadge({ streak = 0, onBuy }: StreakShieldBadgeProps)
     <>
       <button
         onClick={handleBuyClick}
-        className="w-full mb-2 px-3 py-1.5 rounded-xl flex items-center justify-between gap-2 transition-all active:scale-[0.98] glass border border-night-700/30"
+        className="w-full mb-2 px-3 py-1.5 rounded-xl flex items-center justify-between gap-2 transition-colors duration-200 ease-out active:scale-[0.98] glass border border-night-700/30"
       >
         <div className="flex items-center gap-2">
           <span className="text-sm leading-none opacity-70" aria-hidden="true">🛡️</span>
@@ -116,21 +116,21 @@ export function StreakShieldBadge({ streak = 0, onBuy }: StreakShieldBadgeProps)
               <button
                 onClick={() => handlePurchase('ios')}
                 disabled={buying}
-                className="w-full py-3 rounded-xl bg-night-800 hover:bg-night-700 text-night-100 text-sm border border-night-700 transition-all disabled:opacity-50"
+                className="w-full py-3 rounded-xl bg-night-800 hover:bg-night-700 text-night-100 text-sm border border-night-700 transition-colors duration-200 ease-out disabled:opacity-50"
               >
                 {buying ? '…' : 'Acheter sur iOS (App Store)'}
               </button>
               <button
                 onClick={() => handlePurchase('android')}
                 disabled={buying}
-                className="w-full py-3 rounded-xl bg-night-800 hover:bg-night-700 text-night-100 text-sm border border-night-700 transition-all disabled:opacity-50"
+                className="w-full py-3 rounded-xl bg-night-800 hover:bg-night-700 text-night-100 text-sm border border-night-700 transition-colors duration-200 ease-out disabled:opacity-50"
               >
                 {buying ? '…' : 'Acheter sur Android (Play Store)'}
               </button>
               <button
                 onClick={() => handlePurchase('stripe')}
                 disabled={buying}
-                className="w-full py-3 rounded-xl bg-gradient-to-r from-gold-400 to-gold-600 text-night-950 font-semibold text-sm hover:scale-[1.02] active:scale-[0.98] transition-all shadow-lg shadow-gold-500/20 disabled:opacity-50"
+                className="w-full py-3 rounded-xl bg-gradient-to-r from-gold-400 to-gold-600 text-night-950 font-semibold text-sm hover:scale-[1.02] active:scale-[0.98] transition-colors duration-200 ease-out shadow-lg shadow-gold-500/20 disabled:opacity-50"
               >
                 {buying ? 'Traitement…' : 'Payer par carte · 0,99 €'}
               </button>

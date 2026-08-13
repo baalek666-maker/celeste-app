@@ -158,7 +158,7 @@ export default function MoodForecast() {
             <button
               key={d.date}
               onClick={() => setSelectedIdx(i)}
-              className={`flex flex-col items-center gap-0.5 transition-all ${i === selectedIdx ? 'text-gold-400' : ''}`}
+              className={`flex flex-col items-center gap-0.5 transition-colors duration-200 ease-out ${i === selectedIdx ? 'text-gold-400' : ''}`}
               style={{ flex: 1 }}
             >
               <span>{dayShort(d.date)}</span>
