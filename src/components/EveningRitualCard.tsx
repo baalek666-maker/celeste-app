@@ -180,7 +180,7 @@ export default function EveningRitualCard({ streak = 0 }: Props) {
         <button
           onClick={save}
           disabled={!allFilled || saving}
-          className="relative w-full mt-4 px-4 py-2.5 text-sm font-semibold uppercase tracking-wider rounded-xl bg-gradient-to-r from-cosmic-400 to-cosmic-600 text-night-100 hover:scale-[1.01] active:scale-[0.98] disabled:opacity-40 disabled:hover:scale-100 transition shadow-md shadow-cosmic-500/30"
+          className="relative w-full mt-4 px-4 py-2.5 text-sm font-semibold uppercase tracking-wider rounded-xl bg-gradient-to-r from-cosmic-400 to-cosmic-600 text-night-100 hover:scale-[1.01] active:scale-[0.97] disabled:opacity-40 disabled:hover:scale-100 transition shadow-md shadow-cosmic-500/30"
         >
           {saving ? '…' : saved ? '✓ Scellé' : 'Sceller mon rituel 🌙'}
         </button>

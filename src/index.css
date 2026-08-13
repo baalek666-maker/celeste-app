@@ -416,20 +416,96 @@
   100% { opacity: 0; transform: translate(-50%, -8px) scale(0.95); }
 }
 .animate-slide-down   { animation: slide-down   0.28s cubic-bezier(0.16, 1, 0.3, 1) both; }
-.animate-fade-out-up  { animation: fade-out-up  0.25s ease-in    both; }
+.animate-fade-out-up  { animation: fade-out-up  0.25s var(--ease-out) both; }
+
+/* ─── Animation Tokens (Emil Kowalski standard) ─── */
+:root {
+  --ease-out: cubic-bezier(0.23, 1, 0.32, 1);
+  --ease-in-out: cubic-bezier(0.77, 0, 0.175, 1);
+  --ease-drawer: cubic-bezier(0.32, 0.72, 0, 1);
+  --duration-fast: 160ms;
+  --duration-normal: 200ms;
+  --duration-slow: 280ms;
+}
 
 /* ─── Page & element transition utilities ─── */
 .page-transition {
-  animation: page-slide-in 0.42s cubic-bezier(0.22, 1, 0.36, 1) forwards;
+  animation: page-slide-in var(--duration-slow) var(--ease-out) forwards;
 }
 @keyframes page-slide-in {
   from { opacity: 0; transform: translateX(18px); }
   to { opacity: 1; transform: translateX(0); }
 }
 
+/* Stagger: max 400ms, delays 50-80ms (not 100ms+) */
 .stagger-card {
   opacity: 0;
-  animation: fade-in 0.5s ease-out forwards;
+  animation: fade-in var(--duration-slow) var(--ease-out) forwards;
+}
+
+/* ─── Accessibility: reduced motion (global) ─── */
+@media (prefers-reduced-motion: reduce) {
+  .animate-fade-in,
+  .animate-fade-in-up,
+  .animate-slide-up,
+  .animate-slide-down,
+  .animate-fade-out-up,
+  .animate-scale-in,
+  .stagger-card,
+  .page-transition {
+    animation-duration: 0.01ms !important;
+    animation-delay: 0s !important;
+    animation-fill-mode: forwards !important;
+    opacity: 1 !important;
+    transform: none !important;
+  }
+  /* Remove movement, keep opacity for comprehension */
+  .animate-twinkle,
+  .animate-float-slow,
+  .animate-glow,
+  .animate-gold-glow,
+  .animate-mystic,
+  .animate-breathe,
+  .animate-shimmer,
+  .splash-dot {
+    animation: none !important;
+    opacity: 1 !important;
+    transform: none !important;
+  }
+}
+
+/* ─── Touch device hover gating ─── */
+@media (hover: none) and (pointer: coarse) {
+  .hover\:scale-105,
+  .hover\:scale-110,
+  .hover\:scale-\[1\.01\],
+  .hover\:scale-\[1\.02\] {
+    transform: none !important;
+  }
+}
+
+/* ─── Button press feedback (Emil: buttons must feel responsive) ─── */
+@media (hover: hover) and (pointer: fine) {
+  .hover\:scale-\[1\.02\]:hover {
+    transform: scale(1.02);
+  }
+  .hover\:scale-105:hover {
+    transform: scale(1.05);
+  }
+  .hover\:scale-110:hover {
+    transform: scale(1.1);
+  }
+  .hover\:scale-\[1\.01\]:hover {
+    transform: scale(1.01);
+  }
+}
+
+/* Global button press feedback */
+button:not(:disabled):active,
+[role="button"]:active,
+a:active {
+  transform: scale(0.97);
+  transition: transform var(--duration-fast) var(--ease-out);
 }
 
 /* Soft pulse for splash dots */

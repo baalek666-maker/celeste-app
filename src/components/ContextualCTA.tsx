@@ -34,7 +34,7 @@ export function ContextualCTA() {
   return (
     <button
       onClick={() => window.dispatchEvent(new CustomEvent('celeste:navigate', { detail: config.target }))}
-      className="w-full mt-2 flex items-center gap-3 px-3 py-2.5 rounded-xl glass border border-cosmic-500/30 hover:border-cosmic-500/60 transition-all active:scale-[0.98] text-left animate-fade-in"
+      className="w-full mt-2 flex items-center gap-3 px-3 py-2.5 rounded-xl glass border border-cosmic-500/30 hover:border-cosmic-500/60 transition-[transform,box-shadow,border-color] duration-160 ease-out active:scale-[0.97] text-left animate-fade-in"
     >
       <span className="text-2xl">{config.icon}</span>
       <div className="flex-1 min-w-0">

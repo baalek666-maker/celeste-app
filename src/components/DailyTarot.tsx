@@ -136,7 +136,7 @@ export default function DailyTarot() {
         <button
           onClick={draw}
           disabled={loading}
-          className="w-full rounded-2xl p-8 transition-all hover:scale-[1.02] active:scale-[0.98] disabled:opacity-50 disabled:cursor-not-allowed"
+          className="w-full rounded-2xl p-8 transition-all hover:scale-[1.02] active:scale-[0.97] disabled:opacity-50 disabled:cursor-not-allowed"
           style={{
             background: 'linear-gradient(135deg, rgba(197,160,89,0.15) 0%, rgba(40,30,15,0.85) 100%)',
             border: '2px solid rgba(197,160,89,0.35)',
@@ -244,7 +244,7 @@ export default function DailyTarot() {
           Une carte a été tirée…
         </p>
         <div
-          className="relative cursor-pointer w-48 h-72 rounded-2xl transition-transform duration-300 hover:scale-[1.03] active:scale-[0.98]"
+          className="relative cursor-pointer w-48 h-72 rounded-2xl transition-transform duration-300 hover:scale-[1.03] active:scale-[0.97]"
           style={{
             perspective: '1200px',
             animation: 'tarot-drop-in 0.6s ease-out',
@@ -314,7 +314,7 @@ export default function DailyTarot() {
           onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); toggleFlip(); } }}
         >
           <div
-            className="relative w-full transition-transform duration-700 ease-out"
+            className="relative w-full transition-transform duration-400 ease-out"
             style={{
               transformStyle: 'preserve-3d',
               transform: flipSide === 'verso' ? 'rotateY(180deg)' : 'rotateY(0deg)',
@@ -430,7 +430,7 @@ export default function DailyTarot() {
                   <button
                     type="button"
                     onClick={toggleFlip}
-                    className="w-full flex items-center justify-center gap-2 py-2 px-3 rounded-xl glass border border-night-700/40 hover:border-night-500/60 transition-all active:scale-[0.98]"
+                    className="w-full flex items-center justify-center gap-2 py-2 px-3 rounded-xl glass border border-night-700/40 hover:border-night-500/60 transition-all active:scale-[0.97]"
                     aria-label={flipSide === 'verso' ? 'Revenir à la carte' : 'Voir la lecture détaillée'}
                   >
                     <span className="text-sm">👆</span>

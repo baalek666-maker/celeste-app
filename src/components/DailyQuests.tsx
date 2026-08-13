@@ -104,7 +104,7 @@ export default function DailyQuests({ onQuestCompleted }: DailyQuestsProps) {
 
       {/* ── Main glass card ── */}
       <div
-        className={`glass-gold rounded-2xl px-4 py-3.5 transition-all duration-500 ${flashing ? 'ring-1 ring-gold-300/70' : ''}`}
+        className={`glass-gold rounded-2xl px-4 py-3.5 transition-[box-shadow,transform,border-color] duration-200 ease-out ${flashing ? 'ring-1 ring-gold-300/70' : ''}`}
         style={flashing ? { boxShadow: '0 0 40px rgba(226,196,124,0.5)' } : undefined}
       >
         {/* Header */}

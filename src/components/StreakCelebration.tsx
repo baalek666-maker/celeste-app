@@ -94,7 +94,7 @@ export default function StreakCelebration({ streak }: { streak: number }) {
         <p className="text-night-500 text-xs">Touchez l’écran pour continuer</p>
         <div className="flex justify-center gap-4 mt-6 text-2xl opacity-60">
           <span className="animate-pulse" style={{ animationDelay: '0s' }}>✦</span>
-          <span className="animate-pulse" style={{ animationDelay: '0.3s' }}>✧</span>
+          <span className="animate-pulse" style={{ animationDelay: '0.1s' }}>✧</span>
           <span className="animate-pulse" style={{ animationDelay: '0.6s' }}>✦</span>
         </div>
       </div>

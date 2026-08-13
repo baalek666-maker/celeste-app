@@ -90,7 +90,7 @@ export function MoodWidget() {
               onClick={() => handle(m.id)}
               aria-label={m.label}
               className={`
-                flex-1 flex flex-col items-center gap-1 py-2.5 rounded-xl border transition-all
+                flex-1 flex flex-col items-center gap-1 py-2.5 rounded-xl border transition-[border-color,box-shadow,transform] duration-160 ease-out
                 ${isSelected ? m.tone : 'border-night-700/30 bg-night-800/30 hover:border-gold-500/20'}
                 ${isPulse ? 'scale-125' : 'scale-100'}
                 active:scale-95 duration-200

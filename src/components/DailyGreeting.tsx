@@ -56,7 +56,7 @@ export default function DailyGreeting({
       <div className="flex items-center justify-between mb-3">
         <p className="text-night-400 text-xs capitalize tracking-wide">{today}</p>
         {streak >= 1 && (
-          <span className={`text-[10px] font-semibold px-2.5 py-1 rounded-full border flex items-center gap-1 transition-all ${
+          <span className={`text-[10px] font-semibold px-2.5 py-1 rounded-full border flex items-center gap-1 transition-colors,150ms,ease-out ${
             streak >= 7
               ? 'text-gold-300 bg-gold-500/15 border-gold-400/40 shadow-sm shadow-gold-500/20'
               : 'text-gold-400 bg-gold-500/10 border-gold-500/30'

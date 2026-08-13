@@ -118,7 +118,7 @@ export default function ProgressionHub() {
           </div>
           <div className="relative h-2.5 bg-night-800/60 rounded-full overflow-hidden">
             <div
-              className="absolute inset-y-0 left-0 bg-gradient-to-r from-gold-500 to-gold-300 rounded-full transition-all duration-700"
+              className="absolute inset-y-0 left-0 bg-gradient-to-r from-gold-500 to-gold-300 rounded-full transition-[width,background] duration-500 ease-out"
               style={{ width: `${gami.progressPct}%` }}
             />
           </div>
@@ -232,7 +232,7 @@ export default function ProgressionHub() {
         {/* Progression globale */}
         <div className="h-1 rounded-full bg-night-800/60 overflow-hidden mb-4">
           <div
-            className="h-full rounded-full bg-gradient-to-r from-gold-500 to-gold-300 transition-all duration-700"
+            className="h-full rounded-full bg-gradient-to-r from-gold-500 to-gold-300 transition-[width,background] duration-500 ease-out"
             style={{ width: `${gami.badgesTotal ? (gami.badgesEarned / gami.badgesTotal) * 100 : 0}%` }}
           />
         </div>

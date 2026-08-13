@@ -75,7 +75,7 @@ export default function LunarCycle() {
   const activeIntentions = status.intentions.filter(i => i.status === 'active');
 
   return (
-    <div className="glass rounded-3xl p-5 mb-5 stagger-card card-glow animate-fade-in" style={{ animationDelay: '0.15s' }}>
+    <div className="glass rounded-3xl p-5 mb-5 stagger-card card-glow animate-fade-in" style={{ animationDelay: '0.05s' }}>
       {/* Moon header */}
       <div className="flex items-center gap-3 mb-4">
         <span className="text-3xl animate-float-slow">{m.emoji}</span>

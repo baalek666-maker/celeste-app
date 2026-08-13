@@ -79,7 +79,7 @@ export default function MoodCheckin() {
   const maxSpark = 5;
 
   return (
-    <div className="glass rounded-3xl p-5 mb-5 stagger-card card-glow animate-fade-in" style={{ animationDelay: '0.25s' }}>
+    <div className="glass rounded-3xl p-5 mb-5 stagger-card card-glow animate-fade-in" style={{ animationDelay: '0.1s' }}>
       <div className="flex items-center justify-between mb-4">
         <div>
           <p className="text-gold-400 text-xs uppercase tracking-widest font-medium">Check-in</p>

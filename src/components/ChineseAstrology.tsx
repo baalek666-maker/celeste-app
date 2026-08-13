@@ -41,7 +41,7 @@ export default function ChineseAstrology({ user }: { user: User }) {
       </div>
 
       {/* Ton signe */}
-      <div className="glass rounded-2xl p-5 stagger-card border border-night-700/20" style={{ animationDelay: '0.1s' }}>
+      <div className="glass rounded-2xl p-5 stagger-card border border-night-700/20" style={{ animationDelay: '0.05s' }}>
         <div className="flex items-center gap-3 mb-3">
           <div className="w-12 h-12 rounded-xl glass flex items-center justify-center text-2xl flex-shrink-0">
             {myAnimal.emoji}
@@ -57,7 +57,7 @@ export default function ChineseAstrology({ user }: { user: User }) {
       </div>
 
       {/* Traits */}
-      <div className="glass rounded-2xl p-5 stagger-card border border-night-700/20" style={{ animationDelay: '0.15s' }}>
+      <div className="glass rounded-2xl p-5 stagger-card border border-night-700/20" style={{ animationDelay: '0.08s' }}>
         <p className="text-night-400 text-xs uppercase tracking-widest mb-3">Traits dominants</p>
         <div className="flex flex-wrap gap-2">
           {myAnimal.traits.map((t, i) => (
@@ -69,7 +69,7 @@ export default function ChineseAstrology({ user }: { user: User }) {
       </div>
 
       {/* Forces / Défis */}
-      <div className="grid grid-cols-1 gap-3 stagger-card" style={{ animationDelay: '0.2s' }}>
+      <div className="grid grid-cols-1 gap-3 stagger-card" style={{ animationDelay: '0.1s' }}>
         <div className="glass rounded-2xl p-4 border border-night-700/20">
           <p className="text-gold-400 text-xs uppercase tracking-wider mb-2">Forces</p>
           <p className="text-night-200 text-sm leading-relaxed">{myAnimal.strengths}</p>
@@ -81,7 +81,7 @@ export default function ChineseAstrology({ user }: { user: User }) {
       </div>
 
       {/* Numéro chance + couleur + direction */}
-      <div className="glass rounded-2xl p-5 stagger-card border border-night-700/20" style={{ animationDelay: '0.22s' }}>
+      <div className="glass rounded-2xl p-5 stagger-card border border-night-700/20" style={{ animationDelay: '0.12s' }}>
         <p className="text-night-400 text-xs uppercase tracking-widest mb-3">Ta chance</p>
         <div className="grid grid-cols-3 gap-3 text-center">
           <div className="p-3 rounded-xl bg-night-800/30">
@@ -103,7 +103,7 @@ export default function ChineseAstrology({ user }: { user: User }) {
       </div>
 
       {/* Élément */}
-      <div className="glass rounded-2xl p-5 stagger-card border border-night-700/20" style={{ animationDelay: '0.25s' }}>
+      <div className="glass rounded-2xl p-5 stagger-card border border-night-700/20" style={{ animationDelay: '0.15s' }}>
         <div className="flex items-center gap-3 mb-3">
           <span className="text-3xl">{myElement.emoji}</span>
           <div>
@@ -126,7 +126,7 @@ export default function ChineseAstrology({ user }: { user: User }) {
 
       {/* Bazi — Pilier horaire */}
       {hourPillar && (
-        <div className="glass rounded-2xl p-5 stagger-card border border-night-700/20" style={{ animationDelay: '0.27s' }}>
+        <div className="glass rounded-2xl p-5 stagger-card border border-night-700/20" style={{ animationDelay: '0.17s' }}>
           <p className="text-night-400 text-xs uppercase tracking-widest mb-3">Ton Bazi (heure de naissance)</p>
           <div className="flex items-center gap-3">
             <span className="text-3xl">{hourPillar.emoji}</span>
@@ -141,7 +141,7 @@ export default function ChineseAstrology({ user }: { user: User }) {
       )}
 
       {/* Prévision 2025 */}
-      <div className="glass rounded-2xl p-5 stagger-card border border-night-700/20" style={{ animationDelay: '0.3s' }}>
+      <div className="glass rounded-2xl p-5 stagger-card border border-night-700/20" style={{ animationDelay: '0.2s' }}>
         <div className="flex items-center gap-2 mb-3">
           <span className="text-lg">🐍</span>
           <p className="text-night-400 text-xs uppercase tracking-widest">Ton année 2025 — Serpent de Bois</p>
@@ -150,7 +150,7 @@ export default function ChineseAstrology({ user }: { user: User }) {
       </div>
 
       {/* Affinités */}
-      <div className="glass rounded-2xl p-5 stagger-card border border-night-700/20" style={{ animationDelay: '0.32s' }}>
+      <div className="glass rounded-2xl p-5 stagger-card border border-night-700/20" style={{ animationDelay: '0.22s' }}>
         <p className="text-night-400 text-xs uppercase tracking-widest mb-3">Affinités naturelles</p>
         <div className="flex flex-wrap gap-3">
           {compatibleAnimals.map(a => a && (
@@ -174,7 +174,7 @@ export default function ChineseAstrology({ user }: { user: User }) {
 
       {/* Incompatibilités */}
       {incompatibleAnimals.length > 0 && (
-        <div className="glass rounded-2xl p-4 stagger-card border border-night-700/20" style={{ animationDelay: '0.34s' }}>
+        <div className="glass rounded-2xl p-4 stagger-card border border-night-700/20" style={{ animationDelay: '0.24s' }}>
           <p className="text-night-400 text-xs uppercase tracking-widest mb-2">Signes difficiles</p>
           <div className="flex flex-wrap gap-3">
             {incompatibleAnimals.map(a => a && (
@@ -194,7 +194,7 @@ export default function ChineseAstrology({ user }: { user: User }) {
       )}
 
       {/* Les 12 animaux */}
-      <div className="stagger-card" style={{ animationDelay: '0.35s' }}>
+      <div className="stagger-card" style={{ animationDelay: '0.25s' }}>
         <p className="text-night-400 text-xs uppercase tracking-widest mb-3 px-1">Les 12 animaux</p>
         <div className="grid grid-cols-4 gap-2">
           {CHINESE_ANIMALS.map(a => (
@@ -263,7 +263,7 @@ export default function ChineseAstrology({ user }: { user: User }) {
       )}
 
       {/* Pont Est-Ouest */}
-      <div className="glass rounded-2xl p-5 stagger-card border border-night-700/20" style={{ animationDelay: '0.4s' }}>
+      <div className="glass rounded-2xl p-5 stagger-card border border-night-700/20" style={{ animationDelay: '0.3s' }}>
         <p className="text-night-400 text-xs uppercase tracking-widest mb-2">Dualité Est-Ouest</p>
         <p className="text-night-200 text-sm leading-relaxed">
           Ton signe chinois <span className="text-gold-300 font-medium">{myAnimal.name}</span> résonne avec le signe occidental <span className="text-gold-300 font-medium">{myAnimal.western}</span>.

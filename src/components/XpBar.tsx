@@ -91,7 +91,7 @@ export default function XpBar() {
         {/* Progress track (no overflow-clip so the gold aura can breathe) */}
         <div className="relative h-2 rounded-full bg-night-800/80 border border-gold-500/15">
           <div
-            className="absolute inset-y-0 left-0 rounded-full transition-all duration-700 ease-out animate-gold-glow"
+            className="absolute inset-y-0 left-0 rounded-full transition-[width,background] duration-600 ease-out ease-out animate-gold-glow"
             style={{
               width: `${pct}%`,
               background: 'linear-gradient(90deg, #b8860b 0%, #d4ae5f 50%, #e2c47c 100%)',

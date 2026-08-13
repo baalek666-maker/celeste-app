@@ -73,7 +73,7 @@ export default function BadgeGrid({ badges }: { badges?: Badge[] }) {
         {/* Progress bar */}
         <div className="h-1 rounded-full bg-night-800/60 overflow-hidden mb-4">
           <div
-            className="h-full rounded-full transition-all duration-700 ease-out bg-gradient-to-r from-gold-500 to-gold-300"
+            className="h-full rounded-full transition-[width,background] duration-500 ease-out bg-gradient-to-r from-gold-500 to-gold-300"
             style={{ width: `${pct}%` }}
           />
         </div>

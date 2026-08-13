@@ -143,7 +143,7 @@ export function PortraitPdfButton() {
               </button>
               <button
                 onClick={() => handleBuy('stripe')}
-                className="w-full py-3 rounded-xl bg-gradient-to-r from-gold-400 to-gold-600 text-night-950 font-semibold text-sm hover:scale-[1.02] active:scale-[0.98] transition-all shadow-lg shadow-gold-500/20"
+                className="w-full py-3 rounded-xl bg-gradient-to-r from-gold-400 to-gold-600 text-night-950 font-semibold text-sm hover:scale-[1.02] active:scale-[0.97] transition-all shadow-lg shadow-gold-500/20"
               >
                 Payer par carte · 9,99 €
               </button>

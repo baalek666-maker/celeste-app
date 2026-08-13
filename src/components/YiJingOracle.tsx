@@ -146,7 +146,7 @@ export function YiJingOracle() {
         <button
           onClick={() => { startCast(); setMode('cast'); }}
           className="w-full glass rounded-2xl p-5 mb-4 border border-transparent hover:border-gold-500/30 transition-all text-left animate-fade-in"
-          style={{ animationDelay: '0.1s' }}
+          style={{ animationDelay: '0.05s' }}
         >
           <div className="flex items-center gap-4">
             <div className="w-12 h-12 rounded-xl glass-gold flex items-center justify-center flex-shrink-0">
@@ -161,7 +161,7 @@ export function YiJingOracle() {
         </button>
 
         {/* Info Bagua */}
-        <div className="glass rounded-2xl p-5 animate-fade-in" style={{ animationDelay: '0.15s' }}>
+        <div className="glass rounded-2xl p-5 animate-fade-in" style={{ animationDelay: '0.08s' }}>
           <p className="text-night-400 text-xs uppercase tracking-wider mb-3">Les 8 Trigrammes</p>
           <div className="grid grid-cols-4 gap-3">
             {Object.entries(TRIGRAMS).map(([key, t]) => (
