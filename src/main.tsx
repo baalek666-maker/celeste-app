@@ -31,3 +31,6 @@ createRoot(document.getElementById('root')!).render(
     <ToastHost />
   </ErrorBoundary>,
 );
+
+// v15 — page chargée correctement : on réarme le rechargement auto (pour le prochain déploiement).
+setTimeout(() => { try { sessionStorage.removeItem("celeste_chunk_reload"); } catch { /* noop */ } }, 10000);

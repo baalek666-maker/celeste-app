@@ -6,7 +6,7 @@
  */
 import { Router } from 'express';
 
-export function createProfilesRouter({ db, auth, safeJsonParse }) {
+export function createProfilesRouter({ db, auth, safeJsonParse, normalizeBirthTz = (b) => b }) {
   const router = Router();
 
   // List all profiles (own natal + saved family/friends)
@@ -35,7 +35,7 @@ export function createProfilesRouter({ db, auth, safeJsonParse }) {
     if (!birthData.date || !birthData.time || !birthData.city) {
       return res.status(400).json({ error: 'birthData must include date, time, city' });
     }
-    const cleanBd = {
+    const cleanBd = normalizeBirthTz({
       date: birthData.date,
       time: birthData.time,
       city: birthData.city,
@@ -43,7 +43,7 @@ export function createProfilesRouter({ db, auth, safeJsonParse }) {
       latitude: Number(birthData.latitude) || 0,
       longitude: Number(birthData.longitude) || 0,
       timezone: Number(birthData.timezone) || 0,
-    };
+    });
     if (isSelf) {
       db.prepare('UPDATE profiles SET is_self = 0 WHERE user_id = ?').run(req.user.id);
     }
@@ -67,7 +67,7 @@ export function createProfilesRouter({ db, auth, safeJsonParse }) {
       if (!birthData.date || !birthData.time || !birthData.city) {
         return res.status(400).json({ error: 'birthData must include date, time, city' });
       }
-      newBd = JSON.stringify({
+      newBd = JSON.stringify(normalizeBirthTz({
         date: birthData.date,
         time: birthData.time,
         city: birthData.city,
@@ -75,7 +75,7 @@ export function createProfilesRouter({ db, auth, safeJsonParse }) {
         latitude: Number(birthData.latitude) || 0,
         longitude: Number(birthData.longitude) || 0,
         timezone: Number(birthData.timezone) || 0,
-      });
+      }));
     }
     if (isSelf) {
       db.prepare('UPDATE profiles SET is_self = 0 WHERE user_id = ? AND id != ?').run(req.user.id, profileId);

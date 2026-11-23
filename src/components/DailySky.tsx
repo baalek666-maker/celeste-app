@@ -8,9 +8,12 @@ import DailyRituals from './DailyRituals';
  *
  * v15.2 — Maisons activées fusionnées dans le feed (plus de section séparée).
  */
+import LiveAstroBanner from './LiveAstroBanner';
+
 export default function DailySky() {
   return (
     <div className="space-y-4">
+      <LiveAstroBanner />
       <PersonalTransits />
       <DailyRituals />
     </div>

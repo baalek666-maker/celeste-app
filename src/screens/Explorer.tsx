@@ -25,7 +25,7 @@ const PILIERS: { key: Pilier; label: string; emoji: string; desc: string }[] = [
 ];
 
 const SKY_MODULES: Module[] = [
-  { key: 'portrait',  label: 'Portrait astral',  emoji: '📜', desc: 'Ton portrait profond de 1500 mots' },
+  { key: 'portrait',  label: 'Portrait astral',  emoji: '📜', desc: 'Ton portrait complet, planète par planète' },
   { key: 'chart',     label: 'Thème natal',      emoji: '☀️', desc: 'Toutes tes planètes et maisons' },
   { key: 'asteroids', label: 'Blessures & Pouvoirs', emoji: '🌑', desc: 'Chiron, Lilith — tes archétypes intérieurs' },
 ];

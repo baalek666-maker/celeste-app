@@ -17,6 +17,7 @@
     "express-rate-limit": "^8.5.2",
     "jsonwebtoken": "^9.0.2",
     "pdfkit": "^0.19.1",
+    "tz-lookup": "^6.1.25",
     "web-push": "^3.6.7"
   }
 }

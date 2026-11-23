@@ -18,9 +18,25 @@ declare global {
 
 const GOOGLE_CLIENT_ID = (import.meta.env.VITE_GOOGLE_CLIENT_ID as string) || '';
 const APPLE_WEB_AVAILABLE = false; // Apple ne fournit pas de SDK web officiel sans app native.
+const AUTH_API = (import.meta.env.VITE_API_URL as string | undefined) || '/api';
+
+async function postAuth(path: string, body: Record<string, string>): Promise<{ ok?: boolean; error?: string; message?: string }> {
+  const r = await fetch(`${AUTH_API}/auth/${path}`, {
+    method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body),
+  });
+  const data = await r.json().catch(() => ({}));
+  if (!r.ok) throw new Error(data.error || 'Une erreur est survenue.');
+  return data;
+}
 
 export function Auth({ onSuccess }: { onSuccess: (user: any) => void }) {
-  const [mode, setMode] = useState<'login' | 'register'>('register');
+  // v15 P0-6 — lien e-mail « ?reset=TOKEN » → écran nouveau mot de passe
+  const [resetToken] = useState<string>(() => {
+    try { return new URLSearchParams(window.location.search).get('reset') || ''; } catch { return ''; }
+  });
+  const [view, setView] = useState<'main' | 'forgot' | 'reset'>(resetToken ? 'reset' : 'main');
+  const [info, setInfo] = useState('');
+  const [mode, setMode] = useState<'login' | 'register'>(resetToken ? 'login' : 'register');
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [error, setError] = useState('');
@@ -135,7 +151,7 @@ export function Auth({ onSuccess }: { onSuccess: (user: any) => void }) {
       if (raw.includes('network') || raw.includes('failed to fetch') || raw.includes('load failed')) {
         msg = 'Impossible de contacter les étoiles. Vérifie ta connexion.';
       } else if (raw.includes('already') || raw.includes('exists')) {
-        msg = 'Un compte existe déjà avec cet email. Essayez de tu connecter.';
+        msg = 'Un compte existe déjà avec cet e-mail. Connecte-toi plutôt.';
       } else if (raw.includes('invalid idtoken') || raw.includes('signature')) {
         msg = 'Authentification refusée. Réessaie ou utilise ton email.';
       }
@@ -144,6 +160,66 @@ export function Auth({ onSuccess }: { onSuccess: (user: any) => void }) {
       setLoading(false);
     }
   };
+
+  const handleForgot = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setError(''); setInfo(''); setLoading(true);
+    try {
+      const r = await postAuth('forgot-password', { email });
+      setInfo(r.message || "Si un compte existe avec cette adresse, un lien vient d'être envoyé.");
+    } catch (err: unknown) {
+      setError(errMsg(err, 'Impossible de contacter les étoiles. Réessaie.'));
+    } finally { setLoading(false); }
+  };
+
+  const handleReset = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setError(''); setInfo(''); setLoading(true);
+    try {
+      await postAuth('reset-password', { token: resetToken, password });
+      try {
+        const url = new URL(window.location.href); url.searchParams.delete('reset');
+        window.history.replaceState({}, '', url.toString());
+      } catch { /* noop */ }
+      setPassword('');
+      setView('main'); setMode('login');
+      setInfo('Mot de passe changé ✦ Connecte-toi avec le nouveau.');
+    } catch (err: unknown) {
+      setError(errMsg(err, 'Lien invalide ou expiré.'));
+    } finally { setLoading(false); }
+  };
+
+  const inputCls = 'w-full px-4 py-3.5 rounded-2xl glass border border-night-700 text-night-100 placeholder:text-night-500 focus:border-gold-500/50 focus:outline-none transition-colors';
+  const primaryBtn = 'w-full py-3.5 rounded-2xl bg-gradient-to-r from-cosmic-600 via-cosmic-600 to-cosmic-700 text-white font-semibold text-lg transition-colors duration-200 ease-out disabled:opacity-70 shadow-lg shadow-cosmic-900/40';
+
+  if (view !== 'main') {
+    const isForgot = view === 'forgot';
+    return (
+      <div className="cosmic-bg star-field min-h-screen text-night-100 flex items-center justify-center px-6 relative">
+        <div className="w-full max-w-sm relative z-10 animate-fade-in">
+          <h1 className="text-3xl font-bold text-gold-gradient text-center mb-2">Céleste</h1>
+          <p className="text-night-300 text-center mb-8">
+            {isForgot ? 'Tu as oublié ton mot de passe ? On t\'envoie un lien.' : 'Choisis ton nouveau mot de passe.'}
+          </p>
+          <form onSubmit={isForgot ? handleForgot : handleReset} className="space-y-4">
+            {isForgot ? (
+              <input type="email" value={email} onChange={(e) => setEmail(e.target.value)} placeholder="toi@exemple.com" required className={inputCls} autoComplete="email" />
+            ) : (
+              <input type="password" value={password} onChange={(e) => setPassword(e.target.value)} placeholder="6 caractères minimum" required minLength={6} className={inputCls} autoComplete="new-password" />
+            )}
+            {error && <p className="text-red-400 text-sm text-center" role="alert">{error}</p>}
+            {info && <p className="text-gold-300 text-sm text-center" role="status">{info}</p>}
+            <button type="submit" disabled={loading} className={primaryBtn}>
+              {loading ? '…' : isForgot ? 'Recevoir le lien' : 'Enregistrer'}
+            </button>
+          </form>
+          <button type="button" onClick={() => { setView('main'); setError(''); setInfo(''); }} className="block mx-auto mt-6 text-night-400 text-sm hover:text-gold-400">
+            ← Retour à la connexion
+          </button>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="cosmic-bg star-field min-h-screen text-night-100 flex items-center justify-center px-6 relative">
@@ -160,7 +236,7 @@ export function Auth({ onSuccess }: { onSuccess: (user: any) => void }) {
             </svg>
           </div>
           <h1 className="text-3xl font-bold text-gold-gradient">Céleste</h1>
-          <p className="text-night-400 text-sm mt-2">Ta carte du ciel, ton destin</p>
+          <p className="text-night-400 text-sm mt-2">Ton ciel, ton miroir</p>
         </div>
 
         {/* Mode toggle */}
@@ -179,10 +255,11 @@ export function Auth({ onSuccess }: { onSuccess: (user: any) => void }) {
           </button>
         </div>
 
-        {/* OAuth buttons */}
+        {/* OAuth buttons — v15 : masqués tant qu'aucun fournisseur n'est configuré */}
+        {(APPLE_WEB_AVAILABLE || GOOGLE_CLIENT_ID) && (<>
         <div className="space-y-3 mb-6 animate-fade-in" style={{ animationDelay: '0.05s' }}>
           {/* Apple — désactivé sur web (SDK Apple nécessite app native iOS) */}
-          <button
+          {APPLE_WEB_AVAILABLE && (<button
             type="button"
             onClick={handleAppleClick}
             disabled={oauthLoading !== null || loading}
@@ -195,17 +272,12 @@ export function Auth({ onSuccess }: { onSuccess: (user: any) => void }) {
               <path d="M17.05 20.28c-.98.95-2.05.8-3.08.35-1.09-.46-2.09-.48-3.24 0-1.44.62-2.2.44-3.06-.35C2.79 15.25 3.51 7.59 9.05 7.31c1.35.07 2.29.74 3.08.8 1.18-.24 2.31-.93 3.57-.84 1.51.12 2.65.72 3.4 1.8-3.12 1.87-2.38 5.98.48 7.13-.57 1.5-1.31 2.99-2.54 4.09l.01-.01zM12 7.25c-.15-2.6 1.92-4.86 4.4-5.04.12 2.66-2.43 4.96-4.4 5.04z"/>
             </svg>
             {oauthLoading === 'apple' ? 'Connexion…' : 'Continuer avec Apple'}
-            <span className="text-[10px] text-night-500 ml-1">(bientôt iOS)</span>
-          </button>
+          </button>)}
 
           {/* Google — bouton officiel GIS rendu par Google */}
-          {GOOGLE_CLIENT_ID ? (
+          {GOOGLE_CLIENT_ID && (
             <div className="flex justify-center">
               <div ref={googleButtonRef} />
-            </div>
-          ) : (
-            <div className="text-center text-night-500 text-xs py-3">
-              ⚠️ Google OAuth non configuré (VITE_GOOGLE_CLIENT_ID manquant)
             </div>
           )}
 
@@ -220,6 +292,7 @@ export function Auth({ onSuccess }: { onSuccess: (user: any) => void }) {
           <span className="text-night-500 text-xs uppercase tracking-widest">ou avec email</span>
           <div className="flex-1 h-px bg-night-700/60" />
         </div>
+        </>)}
 
         <form onSubmit={handleSubmit} className="space-y-4 animate-fade-in" style={{ animationDelay: '0.2s' }}>
           <div>
@@ -248,6 +321,13 @@ export function Auth({ onSuccess }: { onSuccess: (user: any) => void }) {
             />
           </div>
 
+          {mode === 'login' && (
+            <button type="button" onClick={() => { setView('forgot'); setError(''); setInfo(''); }} className="block ml-auto -mt-2 text-night-400 text-xs hover:text-gold-400">
+              Mot de passe oublié ?
+            </button>
+          )}
+          {info && <p className="text-gold-300 text-sm text-center" role="status">{info}</p>}
+
           {error && (
             <div className="flex items-start gap-2 px-4 py-3 rounded-2xl bg-red-500/10 border border-red-500/20 animate-fade-in" role="alert">
               <span className="text-red-400 text-sm leading-relaxed">{error}</span>
@@ -273,7 +353,7 @@ export function Auth({ onSuccess }: { onSuccess: (user: any) => void }) {
           {mode === 'register' && !loading && (
             <p className="text-gold-300 text-xs text-center mt-3 animate-fade-in flex items-center justify-center gap-1.5">
               <span>✨</span>
-              <span className="font-medium">7 jours gratuits Constellation</span>
+              <span className="font-medium">7 jours de Premium offerts</span>
               <span className="text-night-500">· sans carte bancaire</span>
             </p>
           )}

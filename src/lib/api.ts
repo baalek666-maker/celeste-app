@@ -281,16 +281,18 @@ export const api = {
   },
 
   // Profile
-  saveBirthData: (birthData: BirthData) =>
-    apiCall('/profile/birth-data', {
+  saveBirthData: (birthData: BirthData, extra?: { firstName?: string }) =>
+    apiCall<{ ok: boolean; birthData?: BirthData }>('/profile/birth-data', {
       method: 'POST',
-      body: JSON.stringify({ birthData }),
+      // v15 — deviceTzOffset : fuseau des notifications ; firstName : « Bonjour Camille »
+      body: JSON.stringify({ birthData, deviceTzOffset: -new Date().getTimezoneOffset() / 60, ...(extra || {}) }),
     }),
 
   getProfile: () =>
     apiCall<{
       id: number;
       email: string;
+      displayName?: string | null;
       isPremium: boolean;
       scansRemaining: number;
       birthData?: BirthData | null;
@@ -300,10 +302,12 @@ export const api = {
       trialUsed?: boolean;              // P1-7 — one-shot flag (true si trialStartedAt != null)
     }>('/profile'),
 
-  // Horoscope (LLM-powered, cached server-side per day)
+  // Horoscope (v15 : calculé depuis tes transits réels, sans LLM)
   getHoroscope: () =>
     apiCall<{
       general: string;
+      why?: string[];
+      score?: number;
       amour: string;
       carriere: string;
       energie: number;
@@ -330,10 +334,11 @@ export const api = {
     }>('/tarot/daily', { method: 'GET' }),
 
   // Compatibility (LLM-powered) — supports romantic/family/friend/colleague contexts
-  getCompatibility: (partnerBirthData: BirthData, context: 'romantic' | 'family' | 'friend' | 'colleague' = 'romantic') =>
+  getCompatibility: (partnerBirthData: BirthData, context: 'romantic' | 'family' | 'friend' | 'colleague' = 'romantic', quick = false) =>
     apiCall<CompatibilityResult>('/compatibility', {
       method: 'POST',
-      body: JSON.stringify({ partnerBirthData, context }),
+      // v15 — quick=true : le serveur n'invente aucun aspect (signe solaire seul)
+      body: JSON.stringify({ partnerBirthData, context, quick }),
     }, 25_000),
 
   // ─── P1 DUO — Compatibilité partageable ────────────────────

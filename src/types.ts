@@ -65,6 +65,7 @@ export interface HoroscopeEntry {
   mood: string;
   luckyNumber: number;
   luckyColor: string;
+  why?: string[];      // v15 — aspects qui expliquent le texte
 }
 
 export interface CompatibilityResult {

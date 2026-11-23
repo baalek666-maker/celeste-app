@@ -28,7 +28,7 @@ interface LandingProps {
 }
 
 const STATS = [
-  { num: 'NASA', label: 'Données officielles' },
+  { num: '1 min', label: 'Précision du calcul' },
   { num: '12', label: 'Signes · Ascendant · Lune' },
   { num: '∞', label: 'Lectures uniques' },
 ];
@@ -43,7 +43,7 @@ const FEATURES = [
   {
     glyph: '☥',
     title: 'Compatibilité amoureuse',
-    desc: "Découvre pourquoi certains tu attirent et d'autres pas. Vénus, Mars, Lune — la chimie entre deux personnes, expliquée simplement.",
+    desc: "Découvre pourquoi certaines personnes t'attirent et d'autres pas. Vénus, Mars, Lune — la chimie entre deux personnes, expliquée simplement.",
     accent: 'silver',
   },
   {
@@ -165,14 +165,14 @@ export function Landing({ onStart, onLogin, onGuest }: LandingProps) {
         {/* Trust badge */}
         <div className="inline-flex items-center gap-2 px-3 py-1.5 rounded-full glass-gold border border-gold-500/20 mb-6 animate-fade-in" style={{ animationDelay: '0.15s' }}>
           <span className="w-1.5 h-1.5 rounded-full bg-green-400 animate-pulse" />
-          <span className="text-[11px] text-night-300 uppercase tracking-wider">Données astronomiques NASA · mises à jour en temps réel</span>
+          <span className="text-[11px] text-night-300 uppercase tracking-wider">Positions réelles des planètes</span>
         </div>
 
         <h1 className="text-4xl md:text-5xl font-bold font-display text-gold-gradient mb-4 leading-tight animate-fade-in-up" style={{ animationDelay: '0.2s' }}>
           Ton ciel,<br />ton miroir
         </h1>
         <p className="text-night-300 text-base max-w-md mx-auto mb-10 font-body leading-relaxed animate-fade-in-up" style={{ animationDelay: '0.35s' }}>
-          Une carte du ciel calculée aux données astronomiques NASA. Des lectures qui parlent de toi, pas d'un signe générique. L'astrologie comme elle aurait dû être.
+          Une carte du ciel calculée sur les vraies positions des planètes. Des lectures qui parlent de toi, pas d'un signe générique. L'astrologie comme elle aurait dû être.
         </p>
 
         {/* Piste carousel — Aperçu horoscope rotatif automatique */}
@@ -187,7 +187,7 @@ export function Landing({ onStart, onLogin, onGuest }: LandingProps) {
           <span className="absolute inset-0 bg-gradient-to-r from-transparent via-white/30 to-transparent translate-x-[-100%] group-hover:translate-x-[100%] transition-transform duration-700" />
         </button>
         <p className="text-night-500 text-xs mt-3 animate-fade-in" style={{ animationDelay: '0.65s' }}>
-          Sans carte bancaire · 7 lectures offertes
+          7 jours de Premium offerts · sans carte bancaire
         </p>
         <button
           onClick={onGuest}
@@ -287,21 +287,26 @@ export function Landing({ onStart, onLogin, onGuest }: LandingProps) {
       {/* ── Pricing ── */}
       <section className="px-6 py-8 relative z-10">
         <h2 className="text-xs uppercase tracking-[0.3em] text-night-500 text-center mb-6">
-          Tarif unique
+          Premium · après tes 7 jours offerts
         </h2>
         <div className="grid grid-cols-2 gap-3 max-w-md mx-auto">
           <div className="glass rounded-2xl p-4 border border-night-700 text-center">
             <p className="text-night-400 text-xs uppercase tracking-wider mb-2">Semaine</p>
             <p className="text-gold-400 text-2xl font-bold font-display">6,99 €</p>
+            <p className="text-night-500 text-[11px] mt-1">sans engagement</p>
           </div>
           <div className="glass-gold rounded-2xl p-4 border border-gold-500/50 text-center relative">
             <span className="absolute -top-2 left-1/2 -translate-x-1/2 px-2 py-0.5 bg-gold-500 text-night-950 text-[10px] font-bold rounded-full uppercase tracking-wider">
-              Économique
+              Meilleur prix
             </span>
             <p className="text-night-400 text-xs uppercase tracking-wider mb-2">Année</p>
             <p className="text-gold-400 text-2xl font-bold font-display">40 €</p>
+            <p className="text-night-400 text-[11px] mt-1">soit 0,77 € / semaine</p>
           </div>
         </div>
+        <p className="text-night-500 text-xs text-center mt-4 max-w-xs mx-auto">
+          Sans Premium, ton horoscope et ton tirage du jour restent gratuits. Annulation en 2 clics.
+        </p>
       </section>
 
       {/* ── Footer CTA ── */}

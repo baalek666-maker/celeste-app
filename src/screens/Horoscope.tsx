@@ -83,6 +83,7 @@ export function Horoscope({ user, onNavigate }: { user: User; onNavigate: (s: Sc
     luckyNumber: h.luckyNumber,
     luckyColor: h.luckyColor,
     isFallback: !!h.isFallback,
+    why: Array.isArray(h.why) ? h.why : undefined,
   });
 
   const fetchHoroscope = (force: boolean, cancelledRef: { value: boolean } = { value: false }) => {
@@ -561,6 +562,16 @@ export function Horoscope({ user, onNavigate }: { user: User; onNavigate: (s: Sc
                 </button>
               </div>
               <p className="text-night-100 leading-relaxed">{horoscope.general || '—'}</p>
+              {/* v15 — Transparence : d'où vient ce texte (réponse aux avis « textes génériques/IA ») */}
+              {Array.isArray(horoscope.why) && horoscope.why!.length > 0 && (
+                <details className="mt-3 group">
+                  <summary className="text-[12px] text-gold-400/80 cursor-pointer list-none select-none">✦ Pourquoi ce texte ?</summary>
+                  <ul className="mt-2 space-y-1 text-[12px] text-night-400">
+                    {horoscope.why!.map((w: string) => <li key={w}>· {w}</li>)}
+                  </ul>
+                  <p className="mt-2 text-[11px] text-night-500">Calculé pour toi à partir des positions réelles des planètes aujourd'hui et de ton thème natal.</p>
+                </details>
+              )}
             </div>
           </div>
         )}

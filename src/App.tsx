@@ -1,25 +1,39 @@
-import { useState, useEffect, lazy, Suspense } from 'react';
+import { useState, useEffect, useRef, lazy, Suspense } from 'react';
 import { Auth } from './screens/Auth';
 import { Landing } from './screens/Landing';
 import { Home } from './screens/Home';
 import CelesteLogo from './components/CelesteLogo';
 import { BottomNav } from './components/BottomNav';
 import { getToken, clearToken, api } from './lib/api';
-import { getUser, saveUser, getFreeScans, incrementFreeScans, getFreeCompat, incrementFreeCompat } from './lib/storage';
+import { getUser, saveUser } from './lib/storage';
 import { identifyUser, track, resetUser } from './lib/monitoring';
 import { calculateNatalChart } from './lib/astrology';
 import type { User } from './types';
 
 // Code splitting : les screens secondaires sont lazy-loaded pour réduire le bundle initial.
 // Onboarding charge lib/astrology.ts (~500KB astronomy-engine) — on ne le bundle que si besoin.
-const ChartView = lazy(() => import('./screens/ChartView').then(m => ({ default: m.ChartView })));
-const Horoscope = lazy(() => import('./screens/Horoscope').then(m => ({ default: m.Horoscope })));
-const Compatibility = lazy(() => import('./screens/Compatibility').then(m => ({ default: m.Compatibility })));
-const Journal = lazy(() => import('./screens/Journal').then(m => ({ default: m.Journal })));
-const Paywall = lazy(() => import('./screens/Paywall').then(m => ({ default: m.Paywall })));
-const Settings = lazy(() => import('./screens/Settings').then(m => ({ default: m.Settings })));
-const Explorer = lazy(() => import('./screens/Explorer').then(m => ({ default: m.Explorer })));
-const CompatRedeem = lazy(() => import('./screens/CompatRedeem').then(m => ({ default: m.CompatRedeem })));
+// v15 — Après un déploiement, un onglet ouvert sur l'ancienne version ne trouve
+// plus ses morceaux de code → on recharge UNE fois au lieu d'afficher une erreur.
+function lazyRetry<T>(factory: () => Promise<T>): Promise<T> {
+  return factory().catch((err) => {
+    const KEY = 'celeste_chunk_reload';
+    if (!sessionStorage.getItem(KEY)) {
+      sessionStorage.setItem(KEY, '1');
+      window.location.reload();
+      return new Promise<T>(() => { /* page rechargée */ });
+    }
+    throw err;
+  });
+}
+
+const ChartView = lazy(() => lazyRetry(() => import('./screens/ChartView')).then(m => ({ default: m.ChartView })));
+const Horoscope = lazy(() => lazyRetry(() => import('./screens/Horoscope')).then(m => ({ default: m.Horoscope })));
+const Compatibility = lazy(() => lazyRetry(() => import('./screens/Compatibility')).then(m => ({ default: m.Compatibility })));
+const Journal = lazy(() => lazyRetry(() => import('./screens/Journal')).then(m => ({ default: m.Journal })));
+const Paywall = lazy(() => lazyRetry(() => import('./screens/Paywall')).then(m => ({ default: m.Paywall })));
+const Settings = lazy(() => lazyRetry(() => import('./screens/Settings')).then(m => ({ default: m.Settings })));
+const Explorer = lazy(() => lazyRetry(() => import('./screens/Explorer')).then(m => ({ default: m.Explorer })));
+const CompatRedeem = lazy(() => lazyRetry(() => import('./screens/CompatRedeem')).then(m => ({ default: m.CompatRedeem })));
 // v15.0 — Onboarding importé en direct (plus de lazy) pour fix le removeChild au mount
 // Le chunk lazy entrait en conflit avec le unmount de Home, causant
 // "Failed to execute 'removeChild' on 'Node'" capturé par ErrorBoundary
@@ -237,6 +251,8 @@ export function App() {
       const focus = params.get('focus');
       // P1 DUO — deep-link invitation compatibilité (lien partagé)
       const inviteToken = params.get('invite');
+      // v15 P0-6 — lien « mot de passe oublié » → écran Auth (vue reset)
+      if (params.get('reset')) setScreen('auth');
       if (inviteToken) {
         window.dispatchEvent(new CustomEvent('celeste:compat-redeem', { detail: inviteToken }));
       }
@@ -334,6 +350,8 @@ export function App() {
             scansRemaining: profile.scansRemaining,
             premiumUntil: profile.premiumUntil ?? null,
             streak: profile.streak ?? user.streak ?? 0,
+            name: profile.displayName || user.name || '',
+          trialStartedAt: profile.trialStartedAt ?? user.trialStartedAt ?? null,
           };
           // If birth data is on the server, sync it
           if (profile.birthData) {
@@ -430,25 +448,9 @@ export function App() {
         return;
       }
     }
-    if (!user.isPremium) {
-      // Horoscope: 3 free consultations, then paywall
-      if (s === 'horoscope') {
-        if (getFreeScans() >= 3) {
-          setScreen('paywall');
-          return;
-        }
-        incrementFreeScans();
-      }
-      // Compatibility: 1 free analysis, then paywall
-      if (s === 'compatibility') {
-        if (getFreeCompat() >= 1) {
-          setScreen('paywall');
-          return;
-        }
-        incrementFreeCompat();
-      }
-      // Journal: always allowed (read & write)
-    }
+    // v15 — Offre unifiée : l'horoscope du jour reste gratuit tous les jours (habitude
+    // = rétention). Le quota de compatibilités (3/mois) est appliqué côté serveur
+    // (402 → paywall contextuel), plus de compteur localStorage qui bloquait à vie.
     setScreen(s);
     // UX nav — si l'user clique sur le tab déjà actif, on force un remount
     // du screen pour reset son état interne (ex: Explorer pilier/module).
@@ -476,6 +478,33 @@ export function App() {
   }, [screen]);
 
   const [navKey, setNavKey] = useState(0);
+
+  // v15 — Bouton retour (Android / navigateur) : chaque écran = une entrée d'historique.
+  // Avant : aucun pushState → le retour Android fermait l'app.
+  const fromPopRef = useRef(false);
+  useEffect(() => {
+    if (fromPopRef.current) { fromPopRef.current = false; return; }
+    try {
+      const cur = (window.history.state as { screen?: Screen } | null)?.screen;
+      if (cur === screen) return;
+      if (!cur) window.history.replaceState({ screen }, '');
+      else window.history.pushState({ screen }, '');
+    } catch { /* noop */ }
+  }, [screen]);
+  useEffect(() => {
+    const onPop = (e: PopStateEvent) => {
+      const target = (e.state as { screen?: Screen } | null)?.screen;
+      if (!target) return;
+      if (target === 'onboarding' || target === 'auth' || target === 'landing') {
+        // Pas de retour vers l'inscription une fois connecté
+        if (isAuthed) { window.history.pushState({ screen }, ''); return; }
+      }
+      fromPopRef.current = true;
+      setScreen(target);
+    };
+    window.addEventListener('popstate', onPop);
+    return () => window.removeEventListener('popstate', onPop);
+  }, [isAuthed, screen]);
 
   // Fix #3 — Listener postMessage du Service Worker.
   // Quand l'user clique une notification push (sw.js envoie

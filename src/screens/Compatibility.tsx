@@ -137,7 +137,7 @@ export function Compatibility({ user }: { user: User }) {
         };
       }
 
-      const res = await api.getCompatibility(partnerData, context);
+      const res = await api.getCompatibility(partnerData, context, mode === 'quick');
       // Backend returns French sign names ('Bélier', 'Lion'...). Normalize to
       // English ZodiacSign so ZODIAC_SIGNS[sun]?.symbol renders correctly.
       // Prefer the user's known natal chart (already in EN) over the backend

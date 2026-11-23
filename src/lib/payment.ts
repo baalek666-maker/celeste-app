@@ -9,7 +9,9 @@
  * "paiements en cours de configuration" au lieu de planter.
  */
 
-const API_URL = (import.meta.env.VITE_API_URL as string | undefined) || '';
+// v15 P0-4 — VITE_API_URL vaut '/api' (ou 'https://…/api') : on retire le suffixe
+// pour éviter les appels '/api/api/billing/...' (404 → bouton de paiement mort).
+const API_URL = ((import.meta.env.VITE_API_URL as string | undefined) || '').replace(/\/api\/?$/, '');
 const TOKEN_KEY = 'celeste_jwt';
 
 function getToken(): string | null {

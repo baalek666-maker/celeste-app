@@ -3,10 +3,8 @@ import type { User } from '../types';
 import type { Screen } from '../App';
 import StreakCelebration from '../components/StreakCelebration';
 import DailyTarot from '../components/DailyTarot';
-import TarotCross from '../components/TarotCross';
 import EveningRitualCard from '../components/EveningRitualCard';
 import MoodForecast from '../components/MoodForecast';
-import LiveAstroBanner from '../components/LiveAstroBanner';
 import DailyEnergy from '../components/DailyEnergy';
 import { DailyHero } from '../components/DailyHero';
 import DailyIntention from '../components/DailyIntention';
@@ -104,7 +102,8 @@ export function Home({ user, onNavigate, isGuest }: { user: User; onNavigate: (s
   }
 
   const chart = user.natalChart as NonNullable<User['natalChart']>;
-  const firstName = (user.name?.split(' ')[0]) || (user.email?.split('@')[0]) || undefined;
+  // v15 — jamais le préfixe e-mail (« Bonjour audit.test.16389 ») : prénom ou rien.
+  const firstName = (user.name?.split(' ')[0]) || undefined;
   const tintsStyle = transitTints(transit);
 
   return (
@@ -134,6 +133,21 @@ export function Home({ user, onNavigate, isGuest }: { user: User; onNavigate: (s
           Le hero porte maintenant le hook transit (concret). L'intention
           devient une respiration méditative entre 2 rituels actifs. */}
 
+      {/* v15 — Raccourcis : l'essentiel en 1 clic (compatibilité était à 3 clics) */}
+      <div className="grid grid-cols-3 gap-2 mb-6">
+        {([
+          { s: 'horoscope', icon: '☉', label: 'Mon horoscope' },
+          { s: 'compatibility', icon: '♡', label: 'Compatibilité' },
+          { s: 'chart', icon: '✦', label: 'Mon thème' },
+        ] as { s: Screen; icon: string; label: string }[]).map(a => (
+          <button key={a.s} onClick={() => onNavigate(a.s)}
+            className="glass rounded-2xl py-3 px-2 flex flex-col items-center gap-1 border border-night-700/60 hover:border-gold-500/40 active:scale-95 transition-all">
+            <span className="text-gold-300 text-xl leading-none">{a.icon}</span>
+            <span className="text-night-200 text-[12px] font-medium">{a.label}</span>
+          </button>
+        ))}
+      </div>
+
       {/* ── ZONE 2 : RITUELS DU JOUR (scroll) ── */}
 
       {/* Tarot */}
@@ -158,11 +172,8 @@ export function Home({ user, onNavigate, isGuest }: { user: User; onNavigate: (s
         <EveningRitualCard streak={streak} />
       </div>
 
-      {/* Tarot premium (croix) */}
-      <TarotCross />
-
-      {/* Éphémérides vivantes */}
-      <LiveAstroBanner />
+      {/* v15 — Croix de tarot et éphémérides retirées de l'accueil (12 blocs → 8).
+          Toujours accessibles depuis Explorer. */}
 
       {/* Mood forecast */}
       <MoodForecast />

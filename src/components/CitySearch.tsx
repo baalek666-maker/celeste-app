@@ -116,7 +116,7 @@ export function CitySearch({ placeholder = '🔎 Rechercher une ville...', onSel
               <span className="shrink-0 w-5 h-5 rounded-full bg-night-800/60 text-night-600 flex items-center justify-center text-xs" aria-hidden="true">○</span>
               <span className="flex-1 min-w-0">
                 <span className="text-night-100 block truncate">{place.city}</span>
-                <span className="text-night-400 text-xs block truncate">{place.country}</span>
+                <span className="text-night-400 text-xs block truncate">{place.region ? `${place.region}, ${place.country}` : place.country}</span>
               </span>
             </button>
           ))}
@@ -127,9 +127,7 @@ export function CitySearch({ placeholder = '🔎 Rechercher une ville...', onSel
         <div className="w-full mt-3 px-4 py-3 rounded-2xl glass border border-gold-500/30 bg-gold-500/5 animate-fade-in">
           <p className="text-night-400 text-xs uppercase tracking-widest mb-1">Ville sélectionnée</p>
           <p className="text-gold-300 text-sm font-medium">✦ {selected.city}, {selected.country}</p>
-          <p className="text-night-500 text-xs mt-1">
-            Fuseau UTC{selected.tzOffset >= 0 ? '+' : ''}{selected.tzOffset} · {selected.latitude.toFixed(2)}°, {selected.longitude.toFixed(2)}°
-          </p>
+          {selected.region && <p className="text-night-500 text-xs mt-1">{selected.region}</p>}
         </div>
       )}
     </div>

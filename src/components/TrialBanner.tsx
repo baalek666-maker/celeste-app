@@ -95,6 +95,24 @@ export function TrialBanner({
   const isLastDay = info.daysLeft === 1;
   const isLast3Days = info.daysLeft <= 3;
 
+  // v15 — Home allégée : une seule ligne tant qu'il reste plus de 2 jours.
+  if (info.daysLeft > 2) {
+    return (
+      <div
+        onClick={handleClick}
+        role="button"
+        tabIndex={0}
+        onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); handleClick(); } }}
+        className="w-full mb-4 px-3 py-2 rounded-lg cursor-pointer hover:bg-night-800/30 transition-colors animate-fade-in"
+      >
+        <p className="text-[12px] text-night-400 leading-snug">
+          <span className="text-gold-300">✦ Premium offert</span>
+          <span className="text-night-500"> · encore {info.daysLeft} jours</span>
+        </p>
+      </div>
+    );
+  }
+
   const borderClass = isLastDay
     ? 'border-t-rose-400'
     : isLast3Days

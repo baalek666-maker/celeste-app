@@ -82,7 +82,7 @@ export function DailyHero({ firstName, sunSignName, sunSignGlyph, sunSignColor }
             <span className="relative inline-flex rounded-full h-1.5 w-1.5 bg-emerald-400"></span>
           </span>
           <span className="text-[10px] tracking-[0.15em] text-night-400 uppercase font-medium">
-            Données NASA · temps réel
+            Ciel réel · temps réel
           </span>
         </div>
       </div>

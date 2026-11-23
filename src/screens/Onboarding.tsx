@@ -6,6 +6,8 @@ import type { User, BirthData, NatalChart } from '../types';
 import { toast } from '../components/Toast';
 import { CitySearch } from '../components/CitySearch';
 import type { GeoPlace } from '../lib/geocode';
+import { ZODIAC_SIGNS } from '../data/zodiac';
+import { SUN_TEXT, MOON_TEXT, RISING_TEXT } from '../data/big3';
 
 // P0#2 — 117 villes hardcodées supprimées. Remplacées par geocoding OSM Nominatim
 // via <CitySearch /> (composant réutilisable). Plus aucun blocage géographique :
@@ -18,6 +20,22 @@ export function Onboarding({ onComplete }: { onComplete: (u: User) => void }) {
   const [timeUnknown, setTimeUnknown] = useState(false);
   const [selectedPlace, setSelectedPlace] = useState<GeoPlace | null>(null);
   const [calculating, setCalculating] = useState(false);
+  const [firstName, setFirstName] = useState('');
+  const [reveal, setReveal] = useState<NatalChart | null>(null);
+  const [trialOn, setTrialOn] = useState(false);
+
+  const finish = () => {
+    let user: Partial<User> = {};
+    try { user = JSON.parse(localStorage.getItem('celeste_user') || '{}'); } catch { /* corrupt localStorage */ }
+    if (firstName.trim()) user.name = firstName.trim();
+    if (trialOn) {
+      const now = Math.floor(Date.now() / 1000);
+      user.isPremium = true;
+      user.trialStartedAt = now;
+      user.premiumUntil = now + 7 * 86400;
+    }
+    onComplete(user as User);
+  };
 
   const handleSubmit = () => {
     if (!selectedPlace) return;
@@ -25,40 +43,53 @@ export function Onboarding({ onComplete }: { onComplete: (u: User) => void }) {
     setStep(3); // Affiche l'animation "Calculating" (était manquant — bug P0)
     const c = selectedPlace;
     const finalTime = timeUnknown ? '12:00' : time;
-    const birth: BirthData = {
+    let birth: BirthData = {
       date, time: finalTime, city: c.city, country: c.country,
       latitude: c.latitude, longitude: c.longitude, timezone: c.tzOffset,
     };
 
-    // Compute chart with error handling (was unprotected — crash on invalid date)
-    let chart;
-    try {
-      chart = calculateNatalChart(birth);
-    } catch (err) {
-      console.error('[Onboarding] calculateNatalChart failed:', err);
-      setCalculating(false);
-      setStep(2); // Retour à l'étape 2 en cas d'erreur
-      return;
-    }
-    setBirthData(birth, chart);
-    setOnboarded();
-    const save = api.saveBirthData(birth)
-      .then(() => { toast.success('Thème natal sauvegardé ✨'); return 'synced'; })
-      .catch(() => { toast.info('Sauvegardé localement — sync dès que possible'); return 'queued'; });
+    // v15 — le serveur renvoie le fuseau RÉEL à la date de naissance (heure d'été,
+    // historique) → on recalcule le thème local avec, sinon l'Ascendant peut être faux.
+    const save = api.saveBirthData(birth, { firstName: firstName.trim() || undefined })
+      .then((r) => { if (r?.birthData) birth = { ...birth, ...r.birthData }; return 'synced'; })
+      .catch(() => { toast.info('Sauvegardé sur ton téléphone — synchronisation dès que possible'); return 'queued'; });
+    // v15 — « reverse trial » : 7 jours de Premium offerts automatiquement, sans CB.
+    const trial = save.then(() => api.startTrial()).then(() => { setTrialOn(true); }).catch(() => { /* déjà utilisé / hors ligne */ });
 
-    // 1500ms (was 2800ms — felt too long during testing) plus save.
-    const minDelay = new Promise(r => setTimeout(r, 1500));
-    Promise.all([minDelay, save]).finally(() => {
-      let user: Partial<User> = {};
-      try { user = JSON.parse(localStorage.getItem('celeste_user') || '{}'); } catch { /* corrupt localStorage */ }
-      onComplete(user as User);
+    const minDelay = new Promise(r => setTimeout(r, 1800));
+    Promise.all([minDelay, save, trial]).finally(() => {
+      let chart: NatalChart;
+      try {
+        chart = calculateNatalChart(birth);
+      } catch (err) {
+        console.error('[Onboarding] calculateNatalChart failed:', err);
+        setCalculating(false);
+        setStep(2);
+        return;
+      }
+      setBirthData(birth, chart);
+      setOnboarded();
+      setCalculating(false);
+      setReveal(chart);
+      setStep(4);
     });
   };
 
+  const shareBig3 = async (chart: NatalChart) => {
+    const s = ZODIAC_SIGNS[chart.sun]?.name, m = ZODIAC_SIGNS[chart.moon]?.name, r = ZODIAC_SIGNS[chart.rising]?.name;
+    const text = `Mon Big 3 : Soleil ${s}, Lune ${m}, Ascendant ${r} ✦ Et toi ?`;
+    try {
+      if (navigator.share) await navigator.share({ title: 'Mon ciel sur Céleste', text, url: window.location.origin });
+      else { await navigator.clipboard.writeText(`${text} ${window.location.origin}`); toast.success('Copié — colle-le où tu veux ✦'); }
+    } catch { /* partage annulé */ }
+  };
+
   // Step indicator (P1 — segments glass + gold avec labels, vs simple dots)
-  const STEP_LABELS = ['Bienvenue', 'Tes infos', 'Ton thème'];
+  // v15 — 2 étapes réelles (avant : 3 segments pour « Étape 1 sur 2 »), décalé
+  // à droite du bouton retour (qui chevauchait le libellé).
+  const STEP_LABELS = ['Ta naissance', 'Ton lieu'];
   const ProgressBar = ({ current }: { current: number }) => (
-    <div className="fixed top-0 left-0 right-0 px-6 pt-5 z-50">
+    <div className="fixed top-0 left-0 right-0 pl-16 pr-6 pt-5 z-40">
       {/* Segmented progress */}
       <div className="flex gap-1.5 mb-2">
         {STEP_LABELS.map((_, n) => (
@@ -118,20 +149,17 @@ export function Onboarding({ onComplete }: { onComplete: (u: User) => void }) {
           </svg>
         </div>
       </div>
-      <h1 className="text-4xl font-bold mb-3 text-gold-gradient">Céleste</h1>
-      <p className="text-night-300 text-lg mb-2">Ta carte du ciel,</p>
-      <p className="text-night-300 text-lg mb-12">ton miroir</p>
-      <p className="text-night-400 text-sm mb-8 max-w-xs">
-        Une astrologie qui te parle à toi. Pas de texte recyclé — chaque mot est calculé à partir de tes planètes réelles.
+      <h1 className="text-3xl font-bold mb-3 text-gold-gradient">Bienvenue</h1>
+      <p className="text-night-300 text-base mb-8 max-w-xs">
+        Trois infos sur ta naissance, et ton ciel s'ouvre. Ça prend une minute.
       </p>
-      {/* P10 — Explain free tier upfront to set expectations */}
+      {/* v15 — Offre unique, la même partout */}
       <div className="glass rounded-2xl px-5 py-4 mb-8 max-w-xs border border-gold-500/20">
         <div className="flex items-center gap-2 mb-2">
-          <span className="text-lg">🎁</span>
-          <span className="text-gold-400 text-sm font-semibold">7 lectures offertes</span>
+          <span className="text-gold-400 text-sm font-semibold">✦ 7 jours de Premium offerts</span>
         </div>
         <p className="text-night-400 text-xs leading-relaxed text-left">
-          Horoscope, compatibilité, portrait astral — explore tout le potentiel de Céleste sans payer. Sans carte bancaire.
+          Sans carte bancaire. Ensuite, ton horoscope et ton tirage du jour restent gratuits, pour toujours.
         </p>
       </div>
       {/* P3 — 3 mini-cartes preview avant le CTA : montre ce qui t'attend */}
@@ -166,13 +194,23 @@ export function Onboarding({ onComplete }: { onComplete: (u: User) => void }) {
 
     // Step 1: Date + Time of birth (merged — was 2 separate steps)
     <div key="1" className="flex flex-col items-center justify-center min-h-screen px-8 pt-28 pb-8 animate-fade-in relative">
-      <ProgressBar current={1} />
+      <ProgressBar current={0} />
       <BackButton to={0} />
       <p className="text-gold-400 text-sm uppercase tracking-widest mb-3">Étape 1 sur 2</p>
       <h2 className="text-2xl font-bold mb-2 text-center">Quand es-tu né·e ?</h2>
-      <p className="text-night-400 text-sm mb-8 text-center max-w-xs">
-        La position des planètes change chaque jour, chaque heure. Ta date et l'heure de naissance donnent ton Ascendant.
+      <p className="text-night-400 text-sm mb-6 text-center max-w-xs">
+        L'heure de naissance donne ton Ascendant — elle change tout.
       </p>
+
+      {/* v15 — prénom (facultatif) : « Bonjour Camille » au lieu du préfixe e-mail */}
+      <label className="w-full max-w-xs mb-2 text-night-400 text-xs uppercase tracking-wider text-left">
+        Ton prénom <span className="normal-case tracking-normal text-night-600">(facultatif)</span>
+      </label>
+      <input
+        type="text" value={firstName} onChange={e => setFirstName(e.target.value.slice(0, 40))}
+        autoComplete="given-name" placeholder="Camille"
+        className="w-full max-w-xs py-3.5 px-4 rounded-2xl glass border border-night-700 text-night-100 text-lg text-center placeholder:text-night-600 focus:outline-none focus:border-cosmic-500 transition-colors mb-4"
+      />
 
       {/* Date input — v15.1 : label au-dessus (les input[type=date] natives Android affichent leur propre format, pas de placeholder custom) */}
       <label className="w-full max-w-xs mb-2 text-night-400 text-xs uppercase tracking-wider text-left">
@@ -220,7 +258,7 @@ export function Onboarding({ onComplete }: { onComplete: (u: User) => void }) {
     // comme défaut pour réduire l'abandon. Le user pourra le changer plus tard
     // dans Settings > Profil.
     <div key="2" className="flex flex-col items-center justify-center min-h-screen px-8 pt-28 pb-8 animate-fade-in relative">
-      <ProgressBar current={2} />
+      <ProgressBar current={1} />
       <BackButton to={1} />
       <p className="text-gold-400 text-sm uppercase tracking-widest mb-3">Étape 2 sur 2</p>
       <h2 className="text-2xl font-bold mb-2 text-center">Où es-tu né·e ?</h2>
@@ -369,6 +407,54 @@ export function Onboarding({ onComplete }: { onComplete: (u: User) => void }) {
           </div>
         </>
       ) : null}
+    </div>,
+
+    // Step 4 (v15) — Révélation du Big 3 : le moment « wow », partageable.
+    <div key="4" className="flex flex-col items-center min-h-screen px-6 pt-14 pb-10 text-center animate-fade-in">
+      {reveal && (() => {
+        const big3 = [
+          { label: 'Soleil', hint: 'qui tu es', sign: reveal.sun, text: SUN_TEXT[ZODIAC_SIGNS[reveal.sun]?.name] },
+          { label: 'Lune', hint: 'ce dont tu as besoin', sign: reveal.moon, text: MOON_TEXT[ZODIAC_SIGNS[reveal.moon]?.name] },
+          { label: 'Ascendant', hint: 'ce que les autres voient', sign: reveal.rising, text: RISING_TEXT[ZODIAC_SIGNS[reveal.rising]?.name] },
+        ];
+        return (
+          <>
+            <p className="text-gold-400 text-xs uppercase tracking-[0.25em] mb-3">Ton ciel de naissance</p>
+            <h2 className="text-3xl font-bold text-gold-gradient mb-8">
+              {firstName.trim() ? `${firstName.trim()}, voici ton ciel` : 'Voici ton ciel'}
+            </h2>
+            <div className="w-full max-w-sm space-y-3 mb-6">
+              {big3.map((b, i) => (
+                <div key={b.label} className="glass rounded-2xl p-4 text-left border border-gold-500/15 animate-fade-in" style={{ animationDelay: `${0.2 + i * 0.35}s`, animationFillMode: 'both' }}>
+                  <div className="flex items-center gap-3 mb-1.5">
+                    <span className="text-3xl text-gold-300 w-9 text-center">{ZODIAC_SIGNS[b.sign]?.symbol}</span>
+                    <div>
+                      <p className="text-night-400 text-[11px] uppercase tracking-widest">{b.label} · {b.hint}</p>
+                      <p className="text-white text-lg font-semibold leading-tight">{ZODIAC_SIGNS[b.sign]?.name}</p>
+                    </div>
+                  </div>
+                  {b.text && <p className="text-night-300 text-sm leading-relaxed">{b.text}</p>}
+                </div>
+              ))}
+            </div>
+            {timeUnknown && (
+              <p className="text-night-500 text-xs max-w-xs mb-4">Sans heure de naissance, ton Ascendant est approximatif. Tu pourras l'ajouter dans ton Profil.</p>
+            )}
+            {trialOn && (
+              <div className="w-full max-w-sm rounded-2xl px-4 py-3 mb-6 border border-gold-500/30 bg-gold-500/5 animate-fade-in" style={{ animationDelay: '1.3s', animationFillMode: 'both' }}>
+                <p className="text-gold-300 text-sm font-semibold">✦ Ton Premium est offert pendant 7 jours</p>
+                <p className="text-night-400 text-xs mt-1">Portrait complet, compatibilités illimitées, météo à 14 jours. Sans carte bancaire, rien à annuler.</p>
+              </div>
+            )}
+            <button onClick={finish} className="w-full max-w-sm py-4 rounded-2xl bg-gradient-to-r from-gold-500 to-gold-600 text-night-950 font-semibold text-lg shadow-lg shadow-gold-900/40 mb-3">
+              Découvrir ma journée ✦
+            </button>
+            <button onClick={() => shareBig3(reveal)} className="text-night-300 hover:text-gold-400 text-sm py-2">
+              Partager mon Big 3 →
+            </button>
+          </>
+        );
+      })()}
     </div>,
   ];
 

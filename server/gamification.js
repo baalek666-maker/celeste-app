@@ -4,6 +4,7 @@
  */
 
 import * as Astronomy from 'astronomy-engine';
+const _nowSec = () => Math.floor(Date.now() / 1000); // v15 — premium_until en secondes
 import { CELESTE_VOICE, celesteSystemPrompt } from './celest-voice.js';
 
 // ─── Constants ──────────────────────────────────────────────────
@@ -167,9 +168,19 @@ function registerGamificationRoutes(app, db, auth, callLLMWithRetry, getNatalPos
       if (!questDef) return res.status(400).json({ error: 'Unknown quest' });
 
       const today = localISODate();
-      const quest = db.prepare(
+      const getQ = () => db.prepare(
         'SELECT * FROM daily_quests WHERE user_id = ? AND date = ? AND quest_key = ?'
       ).get(userId, today, questKey);
+      let quest = getQ();
+      // v15 — avant : si l'utilisateur lisait son horoscope AVANT d'ouvrir la liste
+      // des quêtes, la ligne n'existait pas → 404 → 0 XP. On la crée à la volée.
+      if (!quest) {
+        try {
+          db.prepare('INSERT OR IGNORE INTO daily_quests (user_id, date, quest_key, quest_label, xp_reward, completed) VALUES (?, ?, ?, ?, ?, 0)')
+            .run(userId, today, questKey, questDef.label, questDef.xp);
+        } catch (e) { console.warn('[quest] auto-create failed:', e.message); }
+        quest = getQ();
+      }
       if (!quest) return res.status(404).json({ error: 'Quest not found' });
       if (quest.completed) return res.json({ alreadyCompleted: true, xpAwarded: 0 });
 
@@ -303,7 +314,7 @@ function registerGamificationRoutes(app, db, auth, callLLMWithRetry, getNatalPos
       // Premium-only: AstroPortrait is the most LLM-expensive feature (8192 tokens)
       const premCheck = db.prepare('SELECT is_premium, premium_until FROM users WHERE id = ?').get(userId);
       const now = Math.floor(Date.now() / 1000);
-      const isPremium = !!premCheck?.is_premium && (!premCheck?.premium_until || premCheck.premium_until > now);
+      const isPremium = !!premCheck?.is_premium && (!premCheck?.premium_until || premCheck.premium_until > _nowSec());
       if (!isPremium) {
         return res.status(403).json({ error: 'premium_required', message: 'Le Portrait Astral est réservé aux membres Premium.' });
       }
@@ -348,76 +359,10 @@ function registerGamificationRoutes(app, db, auth, callLLMWithRetry, getNatalPos
         .filter(Boolean)
         .join(', ');
 
-      const prompt = `${celesteSystemPrompt('Tu rédiges un portrait astral complet (1200-1500 mots) pour une personne qui veut se comprendre.')}
-
-DONNÉES NATALES:
-- Soleil: ${sunSign}
-- Lune: ${moonSign}
-- Ascendant: ${risingSign}
-- Naissance: ${bd.date} à ${bd.time} à ${bd.city}
-- Positions: ${positionsStr}
-
-STRUCTURE (utilise des titres avec ##):
-## Ton essence: Soleil en ${sunSign}
-Qui tu es au fond de toi — tes motivations, ton élan vital, ce qui te fait vibrer.
-
-## Ton monde intérieur: Lune en ${moonSign}
-Tes émotions, tes besoins, ce qui te sécurise, ce qui te fait du bien.
-
-## Ton masque: Ascendant ${risingSign}
-L'impression que tu donnes au premier abord, comment les autres te perçoivent.
-
-## Ton chemin de vie
-Comment ces trois forces dialoguent en toi et créent ta dynamique unique.
-
-## Tes forces
-3-4 atouts majeurs, avec des exemples concrets de ta vie quotidienne.
-
-## Tes défis à apprivoiser
-2-3 tensions qui te suivent, et comment les vivre plutôt que les subir.
-
-## Ton cœur en amour
-Comment tu aimes, ce que tu cherches chez l'autre, tes affinités.
-
-Sois précise et spécifique aux signes de cette personne. Pas de listes à puces, fais des paragraphes.
-
-Réponse au format JSON: {"portrait": "le texte complet avec les ##"}`;
-
-      const result = await callLLMWithRetry(
-        [{ role: 'user', content: prompt }],
-        0,    // maxRetries=0 — pas de retry (sinon circuit breaker + 6min bloqué)
-        4096, // maxTokens réduit (glm-5.2 reasoning est lent, 8192 = timeout garanti)
-        { response_format: { type: 'json_object' } },
-        30000 // 30s — portrait est long à générer, fallback après
-      );
-
-      let portraitText = '';
-      try {
-        const parsed = typeof result === 'string' ? JSON.parse(result) : result;
-        // glm-5.2: content may be empty, check reasoning_content fallback
-        let rawContent = parsed.choices?.[0]?.message?.content
-          || parsed.choices?.[0]?.message?.reasoning_content
-          || '';
-        // Strip markdown code fences (glm-5.2 wraps JSON in ```json...```)
-        rawContent = rawContent.replace(/^```(?:json)?\s*/i, '').replace(/\s*```$/,'').trim();
-        portraitText = rawContent ? (JSON.parse(rawContent).portrait || rawContent) : (parsed.portrait || '');
-      } catch {
-        let rawFallback = result?.choices?.[0]?.message?.content
-          || result?.choices?.[0]?.message?.reasoning_content
-          || (typeof result === 'string' ? result : '');
-        rawFallback = rawFallback.replace(/^```(?:json)?\s*/i, '').replace(/\s*```$/,'').trim();
-        // Try to extract .portrait from JSON
-        try {
-          const m = JSON.parse(rawFallback);
-          portraitText = m.portrait || rawFallback;
-        } catch {
-          portraitText = rawFallback;
-        }
-      }
-
-      if (!portraitText || portraitText.length < 200) {
-        portraitText = `## Ton essence: Soleil en ${sunSign}\n\nTon Soleil en ${sunSign} illumine ton chemin. Cette position fondamentale définit qui tu es au plus profond de ton être.\n\n## Ton monde intérieur: Lune en ${moonSign}\n\nTa Lune en ${moonSign} gouverne ton paysage émotionnel et tes besoins les plus intimes.\n\n## Ton masque: Ascendant ${risingSign}\n\nTon Ascendant ${risingSign} est la première impression que tu donnes au monde.`;
-      }
+      // v15 — ZÉRO LLM côté utilisateur (coût) : portrait assemblé depuis la
+      // bibliothèque d'interprétations écrite à l'avance (planète × signe × maison).
+      void sunSign; void moonSign; void risingSign; void bd; void positionsStr;
+      const portraitText = generateRichPortrait(natalChart, birthData);
 
       const wordCount = portraitText.split(/\s+/).length;
 
@@ -521,7 +466,7 @@ const PLANET_INTERPRETATIONS = {
       'Scorpion': `Tes émotions sont intenses et secrètes. Tu ressens tout en profondeur. Ta sécurité vient de la vérité et de l'intimité totale. Apprends à partager tes vulnérabilités.`,
       'Sagittaire': `Tes émotions cherchent l'horizon. Tu as besoin de liberté émotionnelle et d'aventure. Apprends à rester avec la tristesse sans vouloir fuir.`,
       'Capricorne': `Tes émotions sont contenues et sérieuses. Tu gères seul·e. Ta sécurité vient de la compétence et de la structure. Apprends à demander de l'aide.`,
-      'Verseau': `Tes émotions sont detachees et originales. Tu as besoin d'espace et d'amis. Apprends à laisser l'intimité émotionnelle entrer.`,
+      'Verseau': `Tes émotions sont détachées et originales. Tu as besoin d'espace et d'amis. Apprends à laisser l'intimité émotionnelle entrer.`,
       'Poissons': `Tes émotions sont fluides, sans frontières. Tu absorbes l'atmosphère. Ta sécurité vient de la créativité et du silence. Apprends à mettre des limites.`,
     },
   },
@@ -529,18 +474,18 @@ const PLANET_INTERPRETATIONS = {
     title: 'Ton masque',
     intro: (s) => `Ton Ascendant ${s} est la première impression que tu donnes. C'est ton masque social, ta façon spontanée d'aborder le monde. Les gens voient ton Ascendant avant de découvrir ton Soleil.`,
     signs: {
-      'Bélier': `Tu apparaîs direct·e, énergique, franc·e. On te perçoit comme quelqu'un qui agit. Ta présence donne une impression de mouvement.`,
-      'Taureau': `Tu apparaîs calme, posé·e, rassurant·e. On te perçoit comme quelqu'un de stable. Ta présence donne une impression de tranquillité.`,
-      'Gémeaux': `Tu apparaîs vif·ve, curieux·se, bavard·e. On te perçoit comme quelqu'un d'intéressant. Ta présence donne une impression d'animation.`,
-      'Cancer': `Tu apparaîs doux·ce, sensible, accueillant·e. On te perçoit comme quelqu'un de bienveillant. Ta présence donne une impression de chaleur.`,
-      'Lion': `Tu apparaîs confiant·e, chaleureux·se, rayonnant·e. On te perçoit comme quelqu'un qui a de la présence. Ta présence donne une impression de lumière.`,
-      'Vierge': `Tu apparaîs soigné·e, précis·e, serviable. On te perçoit comme quelqu'un de fiable. Ta présence donne une impression d'ordre.`,
-      'Balance': `Tu apparaîs élégant·e, diplomate, aimable. On te perçoit comme quelqu'un d'agréable. Ta présence donne une impression d'harmonie.`,
-      'Scorpion': `Tu apparaîs intense, mystérieux·se, magnétique. On te perçoit comme quelqu'un de profond. Ta présence donne une impression de puissance.`,
-      'Sagittaire': `Tu apparaîs enthousiaste, ouvert·e, libre. On te perçoit comme quelqu'un d'aventureux. Ta présence donne une impression d'horizon.`,
-      'Capricorne': `Tu apparaîs sérieux·se, ambitieux·se, mature. On te perçoit comme quelqu'un de responsable. Ta présence donne une impression de solidité.`,
-      'Verseau': `Tu apparaîs original·e, indépendant·e, visionnaire. On te perçoit comme quelqu'un d'unique. Ta présence donne une impression de liberté.`,
-      'Poissons': `Tu apparaîs doux·ce, rêveur·se, mystérieux·se. On te perçoit comme quelqu'un de sensible. Ta présence donne une impression de profondeur.`,
+      'Bélier': `Tu apparais direct·e, énergique, franc·e. On te perçoit comme quelqu'un qui agit. Ta présence donne une impression de mouvement.`,
+      'Taureau': `Tu apparais calme, posé·e, rassurant·e. On te perçoit comme quelqu'un de stable. Ta présence donne une impression de tranquillité.`,
+      'Gémeaux': `Tu apparais vif·ve, curieux·se, bavard·e. On te perçoit comme quelqu'un d'intéressant. Ta présence donne une impression d'animation.`,
+      'Cancer': `Tu apparais doux·ce, sensible, accueillant·e. On te perçoit comme quelqu'un de bienveillant. Ta présence donne une impression de chaleur.`,
+      'Lion': `Tu apparais confiant·e, chaleureux·se, rayonnant·e. On te perçoit comme quelqu'un qui a de la présence. Ta présence donne une impression de lumière.`,
+      'Vierge': `Tu apparais soigné·e, précis·e, serviable. On te perçoit comme quelqu'un de fiable. Ta présence donne une impression d'ordre.`,
+      'Balance': `Tu apparais élégant·e, diplomate, aimable. On te perçoit comme quelqu'un d'agréable. Ta présence donne une impression d'harmonie.`,
+      'Scorpion': `Tu apparais intense, mystérieux·se, magnétique. On te perçoit comme quelqu'un de profond. Ta présence donne une impression de puissance.`,
+      'Sagittaire': `Tu apparais enthousiaste, ouvert·e, libre. On te perçoit comme quelqu'un d'aventureux. Ta présence donne une impression d'horizon.`,
+      'Capricorne': `Tu apparais sérieux·se, ambitieux·se, mature. On te perçoit comme quelqu'un de responsable. Ta présence donne une impression de solidité.`,
+      'Verseau': `Tu apparais original·e, indépendant·e, visionnaire. On te perçoit comme quelqu'un d'unique. Ta présence donne une impression de liberté.`,
+      'Poissons': `Tu apparais doux·ce, rêveur·se, mystérieux·se. On te perçoit comme quelqu'un de sensible. Ta présence donne une impression de profondeur.`,
     },
   },
 };
@@ -627,6 +572,13 @@ const SIGN_TO_ELEMENT = {
   'Cancer': 'Eau', 'Scorpion': 'Eau', 'Poissons': 'Eau',
 };
 
+function _frDate(iso) {
+  const m = /^(\d{4})-(\d{2})-(\d{2})$/.exec(String(iso || ''));
+  if (!m) return iso;
+  const MOIS = ['janvier', 'février', 'mars', 'avril', 'mai', 'juin', 'juillet', 'août', 'septembre', 'octobre', 'novembre', 'décembre'];
+  return `${parseInt(m[3], 10)} ${MOIS[parseInt(m[2], 10) - 1]} ${m[1]}`;
+}
+
 function generateRichPortrait(natal, bd) {
   if (!natal?.sun?.sign) {
     return '## Portrait en préparation\n\nTon thème natal est en cours de calcul. Reviens dans quelques instants pour découvrir ton portrait complet.';
@@ -636,7 +588,7 @@ function generateRichPortrait(natal, bd) {
   const moonSign = natal.moon?.sign || 'Cancer';
   const risingSign = natal.ascendant?.sign || 'Balance';
   const birthInfo = bd?.date
-    ? `Tu es né·e le ${bd.date}${bd.time ? ' à ' + bd.time : ''}${bd.city ? ' à ' + bd.city : ''}.`
+    ? `Tu es né·e le ${_frDate(bd.date)}${bd.time ? ' à ' + bd.time.replace(':', 'h') : ''}${bd.city ? ', à ' + bd.city : ''}.`
     : '';
 
   let portrait = '';
@@ -691,33 +643,33 @@ function generateRichPortrait(natal, bd) {
 
   // Forces et défis basés sur les éléments
   const elementStrengths = {
-    Feu: 'Ton plus grand atout est ta capacité à insuffler de l énergie et de l enthousiasme autour de toi. Tu es un moteur, une étincelle. Les gens te suivent parce que tu les fais rêver et avancer.',
-    Terre: 'Ton plus grand atout est ta fiabilité. Tu construis pour durer, tu tiens tes promesses, tu es là quand ça compte. Les gens te font confiance parce que tu incarnes la stabilité.',
-    Air: 'Ton plus grand atout est ta capacité à voir les choses sous un angle nouveau. Tu connectes les idées, les gens, les possibilities. Les gens viennent te voir parce que tu ouvres des perspectives.',
-    Eau: 'Ton plus grand atout est ta profondeur de cœur. Tu ressens ce que les autres ne voient pas, tu comprends sans qu on ait besoin de t expliquer. Les gens se sentent vus et compris auprès de toi.',
+    Feu: `Ton plus grand atout est ta capacité à insuffler de l'énergie et de l'enthousiasme autour de toi. Tu es un moteur, une étincelle. Les gens te suivent parce que tu les fais rêver et avancer.`,
+    Terre: `Ton plus grand atout est ta fiabilité. Tu construis pour durer, tu tiens tes promesses, tu es là quand ça compte. Les gens te font confiance parce que tu incarnes la stabilité.`,
+    Air: `Ton plus grand atout est ta capacité à voir les choses sous un angle nouveau. Tu connectes les idées, les gens, les possibles. Les gens viennent te voir parce que tu ouvres des perspectives.`,
+    Eau: `Ton plus grand atout est ta profondeur de cœur. Tu ressens ce que les autres ne voient pas, tu comprends sans qu'on ait besoin de t'expliquer. Les gens se sentent vus et compris auprès de toi.`,
   };
   const elementChallenges = {
-    Feu: 'Ton plus grand défi est la patience. Tu veux tout, tout de suite. Apprends que les plus belles choses prennent du temps à grandir. Canalise ton feu dans la durée, pas seulement dans l instant.',
-    Terre: 'Ton plus grand défi est le lâcher-prise. Tu veux tout contrôler, tout sécuriser. Apprends que la vie est imprévisible et que c est dans l inconnu que se trouvent les plus belles surprises.',
-    Air: 'Ton plus grand défi est l ancrage. Tu voles haut, tu vois large, mais tu peux oublier de poser les pieds sur terre. Apprends à transformer tes idées en actions concrètes.',
-    Eau: 'Ton plus grand défi est la frontière. Tu ressens tout, tu absorbes tout, tu peux te noyer dans les émotions des autres. Apprends à dire non, à te protéger, à garder ton espace.',
+    Feu: `Ton plus grand défi est la patience. Tu veux tout, tout de suite. Apprends que les plus belles choses prennent du temps à grandir. Canalise ton feu dans la durée, pas seulement dans l'instant.`,
+    Terre: `Ton plus grand défi est le lâcher-prise. Tu veux tout contrôler, tout sécuriser. Apprends que la vie est imprévisible et que c'est dans l'inconnu que se trouvent les plus belles surprises.`,
+    Air: `Ton plus grand défi est l'ancrage. Tu voles haut, tu vois large, mais tu peux oublier de poser les pieds sur terre. Apprends à transformer tes idées en actions concrètes.`,
+    Eau: `Ton plus grand défi est la frontière. Tu ressens tout, tu absorbes tout, tu peux te noyer dans les émotions des autres. Apprends à dire non, à te protéger, à garder ton espace.`,
   };
 
-  portrait += `## Tes forces\n\n${elementStrengths[dominantElement]}\n\nAvec un Soleil en ${sunSign} et une Lune en ${moonSign}, tu possèdes une combinaison unique. Ton Ascendant ${risingSign} ajoute une couche supplémentaire : c est la première chose que les gens remarquent chez toi, et souvent la plus difficile à vivre pleinement. Quand tu alignes ton Soleil (ce que tu es), ta Lune (ce que tu ressens) et ton Ascendant (comment tu apparaîs), tu deviens irrésistible.\n\n`;
+  portrait += `## Tes forces\n\n${elementStrengths[dominantElement]}\n\nAvec un Soleil en ${sunSign} et une Lune en ${moonSign}, tu possèdes une combinaison unique. Ton Ascendant ${risingSign} ajoute une couche supplémentaire : c'est la première chose que les gens remarquent chez toi, et souvent la plus difficile à vivre pleinement. Quand tu alignes ton Soleil (ce que tu es), ta Lune (ce que tu ressens) et ton Ascendant (comment tu apparais), tu deviens irrésistible.\n\n`;
 
-  portrait += `## Tes défis\n\n${elementChallenges[dominantElement]}\n\nLa bonne nouvelle ? Tes défis ne sont pas des faiblesses, mais des zones de croissance. Chaque fois que tu fais l effort de travailler un défi, tu débloques une nouvelle force. C est comme un muscle : plus tu l utilises, plus il devient puissant.\n\n`;
+  portrait += `## Tes défis\n\n${elementChallenges[dominantElement]}\n\nLa bonne nouvelle ? Tes défis ne sont pas des faiblesses, mais des zones de croissance. Chaque fois que tu fais l'effort de travailler un défi, tu débloques une nouvelle force. C est comme un muscle : plus tu l'utilises, plus il devient puissant.\n\n`;
 
   // Compatibilités
   const elementMatches = {
-    Feu: 'Feu (Bélier, Lion, Sagittaire) et Air (Gémeaux, Balance, Verseau)',
-    Terre: 'Terre (Taureau, Vierge, Capricorne) et Eau (Cancer, Scorpion, Poissons)',
-    Air: 'Air (Gémeaux, Balance, Verseau) et Feu (Bélier, Lion, Sagittaire)',
-    Eau: 'Eau (Cancer, Scorpion, Poissons) et Terre (Taureau, Vierge, Capricorne)',
+    Feu: `Feu (Bélier, Lion, Sagittaire) et Air (Gémeaux, Balance, Verseau)`,
+    Terre: `Terre (Taureau, Vierge, Capricorne) et Eau (Cancer, Scorpion, Poissons)`,
+    Air: `Air (Gémeaux, Balance, Verseau) et Feu (Bélier, Lion, Sagittaire)`,
+    Eau: `Eau (Cancer, Scorpion, Poissons) et Terre (Taureau, Vierge, Capricorne)`,
   };
-  portrait += `## Tes affinités\n\nTu es naturellement en harmonie avec les personnes qui ont une dominante ${elementMatches[dominantElement]}. Ces combinaisons créent une complémentarité naturelle — l un apporte ce qui manque à l autre. Mais attention : les plus grandes croissances viennent souvent des opposés. Une personne très différente de toi peut te faire grandir bien plus qu un clone.\n\n`;
+  portrait += `## Tes affinités\n\nTu es naturellement en harmonie avec les personnes qui ont une dominante ${elementMatches[dominantElement]}. Ces combinaisons créent une complémentarité naturelle — l'un apporte ce qui manque à l'autre. Mais attention : les plus grandes croissances viennent souvent des opposés. Une personne très différente de toi peut te faire grandir bien plus qu'un clone.\n\n`;
 
   // Conclusion enrichie
-  portrait += `## Ton chemin\n\nCe portrait n'est pas une boîte mais une boussole. Tes planètes indiquent des tendances, des énergies, des potentiels — jamais des certitudes. Tu es libre de ce que tu fais de ce ciel.\n\nL'astrologie ne prédit pas l'avenir : elle t'aide à te comprendre pour mieux choisir. Connaître ton thème, c est comme avoir une carte quand tu te promènes en forêt. La carte ne décide pas du chemin à ta place — mais elle t évite de tourner en rond.\n\nReviens consulter ce portrait quand tu te sens perdu·e, quand tu doutes, quand tu te demandes pourquoi tu réagis d une certaine façon. Il est là pour te rappeler qui tu es, dans les moments où tu l'oublies. Tu es né·e sous un ciel unique, et ce ciel t appartient.`;
+  portrait += `## Ton chemin\n\nCe portrait n'est pas une boîte mais une boussole. Tes planètes indiquent des tendances, des énergies, des potentiels — jamais des certitudes. Tu es libre de ce que tu fais de ce ciel.\n\nL'astrologie ne prédit pas l'avenir : elle t'aide à te comprendre pour mieux choisir. Connaître ton thème, c'est comme avoir une carte quand tu te promènes en forêt. La carte ne décide pas du chemin à ta place — mais elle t'évite de tourner en rond.\n\nReviens consulter ce portrait quand tu te sens perdu·e, quand tu doutes, quand tu te demandes pourquoi tu réagis d'une certaine façon. Il est là pour te rappeler qui tu es, dans les moments où tu l'oublies. Tu es né·e sous un ciel unique, et ce ciel t'appartient.`;
 
   return portrait;
 }

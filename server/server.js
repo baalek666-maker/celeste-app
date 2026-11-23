@@ -90,7 +90,10 @@ const LLM_MODEL = process.env.LLM_MODEL || 'gpt-4o-mini';
 // Objectif : budget LLM sous contrôle total — les users n'appellent JAMAIS le LLM
 // en temps réel. Le contenu est servi depuis les caches DB (daily_aspects_cache,
 // horoscope_personal_daily, natal_interpretations, daily_energy, etc.).
-let LLM_USER_ENABLED = (process.env.LLM_USER_ENABLED || 'false').toLowerCase() === 'true';
+// v15 — ZÉRO LLM utilisateur : verrouillé en dur (coût). Ne pas réactiver.
+let LLM_USER_ENABLED = false;
+// v15 — premium_until est stocké en SECONDES. Toujours comparer via _nowSec().
+const _nowSec = () => Math.floor(Date.now() / 1000);
 const PORT = process.env.PORT || 3001;
 
 // CORS: en production, restreindre aux origines autorisées via CORS_ORIGIN (CSV).
@@ -101,9 +104,60 @@ const allowedOrigins = process.env.CORS_ORIGIN
 
 // ─── Web Push (VAPID) setup ────────────────────────────────
 import webpush from 'web-push';
-import { sendVerificationEmail, generateToken, isEmailConfigured } from './email.js';
+import { sendVerificationEmail, sendPasswordResetEmail, generateToken, isEmailConfigured } from './email.js';
 import { detectAstroEvents, runAstroEventsJob } from './cron-events.js';
-import { randomUUID } from 'node:crypto';
+import { randomUUID, createHash } from 'node:crypto';
+import tzlookup from 'tz-lookup';
+import { computeCompat } from './compat-engine.js';
+import { buildHoroscope, dayScore } from './horoscope-engine.js';
+
+// v15 P0-2/P0-3 — Heure de naissance → UTC, indépendant du fuseau du serveur.
+// Le fuseau IANA est déduit des coordonnées (tz-lookup), et l'offset est celui
+// en vigueur À LA DATE DE NAISSANCE (heure d'été/hiver, changements historiques).
+function _tzOffsetMinutesAt(iana, utcMs) {
+  const dtf = new Intl.DateTimeFormat('en-US', {
+    timeZone: iana, hourCycle: 'h23',
+    year: 'numeric', month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit', second: '2-digit',
+  });
+  const parts = Object.fromEntries(dtf.formatToParts(new Date(utcMs)).map(p => [p.type, p.value]));
+  const asUtc = Date.UTC(+parts.year, +parts.month - 1, +parts.day, +parts.hour % 24, +parts.minute, +parts.second);
+  return Math.round((asUtc - utcMs) / 60000);
+}
+export function resolveBirthIana(birthData) {
+  if (typeof birthData?.timeZone === 'string' && birthData.timeZone.includes('/')) return birthData.timeZone;
+  if (typeof birthData?.timezone === 'string' && birthData.timezone.includes('/')) return birthData.timezone;
+  if (typeof birthData?.latitude === 'number' && typeof birthData?.longitude === 'number') {
+    try { return tzlookup(birthData.latitude, birthData.longitude); } catch { /* océan / invalide */ }
+  }
+  return null;
+}
+// Normalise birth_data : ajoute timeZone (IANA) + timezone = offset réel à la naissance (heures).
+// Le frontend (calcul local) s'appuie sur `timezone` → il devient juste lui aussi.
+export function normalizeBirthTz(bd) {
+  if (!bd || !bd.date) return bd;
+  const iana = resolveBirthIana(bd);
+  if (!iana) return bd;
+  const [y, m, d] = String(bd.date).split('-').map(Number);
+  const [hh, mm] = String(bd.time || '12:00').split(':').map(Number);
+  const wall = Date.UTC(y, (m || 1) - 1, d || 1, hh || 0, mm || 0);
+  const utc = birthDateToUtc({ ...bd, timeZone: iana }).getTime();
+  if (isNaN(wall) || isNaN(utc)) return bd;
+  return { ...bd, timeZone: iana, timezone: Math.round((wall - utc) / 36000) / 100 };
+}
+export function birthDateToUtc(birthData) {
+  const [y, m, d] = String(birthData.date).split('-').map(Number);
+  const [hh, mm] = String(birthData.time || '12:00').split(':').map(Number);
+  const wall = Date.UTC(y, (m || 1) - 1, d || 1, hh || 0, mm || 0);
+  if (isNaN(wall)) return new Date(NaN);
+  const iana = resolveBirthIana(birthData);
+  if (iana) {
+    let off = _tzOffsetMinutesAt(iana, wall);
+    off = _tzOffsetMinutesAt(iana, wall - off * 60000);
+    return new Date(wall - off * 60000);
+  }
+  const tz = typeof birthData.timezone === 'number' ? birthData.timezone : 0;
+  return new Date(wall - tz * 3600000);
+}
 const VAPID_PUBLIC_KEY = process.env.VAPID_PUBLIC_KEY;
 const VAPID_PRIVATE_KEY = process.env.VAPID_PRIVATE_KEY;
 const VAPID_SUBJECT = process.env.VAPID_SUBJECT || 'mailto:admin@example.com';
@@ -271,6 +325,30 @@ if (!hasCol('last_early_reengagement_date')) {
 if (!hasCol('last_trial_reminder')) {
   db.exec('ALTER TABLE users ADD COLUMN last_trial_reminder TEXT');
 }
+// v15 P0-2 — Migration fuseau de naissance : recalcule timezone (offset réel à la
+// naissance) + timeZone IANA pour chaque profil, et purge les interprétations
+// calculées sur l'ancien thème faux. Idempotent (ne touche que les lignes sans timeZone).
+try {
+  const fixRows = (table) => {
+    const rows = db.prepare(`SELECT id, ${table === 'users' ? 'id AS uid' : 'user_id AS uid'}, birth_data FROM ${table}
+      WHERE birth_data IS NOT NULL AND birth_data != '' AND json_extract(birth_data, '$.timeZone') IS NULL`).all();
+    const upd = db.prepare(`UPDATE ${table} SET birth_data = ? WHERE id = ?`);
+    const uids = new Set();
+    for (const r of rows) {
+      let bd; try { bd = JSON.parse(r.birth_data); } catch { continue; }
+      const nb = normalizeBirthTz(bd);
+      if (nb && nb.timeZone) { upd.run(JSON.stringify(nb), r.id); uids.add(r.uid); }
+    }
+    return uids;
+  };
+  const touched = new Set([...fixRows('users'), ...fixRows('profiles')]);
+  for (const uid of touched) {
+    for (const t of ['natal_interpretations', 'planet_interpretations', 'astro_portraits', 'personal_transits', 'activated_houses']) {
+      try { db.prepare(`DELETE FROM ${t} WHERE user_id = ?`).run(uid); } catch { /* table absente */ }
+    }
+  }
+  if (touched.size) console.log(`[v15 migration tz] ${touched.size} comptes recalculés (fuseau de naissance réel)`);
+} catch (e) { console.error('[v15 migration tz] échec', e.message); }
 // P0#6 — Vérification email (Resend). email_verified=0 par défaut, 1 après clic.
 // email_verify_token = token opaque 32 bytes (hex), expiré après vérification.
 if (!hasCol('email_verified')) {
@@ -691,6 +769,11 @@ function getNatalPositions(birthData, full = false) {
   // P1 #H — Validation input : crash silencieux sur dates/timezone manquants.
   // v14.4 P2 — Normalisation timezone string→number (certains anciens profils ont "Europe/Paris")
   let tz = birthData?.timezone;
+  // v15 — si on peut résoudre le fuseau depuis les coordonnées, l'offset stocké n'est plus requis.
+  if ((tz === undefined || tz === null || tz === '') && resolveBirthIana(birthData)) {
+    tz = 0;
+    birthData = { ...birthData, timezone: 0 };
+  }
   if (typeof tz === 'string') {
     // Map IANA → UTC offset heuristique (Paris/Berlin/Madrid = +1/+2 selon DST)
     const IANA_OFFSET = { 'Europe/Paris': 2, 'Europe/Berlin': 2, 'Europe/Madrid': 2, 'Europe/London': 1,
@@ -708,12 +791,12 @@ function getNatalPositions(birthData, full = false) {
       typeof birthData.timezone !== 'number' || typeof birthData.latitude !== 'number' || typeof birthData.longitude !== 'number') {
     throw new Error('Invalid birth data: date, time, timezone, latitude, longitude required');
   }
-  const local = new Date(`${birthData.date}T${birthData.time}:00`);
+  const local = birthDateToUtc(birthData);
   // P1 #H — Date invalide → 'Invalid Date' → calculs astronomiques retournent NaN.
   if (isNaN(local.getTime())) {
     throw new Error(`Invalid birth date/time: ${birthData.date}T${birthData.time}`);
   }
-  const utc = new Date(local.getTime() - birthData.timezone * 3600000);
+  const utc = local; // v15 — déjà en UTC (birthDateToUtc)
   const time = new AstroTime(utc);
   const planets = ['sun','moon','mercury','venus','mars','jupiter','saturn','uranus','neptune','pluto'];
   const result = {};
@@ -746,7 +829,8 @@ function getNatalPositions(birthData, full = false) {
   result.midheaven = { sign: SIGNS[Math.floor(mc/30)], degree: Math.round(mc%30 * 10) / 10, longitude: Math.round(mc * 100) / 100 };
 
   // Lunar Nodes (Mean Node)
-  const T = (time.tt - 2451545.0) / 36525.0;
+  // v15 — AstroTime.tt est déjà en jours depuis J2000 (avant : −2451545 en trop → nœuds faux).
+  const T = time.tt / 36525.0;
   let nodeLon = 125.04452 - 1934.136261 * T + 0.0020708 * T * T + T * T * T / 450000.0;
   nodeLon = ((nodeLon % 360) + 360) % 360;
   result.northNode = { sign: SIGNS[Math.floor(nodeLon/30)], degree: Math.round(nodeLon % 30 * 10) / 10, longitude: Math.round(nodeLon * 100) / 100 };
@@ -844,7 +928,7 @@ async function callLLMWithRetry(messages, maxRetries = 3, maxTokens = 4096, extr
   // un objet signal `{disabled: true}` au lieu de throw. Les callers testent `data?.disabled`
   // et servent leur fallback déterministe. C'est moins de boilerplate qu'un try/catch LLM_DISABLED.
   // Si `adminBypass = true` (call admin), on appelle le LLM quoi qu'il arrive.
-  if (!LLM_USER_ENABLED && !options.adminBypass) {
+  if (!options.adminBypass) { // v15 — ZÉRO LLM utilisateur, inconditionnel (même si LLM_USER_ENABLED=true)
     return { disabled: true, reason: 'LLM_USER_ENABLED=false' };
   }
   // v11.5 — Circuit breaker : si on est en cooldown, on retourne aussi un signal.
@@ -1191,13 +1275,14 @@ Génère un résumé court en JSON:
 
 Réponds UNIQUEMENT avec le JSON.`;
 
-  const data = await callLLMWithRetry([
-    { role: 'system', content: systemPrompt },
-    { role: 'user', content: userPrompt },
-  ], 2, 4096); // P1 #E — 2048 trop juste pour JSON complet → 4096.
-
-  // v14.4 — Si LLM off ou erreur, on sert un résumé déterministe calculé
-  // localement à partir des vraies positions astro.
+  // v15 — ZÉRO LLM côté utilisateur : résumé calculé depuis les transits réels.
+  void systemPrompt; void userPrompt;
+  const data = null;
+  if (!data || !data.choices) {
+    const hh = buildHoroscope(natalPositions, transits, { dateKey: String(dateLabel), userKey: String(birthDate || '') });
+    const hard0 = computeAstroHardFacts(transits, new Date(), birthDate);
+    return { general: hh.general, energie: hh.energie, score: hh.score, mood: hh.mood, luckyColor: hard0.luckyColorName, luckyNumber: hard0.luckyNumber, _dominantPlanet: hard0.dominantPlanet };
+  }
   if (!data || !data.choices) {
     const sun = natalPositions.sun?.sign || sign;
     const moon = natalPositions.moon?.sign || 'équilibre';
@@ -1304,12 +1389,18 @@ UNIQUEMENT le JSON, rien d'autre. Pas de markdown, pas de texte avant/après.`;
     //    Ces valeurs ne sont plus inventées : elles sont calculées sur les transits réels.
     // v14.6 — passe birthDate pour chemin de vie numérologique.
     const hard = computeAstroHardFacts(transits, new Date(), birthDate);
+    // v15 — moteur de transits personnels (horoscope-engine.js) : aspects exacts
+    // planètes du jour × thème natal + maison lunaire. Zéro LLM.
+    void ts; void tv; void energyScore; void mood;
+    const h = buildHoroscope(natalPositions, transits, { dateKey: localISODate(), userKey: String(birthDate || '') });
     return {
-      general: `Aujourd'hui, ton soleil en ${sun} rencontre le soleil en ${ts}. C'est une journée pour honorer ce qui te rend unique, ${today}. Prends un moment pour toi, sans culpabiliser.`,
-      amour:  `Vénus en ${ven} en transit dans ta maison intérieure invite à la douceur avec tes proches. Écoute plus que tu ne parles aujourd'hui, le courant passe mieux.`,
-      carriere: `Mars en ${tm} aiguise ton sens pratique. Une idée trotte dans ta tête depuis hier — écris-la avant ce soir.`,
-      energie: energyScore,
-      mood:   mood,
+      general: h.general,
+      amour: h.amour,
+      carriere: h.carriere,
+      energie: h.energie,
+      score: h.score,
+      mood: h.mood,
+      why: h.why,
       luckyNumber: hard.luckyNumber,
       luckyColor:  hard.luckyColorName, // ex: "vert sauge", "rose vénusien"
       _dominantPlanet: hard.dominantPlanet, // info astro pour push matinal (cf. P5)
@@ -1318,7 +1409,8 @@ UNIQUEMENT le JSON, rien d'autre. Pas de markdown, pas de texte avant/après.`;
 
   // v14.4 — Si LLM off, on sert directement le fallback. C'est le cas de 99%
   // des requêtes en prod depuis le coupe-circuit.
-  if (!LLM_USER_ENABLED) {
+  // v15 — ZÉRO LLM côté utilisateur, sans exception (coût).
+  if (true) {
     return fallback();
   }
 
@@ -1461,7 +1553,7 @@ function auth(req, res, next) {
     try {
       const u = db.prepare('SELECT is_premium, premium_until FROM users WHERE id = ?').get(decoded.id);
       const now = Math.floor(Date.now() / 1000);
-      req.user.isPremium = !!u?.is_premium && (!u?.premium_until || u.premium_until > now);
+      req.user.isPremium = !!u?.is_premium && (!u?.premium_until || u.premium_until > _nowSec());
     } catch { /* non-fatal */ }
     // P1#12 — Update last_activity_at (fire-and-forget, non-bloquant).
     // Mis à jour à chaque appel authentifié pour tracker l'inactivité précise.
@@ -1528,7 +1620,19 @@ app.use(cors({
   credentials: true,
 }));
 
+// v15 P0-1 — Accès HTTP direct (IP:3001) → redirection vers le domaine HTTPS public.
+// Sans ça, Helmet envoie HSTS + upgrade-insecure-requests en HTTP → page blanche.
+const PUBLIC_URL = process.env.PUBLIC_URL || 'https://51-75-21-2.sslip.io';
+app.use((req, res, next) => {
+  const host = (req.get('host') || '').split(':')[0];
+  if (!req.secure && /^\d+\.\d+\.\d+\.\d+$/.test(host) && host !== '127.0.0.1' && req.method === 'GET' && !req.path.startsWith('/api/')) {
+    return res.redirect(302, PUBLIC_URL + req.originalUrl);
+  }
+  next();
+});
+
 // P0 #22 — Headers de sécurité (Helmet). CSP laisse passer le CSS inline / Vite assets.
+// v15 — HSTS + upgrade-insecure retirés de Helmet, HSTS renvoyé seulement en HTTPS (plus bas).
 app.use(helmet({
   contentSecurityPolicy: {
     directives: {
@@ -1545,10 +1649,18 @@ app.use(helmet({
       frameSrc: ["'self'", 'https://js.stripe.com', 'https://hooks.stripe.com'],
       objectSrc: ["'none'"],
       baseUri: ["'self'"],
+      upgradeInsecureRequests: null,
     },
   },
+  hsts: false,
   crossOriginEmbedderPolicy: false,
 }));
+app.use((req, res, next) => {
+  if (req.secure) {
+    res.setHeader('Strict-Transport-Security', 'max-age=31536000; includeSubDomains');
+  }
+  next();
+});
 
 // P0 #23 — Fail-fast sur les routes hors-scope (scanners / bots).
 // Économise CPU + log propre. Bloque les scans Next.js / MCP / ONVIF / SSH / etc.
@@ -1774,7 +1886,12 @@ function aspectTypeFromDistance(deg) {
  * Inputs: chart1, chart2 (sorties de getNatalPositions)
  * Output: même shape que generateCompatibility (score, title, strengths, challenges, description)
  */
-function computeCompatDeterministic(chart1, chart2, sign1, sign2, context = 'romantic') {
+function computeCompatDeterministic(chart1, chart2, sign1, sign2, context = 'romantic', quick = false) {
+  // v15 — nouveau moteur (compat-engine.js) : textes justes, aucun aspect inventé en mode rapide.
+  return computeCompat(chart1, chart2, context, quick);
+}
+// Ancienne implémentation conservée pour référence (non appelée).
+function _computeCompatDeterministicLegacy(chart1, chart2, sign1, sign2, context = 'romantic') {
   const planets = ['sun', 'moon', 'mercury', 'venus', 'mars', 'jupiter', 'saturn'];
   const aspects = [];
   let harmoniousCount = 0, tensionCount = 0;
@@ -2196,6 +2313,45 @@ app.post('/api/auth/register', authLimiter, async (req, res) => {
 });
 
 // ─── P0#6 — Verify email (clic sur le lien) ───────────────
+// ─── v15 P0-6 — Mot de passe oublié ─────────────────────────
+if (!hasCol('password_reset_hash')) db.exec('ALTER TABLE users ADD COLUMN password_reset_hash TEXT');
+if (!hasCol('password_reset_expires')) db.exec('ALTER TABLE users ADD COLUMN password_reset_expires INTEGER');
+const _resetHits = new Map(); // ip|email → [timestamps] (anti-abus : 3 / 15 min)
+app.post('/api/auth/forgot-password', async (req, res) => {
+  const email = String(req.body?.email || '').trim().toLowerCase();
+  const generic = { ok: true, message: "Si un compte existe avec cette adresse, un lien vient d'être envoyé." };
+  if (!email || email.length > 200) return res.json(generic);
+  const key = `${req.ip}|${email}`;
+  const now = Date.now();
+  const hits = (_resetHits.get(key) || []).filter(t => now - t < 15 * 60000);
+  if (hits.length >= 3) return res.json(generic);
+  hits.push(now); _resetHits.set(key, hits);
+  const user = db.prepare('SELECT id, email FROM users WHERE lower(email) = ?').get(email);
+  if (user) {
+    const token = generateToken();
+    const hash = createHash('sha256').update(token).digest('hex');
+    db.prepare('UPDATE users SET password_reset_hash = ?, password_reset_expires = ? WHERE id = ?')
+      .run(hash, Math.floor(now / 1000) + 3600, user.id);
+    sendPasswordResetEmail(user.email, token).catch(e => console.error('[forgot-password] email', e.message));
+  }
+  res.json(generic);
+});
+app.post('/api/auth/reset-password', (req, res) => {
+  const token = String(req.body?.token || '');
+  const password = String(req.body?.password || '');
+  if (!/^[a-f0-9]{64}$/.test(token)) return res.status(400).json({ error: 'Lien invalide ou expiré.' });
+  if (password.length < 6 || password.length > 200) return res.status(400).json({ error: 'Mot de passe : 6 caractères minimum.' });
+  const hash = createHash('sha256').update(token).digest('hex');
+  const user = db.prepare('SELECT id, password_reset_expires FROM users WHERE password_reset_hash = ?').get(hash);
+  if (!user || !user.password_reset_expires || user.password_reset_expires < Math.floor(Date.now() / 1000)) {
+    return res.status(400).json({ error: 'Lien invalide ou expiré. Redemande un nouveau lien.' });
+  }
+  db.prepare('UPDATE users SET password_hash = ?, password_reset_hash = NULL, password_reset_expires = NULL WHERE id = ?')
+    .run(bcrypt.hashSync(password, 10), user.id);
+  console.log(`[auth] mot de passe réinitialisé pour user_id=${user.id}`);
+  res.json({ ok: true });
+});
+
 app.get('/api/auth/verify-email', (req, res) => {
   const { token } = req.query || {};
   if (typeof token !== 'string' || token.length !== 64) {
@@ -2383,8 +2539,9 @@ app.post('/api/admin/llm/toggle', adminAuth, (req, res) => {
   if (typeof enabled !== 'boolean') {
     return res.status(400).json({ error: 'enabled (boolean) requis' });
   }
-  LLM_USER_ENABLED = enabled;
-  console.log(`[ADMIN] LLM_USER_ENABLED → ${enabled}`);
+  // v15 — verrou : le LLM côté utilisateur ne peut plus être réactivé.
+  LLM_USER_ENABLED = false;
+  console.log(`[ADMIN] LLM toggle refusé (demandé: ${enabled}) — verrou v15`);
   res.json({ ok: true, llm_user_enabled: LLM_USER_ENABLED });
 });
 
@@ -2695,11 +2852,12 @@ function validateBirthData(input) {
   if (typeof longitude !== 'number' || longitude < -180 || longitude > 180) {
     return { ok: false, error: 'Longitude invalide.' };
   }
-  if (typeof timezone !== 'number' || timezone < -12 || timezone > 14) {
+  // v15 — fuseau optionnel : recalculé côté serveur depuis les coordonnées (normalizeBirthTz).
+  if (timezone !== undefined && timezone !== null && (typeof timezone !== 'number' || timezone < -12 || timezone > 14)) {
     return { ok: false, error: 'Fuseau horaire invalide.' };
   }
 
-  return { ok: true, birthData: { date, time, city, country: country || '', latitude, longitude, timezone } };
+  return { ok: true, birthData: normalizeBirthTz({ date, time, city, country: country || '', latitude, longitude, timezone: typeof timezone === 'number' ? timezone : 0 }) };
 }
 
 // ─── Save birth data (Fix #5 — validation) ─────────────────────
@@ -2707,6 +2865,14 @@ app.post('/api/profile/birth-data', auth, (req, res) => {
   const check = validateBirthData(req.body?.birthData);
   if (!check.ok) return res.status(400).json({ error: check.error });
   db.prepare('UPDATE users SET birth_data = ? WHERE id = ?').run(JSON.stringify(check.birthData), req.user.id);
+  // v15 — fuseau des notifications = fuseau actuel de l'appareil (sinon 0 = UTC)
+  const devTz = Number(req.body?.deviceTzOffset);
+  if (Number.isFinite(devTz) && devTz >= -12 && devTz <= 14) {
+    db.prepare('UPDATE users SET notification_timezone = ? WHERE id = ?').run(devTz, req.user.id);
+  }
+  // v15 — prénom (affiché « Bonjour Camille » au lieu du préfixe e-mail)
+  const fname = typeof req.body?.firstName === 'string' ? req.body.firstName.trim().slice(0, 40) : '';
+  if (fname) db.prepare('UPDATE users SET display_name = ? WHERE id = ?').run(fname, req.user.id);
   // Also upsert into profiles (is_self=1) so /api/natal-chart and other routes work
   const existing = db.prepare('SELECT id FROM profiles WHERE user_id = ? AND is_self = 1').get(req.user.id);
   if (existing) {
@@ -2738,10 +2904,11 @@ app.get('/api/profile', auth, (req, res) => {
   const user = db.prepare('SELECT * FROM users WHERE id = ?').get(req.user.id);
   if (!user) return res.status(404).json({ error: 'User not found' });
   const now = Math.floor(Date.now() / 1000);
-  const isPremium = !!user.is_premium && (!user.premium_until || user.premium_until > now);
+  const isPremium = !!user.is_premium && (!user.premium_until || user.premium_until > _nowSec());
   res.json({
     id: user.id,
     email: user.email,
+    displayName: user.display_name && user.display_name !== String(user.email || '').split('@')[0] ? user.display_name : null,
     isPremium,
     scansRemaining: user.scans_remaining,
     birthData: safeJsonParse(user.birth_data, null, 'login auth birth_data'),
@@ -2891,7 +3058,7 @@ app.get('/api/yearly-recap', auth, (req, res) => {
 
 // ─── Multi-profile CRUD (Feature 8) ────────────────────────
 // List all profiles (own natal + saved family/friends)
-app.use('/api/profiles', createProfilesRouter({ db, auth, safeJsonParse }));
+app.use('/api/profiles', createProfilesRouter({ db, auth, safeJsonParse, normalizeBirthTz }));
 
 // ─── Horoscope (LLM-powered, PERSONAL cache per sun+moon+rising+date) ───────
 // Architecture P2: cache personnalisé (sun, moon, rising, date) ≈ 1728 combos max.
@@ -2903,7 +3070,7 @@ app.post('/api/horoscope', auth, async (req, res) => {
     if (!user?.birth_data) return res.status(400).json({ error: 'Birth data required' });
 
     const now = Date.now();
-    const isPremium = !!user.is_premium && (!user.premium_until || user.premium_until > now);
+    const isPremium = !!user.is_premium && (!user.premium_until || user.premium_until > _nowSec());
 
     const today = localISODate();
 
@@ -2945,89 +3112,21 @@ app.post('/api/horoscope', auth, async (req, res) => {
     const risingSign = natalPositions.ascendant?.sign || 'unknown';
     const transitsStr = JSON.stringify(transits);
 
-    // ── Tier 1: PERSONAL cache (sun + moon + rising + date) ──
-    const personalCached = db.prepare(
-      'SELECT content FROM horoscope_personal_daily WHERE sun_sign = ? AND moon_sign = ? AND rising_sign = ? AND date = ?'
-    ).get(sunSign, moonSign, risingSign, today);
-
-    let horoscope;
-    let usedFallbackLLM = false;
-
-    if (personalCached) {
-      console.log(`[horoscope] personal hit (sun=${sunSign}, moon=${moonSign}, rising=${risingSign}, date=${today})`);
-      const base = JSON.parse(personalCached.content);
-      horoscope = personalizeHoroscope(base, natalPositions, transits, birthData);
-      // P3 — OVERRIDE FINAL : lucky number + lucky color + dominante planétaire sont TOUJOURS
-      //    ré-appliqués ici, même si le cache DB ou un LLM a injecté des valeurs random/génériques.
-      //    Dernier rempart : aucun user ne doit voir "turquoise" ou "43" sans fondement astro.
-      // v14.6 — passe birthDate pour mix chemin de vie numérologique.
-      {
-        const hardFinal = computeAstroHardFacts(transits, new Date(), birthDate);
-        horoscope.luckyNumber = hardFinal.luckyNumber;
-        horoscope.luckyColor = hardFinal.luckyColorName;
-        horoscope._dominantPlanet = hardFinal.dominantPlanet;
-        horoscope._lifePathNumber = hardFinal.lifePathNumber;
-      }
-    } else {
-      // ── Tier 2: LLM generation with graceful fallback ──
-      console.log(`[horoscope] LLM miss (sun=${sunSign}, moon=${moonSign}, rising=${risingSign}, date=${today})`);
-      let base;
-      try {
-        // P1-5 — Cap LLM latency: 1 retry × 15s (instead of 3 × 45s default).
-        // Fallback is instant (FALLBACK_HOROSCOPES), so users never wait >15s.
-        // Worst case before fix: ~150s (45s × 4 attempts w/ backoff). Now: 15s max.
-        // v14.6 — passe birthDate pour chemin de vie numérologique.
-        base = await generateHoroscope(natalPositions, transits, sunSign, birthDate);
-      } catch (llmErr) {
-        console.warn(`[horoscope] LLM failed (${llmErr.message}), using FALLBACK for sign=${sunSign}`);
-        base = getFallbackHoroscope(sunSign);
-        usedFallbackLLM = true;
-      }
-
-      // Persist PERSONAL cache (sun + moon + rising + date)
-      try {
-        db.prepare(`INSERT OR IGNORE INTO horoscope_personal_daily
-          (sun_sign, moon_sign, rising_sign, date, transits, content) VALUES (?, ?, ?, ?, ?, ?)`).run(
-          sunSign, moonSign, risingSign, today, transitsStr, JSON.stringify(base),
-        );
-      } catch (e) {
-        console.warn('[horoscope] personal cache write failed:', e.message);
-      }
-
-      // Also persist in global cache for week view / other users with same sun sign
-      try {
-        db.prepare(`INSERT OR IGNORE INTO horoscope_global_daily
-          (sun_sign, date, transits, content) VALUES (?, ?, ?, ?)`).run(
-          sunSign, today, transitsStr, JSON.stringify(base),
-        );
-      } catch (e) {
-        console.warn('[horoscope] global cache write failed:', e.message);
-      }
-
-      horoscope = personalizeHoroscope(base, natalPositions, transits, birthData);
-      // P3 — OVERRIDE FINAL : lucky number + lucky color + dominante planétaire sont TOUJOURS
-      //    ré-appliqués ici, même si le cache DB ou un LLM a injecté des valeurs random/génériques.
-      //    Dernier rempart : aucun user ne doit voir "turquoise" ou "43" sans fondement astro.
-      // v14.6 — passe birthDate pour mix chemin de vie numérologique.
-      {
-        const hardFinal = computeAstroHardFacts(transits, new Date(), birthDate);
-        horoscope.luckyNumber = hardFinal.luckyNumber;
-        horoscope.luckyColor = hardFinal.luckyColorName;
-        horoscope._dominantPlanet = hardFinal.dominantPlanet;
-        horoscope._lifePathNumber = hardFinal.lifePathNumber;
-      }
+    // v15 — Horoscope calculé pour CETTE personne (aspects exacts transits × thème
+    // natal + maison lunaire), 100 % déterministe, ~2 ms. Plus de cache partagé par
+    // Big 3 (deux personnes au même Big 3 n'ont pas les mêmes aspects) ni de LLM.
+    void transitsStr; void risingSign; void moonSign;
+    const personalCached = null;
+    let horoscope = await generateHoroscope(natalPositions, transits, sunSign, birthDate);
+    {
+      const hardFinal = computeAstroHardFacts(transits, new Date(), birthDate);
+      horoscope.luckyNumber = hardFinal.luckyNumber;
+      horoscope.luckyColor = hardFinal.luckyColorName;
+      horoscope._dominantPlanet = hardFinal.dominantPlanet;
+      horoscope._lifePathNumber = hardFinal.lifePathNumber;
     }
-
-    // Free-tier gate (only when we actually generated a fresh horoscope)
-    // v14.8 — Quota mensuel (3/mois) au lieu de lifetime 7. Reset auto chaque nouveau mois.
-    // FIX P1 (audit 2026-08-02) : utilise decrementMonthlyScans (atomique)
-    // au lieu de ensureMonthlyScans + UPDATE inline (double-decrement bug).
-    if (!isPremium && !personalCached) {
-      const remaining = decrementMonthlyScans(req.user.id);
-      if (remaining <= 0) {
-        return res.status(402).json({ error: 'Free scans exhausted', code: 'paywall_required', scansRemaining: 0 });
-      }
-    }
+    // v15 — l'horoscope du jour est GRATUIT tous les jours (habitude = rétention).
+    // Le quota mensuel ne s'applique plus qu'aux compatibilités.
 
     // Helper: extrait le summary (general+amour+carriere+energie+mood+luckyColor) depuis le content JSON
     // v13.2 — on inclut love + career dans l'historique (avant, seul general était sauvegardé → le frontend
@@ -3058,7 +3157,7 @@ app.post('/api/horoscope', auth, async (req, res) => {
     // P0#4 — streak étendu : { count, freezeConsumed, graceApplied }
     const streakInfo = updateStreak(req.user.id, today);
     // v14.8 — Reload remaining after potential reset + decrement
-    const remaining = isPremium ? null : Math.max(0, ensureMonthlyScans(req.user.id) - (personalCached ? 0 : 1));
+    const remaining = isPremium ? null : ensureMonthlyScans(req.user.id);
     res.json({
       ...horoscope,
       scansRemaining: remaining,
@@ -3081,7 +3180,7 @@ app.get('/api/horoscope/week', auth, async (req, res) => {
     if (!user?.birth_data) return res.status(400).json({ error: 'Birth data required' });
 
     const now = Date.now();
-    const isPremium = !!user.is_premium && (!user.premium_until || user.premium_until > now);
+    const isPremium = !!user.is_premium && (!user.premium_until || user.premium_until > _nowSec());
 
     // Premium: 7 jours | Free: 3 jours — historique uniquement (J-N → J)
     const days = isPremium ? 7 : 3;
@@ -3550,8 +3649,8 @@ app.post('/api/compatibility', auth, llmLimiter, async (req, res) => {
     if (!user?.birth_data) return res.status(400).json({ error: 'Your birth data required' });
 
     // Premium expiry check
-    const now = Date.now();
-    const isPremium = !!user.is_premium && (!user.premium_until || user.premium_until > now);
+    const now = Math.floor(Date.now() / 1000); // v15 — premium_until est en secondes
+    const isPremium = !!user.is_premium && (!user.premium_until || user.premium_until > _nowSec());
 
 // P0 #3 + #9 — Décrément APRÈS succès LLM (pas avant) + clamp à 0.
     // v14.8 — Quota mensuel (3/mois) au lieu de lifetime 7. Reset auto chaque nouveau mois.
@@ -3586,13 +3685,9 @@ app.post('/api/compatibility', auth, llmLimiter, async (req, res) => {
     const chart2 = getNatalPositions(partnerBirthData);
 
     // Try LLM first, fallback to deterministic if timeout/fail
-    let result;
-    try {
-      result = await generateCompatibility(chart1, chart2, chart1.sun.sign, chart2.sun.sign, ctx);
-    } catch (llmErr) {
-      console.warn('[compat] LLM failed, using deterministic fallback:', llmErr.message);
-      result = computeCompatDeterministic(chart1, chart2, chart1.sun.sign, chart2.sun.sign, ctx);
-    }
+    // v15 — zéro LLM côté utilisateur : moteur déterministe uniquement.
+    const quick = req.body?.quick === true;
+    const result = computeCompatDeterministic(chart1, chart2, chart1.sun.sign, chart2.sun.sign, ctx, quick);
 
     // P0 #3 — Décrément conditionné au succès du LLM.
     if (!isPremium && scansRemaining !== null) {
@@ -3623,7 +3718,7 @@ app.post('/api/compatibility', auth, llmLimiter, async (req, res) => {
       yourSun: chart1.sun.sign,
       theirSun: chart2.sun.sign,
       yourMoon: chart1.moon.sign,
-      theirMoon: chart2.moon.sign,
+      theirMoon: quick ? null : chart2.moon.sign, // v15 — pas de Lune inventée en mode rapide
       scansRemaining: isPremium ? null : scansRemaining,
     });
   } catch (err) {
@@ -3741,13 +3836,8 @@ app.post('/api/compat/invite/:token/redeem', (req, res) => {
     // On fait le même compute que /api/compatibility mais sans auth et sans décrément de scans
     // Le coût LLM est sur nous : c'est l'investissement acquisition viral.
     // En dev (COMPAT_DETERMINISTIC_ONLY=1) on skip le LLM pour valider le pipeline.
-    const computePromise = process.env.COMPAT_DETERMINISTIC_ONLY === '1'
-      ? Promise.resolve(computeCompatDeterministic(chart1, chart2, chart1.sun.sign, chart2.sun.sign, 'romantic'))
-      : generateCompatibility(chart1, chart2, chart1.sun.sign, chart2.sun.sign, 'romantic')
-        .catch((err) => {
-          console.warn('compat redeem LLM KO, using deterministic fallback:', err.message);
-          return computeCompatDeterministic(chart1, chart2, chart1.sun.sign, chart2.sun.sign, 'romantic');
-        });
+    // v15 — zéro LLM côté utilisateur (coût) : moteur déterministe uniquement.
+    const computePromise = Promise.resolve(computeCompatDeterministic(chart1, chart2, chart1.sun.sign, chart2.sun.sign, 'romantic'));
     computePromise.then((compat) => {
       const now = Math.floor(Date.now() / 1000);
       const computed = {
@@ -3998,7 +4088,7 @@ const ASPECT_NATURE_SCORE = {
   trine: +10,
 };
 
-function computeDayMood(date) {
+function computeDayMood(date, natal = null) {
   const transits = getTransits(date);
   // Compute major aspects for the day
   const planets = ['sun','moon','mercury','venus','mars','jupiter','saturn'];
@@ -4052,6 +4142,9 @@ function computeDayMood(date) {
   if (transits.venus?.retrograde) score -= 3;
 
   score = Math.max(10, Math.min(95, Math.round(score)));
+  // v15 — Météo PERSONNELLE : même score que l'horoscope et l'énergie du jour
+  // (aspects des planètes du jour sur TON thème). Plus 3 chiffres contradictoires.
+  if (natal) { try { score = Math.max(10, Math.min(95, dayScore(natal, transits))); } catch { /* garde le ciel général */ } }
   const label = moodLabelFor(score);
   const phrases = MOOD_PHRASES[label.tone];
   const phrase = phrases[Math.floor(date.getTime() / 86400000) % phrases.length];
@@ -4072,15 +4165,22 @@ function computeDayMood(date) {
 app.get('/api/mood-forecast', auth, (req, res) => {
   try {
     const user = db.prepare('SELECT is_premium, premium_until FROM users WHERE id = ?').get(req.user.id);
-    const now = Date.now();
-    const isPremium = !!user?.is_premium && (!user?.premium_until || user.premium_until > now);
+    const isPremium = !!user?.is_premium && (!user?.premium_until || user.premium_until > _nowSec());
     const days = isPremium ? 14 : 3;
     const forecast = [];
     const base = new Date();
     base.setUTCHours(12, 0, 0, 0); // midi UTC = stable quel que soit TZ
+    let natal = null;
+    try {
+      const row = db.prepare('SELECT birth_data FROM profiles WHERE user_id = ? AND is_self = 1').get(req.user.id)
+        || db.prepare('SELECT birth_data FROM users WHERE id = ?').get(req.user.id);
+      const bd = row?.birth_data ? JSON.parse(row.birth_data) : null;
+      if (bd?.date) natal = getNatalPositions(bd);
+    } catch { natal = null; }
     for (let i = 0; i < days; i++) {
-      const d = new Date(base.getTime() + i * 86400000);
-      forecast.push(computeDayMood(d));
+      // Aujourd'hui : instant présent (cohérent avec horoscope + énergie). Ensuite : midi UTC.
+      const d = i === 0 ? new Date() : new Date(base.getTime() + i * 86400000);
+      forecast.push(computeDayMood(d, natal));
     }
     res.json({ forecast, isPremium, daysRequested: days, freeDaysLimit: 3 });
   } catch (err) {
@@ -4681,7 +4781,7 @@ app.get('/api/chart/asteroids', auth, async (req, res) => {
 
     // v14.8 — Premium check pour gate interpretation LLM
     const now = Math.floor(Date.now() / 1000);
-    const isPremium = !!userRow.is_premium && (!userRow.premium_until || userRow.premium_until > now);
+    const isPremium = !!userRow.is_premium && (!userRow.premium_until || userRow.premium_until > _nowSec());
 
     // Check lifetime natal cache (asteroid positions never change)
     const cached = db.prepare('SELECT data FROM natal_interpretations WHERE user_id = ? AND feature = ?').get(req.user.id, 'asteroids');
@@ -4756,7 +4856,7 @@ app.get('/api/chart/lunar-nodes', auth, async (req, res) => {
 
     // v14.8 — Premium gate interpretation LLM
     const now = Math.floor(Date.now() / 1000);
-    const isPremium = !!userRow.is_premium && (!userRow.premium_until || userRow.premium_until > now);
+    const isPremium = !!userRow.is_premium && (!userRow.premium_until || userRow.premium_until > _nowSec());
 
     // Check lifetime natal cache
     const cached = db.prepare('SELECT data FROM natal_interpretations WHERE user_id = ? AND feature = ?').get(req.user.id, 'lunar_nodes');
@@ -4989,7 +5089,7 @@ app.get('/api/chart/houses', auth, async (req, res) => {
 
     // v14.8 — Premium gate : free = Maison 1 (Ascendant) seulement, premium = 12 maisons + interprétation
     const now = Math.floor(Date.now() / 1000);
-    const isPremium = !!userRow.is_premium && (!userRow.premium_until || userRow.premium_until > now);
+    const isPremium = !!userRow.is_premium && (!userRow.premium_until || userRow.premium_until > _nowSec());
 
     // Check lifetime natal cache
     const cached = db.prepare('SELECT data FROM natal_interpretations WHERE user_id = ? AND feature = ?').get(req.user.id, 'houses');
@@ -5312,24 +5412,26 @@ app.post('/api/onboarding/dismiss', auth, (req, res) => {
 app.get('/api/premium/status', auth, (req, res) => {
   try {
     const user = db.prepare(
-      'SELECT is_premium, premium_until FROM users WHERE id = ?'
+      'SELECT is_premium, premium_until, trial_started_at FROM users WHERE id = ?'
     ).get(req.user.id);
     if (!user) return res.status(404).json({ error: 'User not found' });
-    const now = Date.now();
-    const isPremium = user.is_premium === 1 || (user.premium_until && user.premium_until > now);
+    // v15 — premium_until (secondes) fait foi ; is_premium seul = à vie.
+    const active = !!user.premium_until && user.premium_until > _nowSec();
+    const isPremium = active || (user.is_premium === 1 && !user.premium_until);
     let plan = 'free';
-    if (user.is_premium === 1) plan = 'lifetime';
-    else if (user.premium_until && user.premium_until > now) {
-      const days = (user.premium_until - now) / 86400000;
+    if (user.is_premium === 1 && !user.premium_until) plan = 'lifetime';
+    else if (active && user.trial_started_at && (user.premium_until - user.trial_started_at) <= 8 * 86400) plan = 'trial';
+    else if (active) {
+      const days = (user.premium_until - _nowSec()) / 86400;
       // Plans 2026 : weekly (7j) ou yearly (365j).
       plan = days > 180 ? 'yearly' : 'weekly';
     }
-    const daysRemaining = (user.premium_until && user.premium_until > now)
-      ? Math.ceil((user.premium_until - now) / 86400000) : null;
+    const daysRemaining = (user.premium_until && user.premium_until > _nowSec())
+      ? Math.ceil((user.premium_until - _nowSec()) / 86400) : null;
     res.json({
       isPremium,
       plan,
-      premiumUntil: user.premium_until && user.premium_until > now
+      premiumUntil: user.premium_until && user.premium_until > _nowSec()
         ? new Date(user.premium_until * 1000).toISOString() : null,
       daysRemaining,
       benefits: isPremium ? [
@@ -6481,6 +6583,9 @@ app.use('/assets', express.static(join(__dirname, '..', 'dist', 'assets'), {
   maxAge: '1y',
   immutable: true,
 }));
+// v15 — Asset hashé introuvable (ancienne version encore ouverte) → vrai 404,
+// jamais index.html servi en tant que JS (crash « étincelle éteinte »).
+app.use('/assets', (_req, res) => res.status(404).type('text/plain').send('Not found'));
 
 // Non-hashed static files (icons, manifest, sw.js) — short cache + revalidate.
 // IMPORTANT : on exclut index.html du static pour qu'il passe par le catch-all
@@ -6493,7 +6598,8 @@ app.use(express.static(join(__dirname, '..', 'dist'), {
 
 // SPA fallback: index.html must NEVER be cached (it references hashed assets)
 app.get('*', (req, res) => {
-  if (req.path.startsWith('/api/')) return;
+  // v15 — Route API inconnue → 404 immédiat (avant : requête pendante jusqu'au timeout).
+  if (req.path.startsWith('/api/')) return res.status(404).json({ error: 'Not found' });
   res.setHeader('Cache-Control', 'no-store, no-cache, must-revalidate');
   res.setHeader('Pragma', 'no-cache');
   res.setHeader('Expires', '0');

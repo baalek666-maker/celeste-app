@@ -18,7 +18,7 @@ type DailyEnergy = {
  */
 function getExpansionKey(): string {
   const d = new Date();
-  return `celeste:expanded-energy:${d.getFullYear()}-${d.getMonth()}-${d.getDate()}`;
+  return `celeste:expanded-energy:${d.getFullYear()}-${d.getMonth() + 1}-${d.getDate()}`;
 }
 
 /**

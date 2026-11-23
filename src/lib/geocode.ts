@@ -20,6 +20,8 @@ export interface GeoPlace {
   tzOffset: number;
   /** Fuseau IANA renvoyé par Nominatim quand dispo (ex: "Europe/Paris"). */
   timeZone?: string;
+  /** v15 — région (pour distinguer deux villes homonymes) */
+  region?: string;
 }
 
 const NOMINATIM_URL = 'https://nominatim.openstreetmap.org/search';
@@ -41,6 +43,7 @@ interface NominatimResponse {
   lat: string;
   lon: string;
   extratags?: { timezone?: string };
+  addresstype?: string;
 }
 
 /**
@@ -58,6 +61,8 @@ export async function searchPlaces(query: string, signal?: AbortSignal): Promise
     addressdetails: '1',
     limit: '10',
     'accept-language': 'fr',
+    // v15 — villes/villages uniquement (avant : 5× « Lyon County » indifférenciés)
+    featuretype: 'settlement',
   });
 
   try {
@@ -71,7 +76,15 @@ export async function searchPlaces(query: string, signal?: AbortSignal): Promise
     });
     if (!resp.ok) return [];
     const data = (await resp.json()) as NominatimResponse[];
-    return data.map(parsePlace).filter((p): p is GeoPlace => p !== null);
+    const seen = new Set<string>();
+    const NOT_CITY = new Set(['county', 'state', 'region', 'country', 'province']);
+    return data.filter(d => !NOT_CITY.has(d.addresstype || '')).map(parsePlace).filter((p): p is GeoPlace => {
+      if (!p) return false;
+      const k = `${p.city}|${p.region || ''}|${p.country}`.toLowerCase();
+      if (seen.has(k)) return false;
+      seen.add(k);
+      return true;
+    }).slice(0, 6);
   } catch (err) {
     if ((err as Error)?.name === 'AbortError') return [];
     console.warn('[geocode] Nominatim fetch failed:', err);
@@ -104,6 +117,7 @@ function parsePlace(raw: NominatimResponse): GeoPlace | null {
     longitude: lon,
     tzOffset,
     timeZone,
+    region: raw.address?.state || raw.address?.county || undefined,
   };
 }
 

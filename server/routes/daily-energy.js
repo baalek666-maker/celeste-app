@@ -11,6 +11,7 @@
  * Factory: receives shared deps, returns an Express router.
  */
 import { Router } from 'express';
+import { dayScore } from '../horoscope-engine.js';
 
 // ─── Helpers ─────────────────────────────────────────────────
 
@@ -151,7 +152,10 @@ export function createDailyEnergyRouter({ db, auth, getNatalPositions, getTransi
       }
 
       // Calculate energy score: sum of activation weights (capped at 10)
-      const energyScore = Math.min(10, Math.round(activations.reduce((s, a) => s + a.weight, 0)));
+      // v15 — même score que l'horoscope et la météo (0-100 → 1-10).
+      let energyScore;
+      try { energyScore = Math.max(1, Math.min(10, Math.round(dayScore(natal, transits) / 10))); }
+      catch { energyScore = Math.min(10, Math.round(activations.reduce((s, a) => s + a.weight, 0))); }
       const energy = getEnergyLevel(energyScore);
 
       // Build LLM prompt
